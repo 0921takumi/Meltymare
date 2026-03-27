@@ -1,0 +1,104 @@
+import { createClient } from '@/lib/supabase/server'
+import Header from '@/components/layout/Header'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { Plus, Edit, Eye, EyeOff } from 'lucide-react'
+
+export default async function CreatorDashboard() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth/login')
+
+  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  if (profile?.role !== 'creator') redirect('/contents')
+
+  const { data: contents } = await supabase
+    .from('contents')
+    .select('*')
+    .eq('creator_id', user.id)
+    .order('created_at', { ascending: false })
+
+  const totalSales = contents?.reduce((sum, c) => sum + (c.sold_count * c.price), 0) ?? 0
+  const totalSold = contents?.reduce((sum, c) => sum + c.sold_count, 0) ?? 0
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
+      <Header user={profile} />
+
+      <div style={{ maxWidth: 1000, margin: '0 auto', padding: '40px 24px' }}>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700 }}>管理ダッシュボード</h1>
+          <Link href="/creator/upload" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--mm-primary)', color: 'white', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, textDecoration: 'none' }}>
+            <Plus size={16} /> コンテンツ追加
+          </Link>
+        </div>
+
+        {/* サマリーカード */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
+          {[
+            { label: 'コンテンツ数', value: `${contents?.length ?? 0} 件`, color: 'var(--mm-primary)' },
+            { label: '総販売枚数', value: `${totalSold} 枚`, color: '#7c3aed' },
+            { label: '売上合計（概算）', value: `¥${totalSales.toLocaleString()}`, color: '#059669' },
+          ].map((s, i) => (
+            <div key={i} className="mm-card" style={{ padding: '20px 24px', textAlign: 'center' }}>
+              <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginBottom: 6 }}>{s.label}</p>
+              <p style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* コンテンツ一覧テーブル */}
+        <div className="mm-card" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--mm-border)', fontWeight: 700, fontSize: 15 }}>
+            コンテンツ一覧
+          </div>
+          {!contents || contents.length === 0 ? (
+            <div style={{ padding: '48px', textAlign: 'center', color: 'var(--mm-text-muted)' }}>
+              <p style={{ marginBottom: 12 }}>まだコンテンツがありません</p>
+              <Link href="/creator/upload" style={{ color: 'var(--mm-primary)', fontWeight: 600, fontSize: 14 }}>
+                最初のコンテンツを追加 →
+              </Link>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <thead>
+                <tr style={{ background: 'var(--mm-bg)' }}>
+                  {['タイトル', '種別', '価格', '在庫', '販売数', '状態', ''].map((h, i) => (
+                    <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {contents.map(c => (
+                  <tr key={c.id} style={{ borderBottom: '1px solid var(--mm-border)' }}>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{ background: c.content_type === 'video' ? '#ede9fe' : 'var(--mm-primary-light)', color: c.content_type === 'video' ? '#7c3aed' : 'var(--mm-primary)', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>
+                        {c.content_type === 'video' ? '動画' : '画像'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--mm-primary)' }}>¥{c.price.toLocaleString()}</td>
+                    <td style={{ padding: '12px 16px', color: 'var(--mm-text-sub)' }}>{c.stock_limit ?? '無制限'}</td>
+                    <td style={{ padding: '12px 16px', color: 'var(--mm-text-sub)' }}>{c.sold_count}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: c.is_published ? '#059669' : 'var(--mm-text-muted)', fontWeight: 600 }}>
+                        {c.is_published ? <><Eye size={13} /> 公開</> : <><EyeOff size={13} /> 非公開</>}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <Link href={`/creator/upload?edit=${c.id}`} style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--mm-primary)', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+                        <Edit size={13} /> 編集
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+      </div>
+    </div>
+  )
+}

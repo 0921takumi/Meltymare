@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+:root {
+  --mm-bg: #f0f4f8;
+  --mm-surface: #ffffff;
+  --mm-primary: #2d6a9f;
+  --mm-primary-light: #d6e8f7;
+  --mm-accent: #8ab4d4;
+  --mm-text: #1a2a3a;
+  --mm-text-sub: #4a6680;
+  --mm-text-muted: #8aa0b4;
+  --mm-border: #d0dde8;
+}
+
+body {
+  background-color: var(--mm-bg);
+  color: var(--mm-text);
+  font-family: 'Noto Sans JP', 'Hiragino Sans', sans-serif;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
+
+.font-display { font-family: 'Cormorant Garamond', serif; }
+
+.mm-card {
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-border);
+  border-radius: 12px;
+  overflow: hidden;
+}

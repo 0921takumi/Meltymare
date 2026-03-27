@@ -1,0 +1,86 @@
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Download, ShoppingCart, Lock } from 'lucide-react'
+import { loadStripe } from '@stripe/stripe-js'
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+
+interface Props {
+  contentId: string
+  price: number
+  isPurchased: boolean
+  isSoldOut: boolean
+  isLoggedIn: boolean
+  downloadUrl: string | null
+}
+
+export default function PurchaseButton({ contentId, price, isPurchased, isSoldOut, isLoggedIn, downloadUrl }: Props) {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+
+  // 購入済み → ダウンロード
+  if (isPurchased && downloadUrl) {
+    return (
+      <a href={downloadUrl} download
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#059669', color: 'white', padding: '14px 24px', borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>
+        <Download size={18} />
+        ダウンロード
+      </a>
+    )
+  }
+
+  if (isPurchased) {
+    return (
+      <div style={{ textAlign: 'center', padding: '14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 10, color: '#059669', fontWeight: 600, fontSize: 14 }}>
+        ✓ 購入済み
+      </div>
+    )
+  }
+
+  if (isSoldOut) {
+    return (
+      <div style={{ textAlign: 'center', padding: '14px', background: 'var(--mm-bg)', border: '1px solid var(--mm-border)', borderRadius: 10, color: 'var(--mm-text-muted)', fontWeight: 600, fontSize: 14 }}>
+        SOLD OUT
+      </div>
+    )
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <button onClick={() => router.push('/auth/login')}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', background: 'var(--mm-primary)', color: 'white', padding: '14px 24px', borderRadius: 10, fontWeight: 700, fontSize: 15, border: 'none', cursor: 'pointer' }}>
+        <Lock size={17} />
+        ログインして購入 ¥{price.toLocaleString()}
+      </button>
+    )
+  }
+
+  const handlePurchase = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+
+      // Stripe Checkout URLへリダイレクト
+      window.location.href = data.checkoutUrl
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '購入処理に失敗しました'
+      alert(msg)
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button onClick={handlePurchase} disabled={loading}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', background: 'var(--mm-primary)', color: 'white', padding: '14px 24px', borderRadius: 10, fontWeight: 700, fontSize: 15, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+      <ShoppingCart size={17} />
+      {loading ? '処理中...' : `購入する ¥${price.toLocaleString()}`}
+    </button>
+  )
+}
