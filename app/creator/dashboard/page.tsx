@@ -20,6 +20,9 @@ export default async function CreatorDashboard() {
 
   const totalSales = contents?.reduce((sum, c) => sum + (c.sold_count * c.price), 0) ?? 0
   const totalSold = contents?.reduce((sum, c) => sum + c.sold_count, 0) ?? 0
+  const feeRate = profile?.fee_rate ?? 30
+  const feeAmount = Math.floor(totalSales * feeRate / 100)
+  const netAmount = totalSales - feeAmount
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
@@ -35,15 +38,18 @@ export default async function CreatorDashboard() {
         </div>
 
         {/* サマリーカード */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr) repeat(3, 1fr)', gap: 14, marginBottom: 32 }}>
           {[
-            { label: 'コンテンツ数', value: `${contents?.length ?? 0} 件`, color: 'var(--mm-primary)' },
-            { label: '総販売枚数', value: `${totalSold} 枚`, color: '#7c3aed' },
-            { label: '売上合計（概算）', value: `¥${totalSales.toLocaleString()}`, color: '#059669' },
+            { label: 'コンテンツ数', value: `${contents?.length ?? 0} 件`, color: 'var(--mm-primary)', sub: null },
+            { label: '総販売数', value: `${totalSold} 件`, color: '#7c3aed', sub: null },
+            { label: '売上合計', value: `¥${totalSales.toLocaleString()}`, color: '#059669', sub: '税込' },
+            { label: `手数料 (${feeRate}%)`, value: `¥${feeAmount.toLocaleString()}`, color: '#dc2626', sub: '運営取り分' },
+            { label: '振込予定額', value: `¥${netAmount.toLocaleString()}`, color: 'var(--mm-primary)', sub: '確定売上ベース' },
           ].map((s, i) => (
-            <div key={i} className="mm-card" style={{ padding: '20px 24px', textAlign: 'center' }}>
-              <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginBottom: 6 }}>{s.label}</p>
-              <p style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</p>
+            <div key={i} className="mm-card" style={{ padding: '18px 20px', textAlign: 'center' }}>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 6 }}>{s.label}</p>
+              <p style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</p>
+              {s.sub && <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>{s.sub}</p>}
             </div>
           ))}
         </div>

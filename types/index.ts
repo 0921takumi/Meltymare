@@ -11,6 +11,12 @@ export interface Profile {
   twitter_url?: string
   instagram_url?: string
   tiktok_url?: string
+  fee_rate: number
+  bank_name?: string
+  bank_branch?: string
+  bank_account_type?: 'ordinary' | 'checking'
+  bank_account_number?: string
+  bank_account_holder?: string
   created_at: string
 }
 
@@ -23,9 +29,10 @@ export interface Content {
   content_type: 'image' | 'video'
   thumbnail_url?: string
   file_url: string
-  stock_limit?: number       // null = 無制限
+  stock_limit?: number
   sold_count: number
   is_published: boolean
+  review_status: 'pending' | 'approved' | 'rejected'
   created_at: string
   creator?: Profile
 }
@@ -39,4 +46,31 @@ export interface Purchase {
   status: 'pending' | 'completed' | 'failed'
   created_at: string
   content?: Content
+  user?: Profile
+}
+
+export interface Payout {
+  id: string
+  creator_id: string
+  amount: number
+  fee_amount: number
+  net_amount: number
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  period_start: string
+  period_end: string
+  paid_at?: string
+  note?: string
+  created_at: string
+  creator?: Profile
+}
+
+export interface Inquiry {
+  id: string
+  user_id?: string
+  email: string
+  subject: string
+  body: string
+  status: 'open' | 'in_progress' | 'closed'
+  created_at: string
+  user?: Profile
 }

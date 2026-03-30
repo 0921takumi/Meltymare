@@ -3,7 +3,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Meltymare',
-  description: 'キャストの写真・動画を購入できるプラットフォーム',
+  description: 'クリエイターの限定写真・動画を購入できるプラットフォーム',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
