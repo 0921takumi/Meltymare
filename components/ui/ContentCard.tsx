@@ -1,3 +1,4 @@
+'use client'
 import Link from 'next/link'
 import { ImageIcon, VideoIcon, Lock } from 'lucide-react'
 import type { Content } from '@/types'
