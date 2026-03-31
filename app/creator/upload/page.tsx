@@ -1,11 +1,11 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Header from '@/components/layout/Header'
 import { Upload, ImageIcon, VideoIcon } from 'lucide-react'
 
-export default function UploadPage() {
+function UploadForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get('edit')
@@ -60,7 +60,6 @@ export default function UploadPage() {
 
       if (!isEdit && !contentFile) throw new Error('ファイルを選択してください')
 
-      // ファイルアップロード
       if (contentFile) {
         const ext = contentFile.name.split('.').pop()
         const path = `${user.id}/${Date.now()}.${ext}`
@@ -117,20 +116,17 @@ export default function UploadPage() {
         <div className="mm-card" style={{ padding: 32 }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-            {/* タイトル */}
             <div>
               <label style={labelStyle}>タイトル *</label>
               <input type="text" value={title} onChange={e => setTitle(e.target.value)} required style={inputStyle} placeholder="コンテンツのタイトル" />
             </div>
 
-            {/* 説明 */}
             <div>
               <label style={labelStyle}>説明</label>
               <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
                 style={{ ...inputStyle, resize: 'vertical' }} placeholder="どんなコンテンツか説明してください" />
             </div>
 
-            {/* 種別 */}
             <div>
               <label style={labelStyle}>種別 *</label>
               <div style={{ display: 'flex', gap: 12 }}>
@@ -144,7 +140,6 @@ export default function UploadPage() {
               </div>
             </div>
 
-            {/* 価格 */}
             <div>
               <label style={labelStyle}>価格（円）*</label>
               <input type="number" value={price} onChange={e => setPrice(e.target.value)} required min={100}
@@ -152,14 +147,12 @@ export default function UploadPage() {
               <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 4 }}>最低100円から設定できます</p>
             </div>
 
-            {/* 在庫 */}
             <div>
               <label style={labelStyle}>販売数上限（空欄 = 無制限）</label>
               <input type="number" value={stockLimit} onChange={e => setStockLimit(e.target.value)} min={1}
                 style={inputStyle} placeholder="例: 30（空欄で無制限）" />
             </div>
 
-            {/* コンテンツファイル */}
             {!isEdit && (
               <div>
                 <label style={labelStyle}>コンテンツファイル *</label>
@@ -171,7 +164,6 @@ export default function UploadPage() {
               </div>
             )}
 
-            {/* サムネイル */}
             <div>
               <label style={labelStyle}>サムネイル画像{isEdit ? '（変更する場合のみ）' : ''}</label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px', border: '2px dashed var(--mm-border)', borderRadius: 8, cursor: 'pointer', color: 'var(--mm-text-muted)' }}>
@@ -181,13 +173,10 @@ export default function UploadPage() {
               </label>
             </div>
 
-            {/* 公開設定 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--mm-bg)', borderRadius: 8 }}>
               <input type="checkbox" id="published" checked={isPublished} onChange={e => setIsPublished(e.target.checked)}
                 style={{ width: 18, height: 18, cursor: 'pointer' }} />
-              <label htmlFor="published" style={{ fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                公開する
-              </label>
+              <label htmlFor="published" style={{ fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>公開する</label>
               <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>チェックを入れると一覧に表示されます</span>
             </div>
 
@@ -207,5 +196,13 @@ export default function UploadPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--mm-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>読み込み中...</div>}>
+      <UploadForm />
+    </Suspense>
   )
 }
