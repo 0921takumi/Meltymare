@@ -34,10 +34,10 @@ export default async function ContentsPage() {
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
       <Header user={profile} />
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+      <div className="mm-page-pad" style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>コンテンツ一覧</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>コンテンツ一覧</h1>
             <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>{contents?.length ?? 0} 件</p>
           </div>
         </div>
@@ -48,7 +48,7 @@ export default async function ContentsPage() {
             <p style={{ fontSize: 16 }}>まだコンテンツがありません</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
+          <div className="mm-content-grid">
             {contents.map((content: Content) => (
               <ContentCard
                 key={content.id}

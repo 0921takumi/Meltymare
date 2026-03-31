@@ -28,17 +28,17 @@ export default async function CreatorDashboard() {
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
       <Header user={profile} />
 
-      <div style={{ maxWidth: 1000, margin: '0 auto', padding: '40px 24px' }}>
+      <div className="mm-page-pad" style={{ maxWidth: 1000, margin: '0 auto' }}>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700 }}>管理ダッシュボード</h1>
-          <Link href="/creator/upload" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--mm-primary)', color: 'white', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, textDecoration: 'none' }}>
-            <Plus size={16} /> コンテンツ追加
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700 }}>管理ダッシュボード</h1>
+          <Link href="/creator/upload" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--mm-primary)', color: 'white', padding: '9px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+            <Plus size={15} /> コンテンツ追加
           </Link>
         </div>
 
         {/* サマリーカード */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr) repeat(3, 1fr)', gap: 14, marginBottom: 32 }}>
+        <div className="mm-creator-stats" style={{ marginBottom: 28 }}>
           {[
             { label: 'コンテンツ数', value: `${contents?.length ?? 0} 件`, color: 'var(--mm-primary)', sub: null },
             { label: '総販売数', value: `${totalSold} 件`, color: '#7c3aed', sub: null },
@@ -46,16 +46,16 @@ export default async function CreatorDashboard() {
             { label: `手数料 (${feeRate}%)`, value: `¥${feeAmount.toLocaleString()}`, color: '#dc2626', sub: '運営取り分' },
             { label: '振込予定額', value: `¥${netAmount.toLocaleString()}`, color: 'var(--mm-primary)', sub: '確定売上ベース' },
           ].map((s, i) => (
-            <div key={i} className="mm-card" style={{ padding: '18px 20px', textAlign: 'center' }}>
+            <div key={i} className="mm-card" style={{ padding: '16px', textAlign: 'center' }}>
               <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 6 }}>{s.label}</p>
-              <p style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</p>
+              <p style={{ fontSize: 20, fontWeight: 700, color: s.color }}>{s.value}</p>
               {s.sub && <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>{s.sub}</p>}
             </div>
           ))}
         </div>
 
         {/* コンテンツ一覧テーブル */}
-        <div className="mm-card" style={{ overflow: 'hidden' }}>
+        <div className="mm-card">
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--mm-border)', fontWeight: 700, fontSize: 15 }}>
             コンテンツ一覧
           </div>
@@ -67,6 +67,7 @@ export default async function CreatorDashboard() {
               </Link>
             </div>
           ) : (
+            <div className="mm-table-wrap">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
                 <tr style={{ background: 'var(--mm-bg)' }}>
@@ -101,6 +102,7 @@ export default async function CreatorDashboard() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 
