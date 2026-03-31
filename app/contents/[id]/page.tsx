@@ -31,18 +31,18 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   if (user) {
     const { data: purchase } = await supabase
       .from('purchases')
-      .select('id, delivery_status, delivered_file_url')
+      .select('*')
       .eq('user_id', user.id)
       .eq('content_id', id)
       .eq('status', 'completed')
       .single()
     isPurchased = !!purchase
-    deliveryStatus = purchase?.delivery_status ?? null
+    deliveryStatus = (purchase as any)?.delivery_status ?? 'pending'
 
-    if (isPurchased && purchase?.delivery_status === 'delivered' && purchase?.delivered_file_url) {
+    if (isPurchased && deliveryStatus === 'delivered' && (purchase as any)?.delivered_file_url) {
       const { data: urlData } = await supabase.storage
         .from('deliveries')
-        .createSignedUrl(purchase.delivered_file_url, 3600)
+        .createSignedUrl((purchase as any).delivered_file_url, 3600)
       downloadUrl = urlData?.signedUrl ?? null
     }
   }

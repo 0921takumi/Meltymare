@@ -13,7 +13,7 @@ export default async function MyPage() {
 
   const { data: purchases } = await supabase
     .from('purchases')
-    .select('*, content:contents(*, creator:profiles(id, display_name, avatar_url))')
+    .select('*, content:contents(id, title, thumbnail_url, price, creator:profiles(id, display_name))')
     .eq('user_id', user.id)
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
