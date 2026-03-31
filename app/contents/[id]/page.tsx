@@ -1,8 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import Header from '@/components/layout/Header'
 import PurchaseButton from './PurchaseButton'
+import ContentCard from '@/components/ui/ContentCard'
 import { notFound } from 'next/navigation'
 import { ImageIcon, VideoIcon, ExternalLink } from 'lucide-react'
+import Link from 'next/link'
 
 export default async function ContentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -48,6 +50,33 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   }
 
   const isSoldOut = content.stock_limit != null && content.sold_count >= content.stock_limit
+
+  // 同クリエイターの他コンテンツ（最大4件）
+  const { data: relatedContents } = await supabase
+    .from('contents')
+    .select('*, creator:profiles(id, display_name, avatar_url)')
+    .eq('creator_id', content.creator_id)
+    .eq('is_published', true)
+    .neq('id', id)
+    .order('created_at', { ascending: false })
+    .limit(4)
+
+  // 購入済みIDリスト（関連コンテンツ用）
+  let purchasedIds: string[] = []
+  if (user) {
+    const { data: allPurchases } = await supabase
+      .from('purchases').select('content_id')
+      .eq('user_id', user.id).eq('status', 'completed')
+    purchasedIds = allPurchases?.map(p => p.content_id) ?? []
+  }
+
+  // おすすめクリエイター（このクリエイター以外、最大4名）
+  const { data: recCreators } = await supabase
+    .from('profiles')
+    .select('id, display_name, username, avatar_url')
+    .eq('role', 'creator')
+    .neq('id', content.creator_id)
+    .limit(4)
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
@@ -139,7 +168,56 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
             )}
           </div>
         </div>
+
+        {/* 同クリエイターの他のコンテンツ */}
+        {relatedContents && relatedContents.length > 0 && (
+          <div style={{ marginTop: 48 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 700 }}>
+                {content.creator?.display_name} の他のコンテンツ
+              </h2>
+              {content.creator && (
+                <Link href={`/creator/${(content.creator as any).username ?? ''}`} style={{ fontSize: 13, color: 'var(--mm-primary)', fontWeight: 600, textDecoration: 'none' }}>
+                  全て見る →
+                </Link>
+              )}
+            </div>
+            <div className="mm-content-grid">
+              {relatedContents.map((c: any) => (
+                <ContentCard key={c.id} content={c} isPurchased={purchasedIds.includes(c.id)} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* おすすめクリエイター */}
+        {recCreators && recCreators.length > 0 && (
+          <div style={{ marginTop: 48 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 16 }}>
+              このクリエイターを見ている方へのおすすめ
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+              {recCreators.map((c: any, i: number) => (
+                <Link key={c.id} href={`/creator/${c.username}`} style={{ textDecoration: 'none' }}>
+                  <div className="mm-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--mm-primary-light)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                      {c.avatar_url
+                        ? <img src={c.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : c.display_name[0]}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.display_name}</p>
+                      <p style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>@{c.username}</p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )
 }
+

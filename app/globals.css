@@ -105,6 +105,13 @@ body {
   .mm-header-nav-mobile { display: none; }
 }
 
+.mm-search-desktop {
+  display: none;
+}
+@media (min-width: 640px) {
+  .mm-search-desktop { display: block; }
+}
+
 /* ─── クリエイターダッシュボード ─────────────────── */
 .mm-creator-stats {
   display: grid;
