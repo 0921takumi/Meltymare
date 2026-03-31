@@ -27,3 +27,122 @@ body {
   border-radius: 12px;
   overflow: hidden;
 }
+
+/* ─── レスポンシブグリッド ─────────────────── */
+
+/* TOPページ: キャストグリッド (モバイル2列→デスクトップ6列) */
+.mm-cast-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+@media (min-width: 480px) {
+  .mm-cast-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+}
+@media (min-width: 768px) {
+  .mm-cast-grid { grid-template-columns: repeat(4, 1fr); gap: 16px; }
+}
+@media (min-width: 1024px) {
+  .mm-cast-grid { grid-template-columns: repeat(6, 1fr); gap: 16px; }
+}
+
+/* TOPページ: コンテンツグリッド (モバイル2列→デスクトップ4列) */
+.mm-content-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .mm-content-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+}
+@media (min-width: 1024px) {
+  .mm-content-grid { grid-template-columns: repeat(4, 1fr); gap: 18px; }
+}
+
+/* STATSバー (モバイル2x2→デスクトップ4列) */
+.mm-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 640px) {
+  .mm-stats-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* HOW TOグリッド */
+.mm-howto-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 640px) {
+  .mm-howto-grid { grid-template-columns: repeat(3, 1fr); gap: 20px; }
+}
+
+/* 安心ポイントグリッド */
+.mm-trust-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (min-width: 640px) {
+  .mm-trust-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ─── ヘッダー ─────────────────── */
+.mm-header-nav {
+  display: none;
+}
+@media (min-width: 640px) {
+  .mm-header-nav { display: flex; align-items: center; gap: 8px; }
+}
+
+.mm-header-nav-mobile {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (min-width: 640px) {
+  .mm-header-nav-mobile { display: none; }
+}
+
+/* ─── クリエイターダッシュボード ─────────────────── */
+.mm-creator-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .mm-creator-stats { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+}
+@media (min-width: 900px) {
+  .mm-creator-stats { grid-template-columns: repeat(5, 1fr); gap: 14px; }
+}
+
+/* ─── テーブルスクロール ─────────────────── */
+.mm-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ─── モバイルパディング調整 ─────────────────── */
+.mm-page-pad {
+  padding: 24px 16px;
+}
+@media (min-width: 640px) {
+  .mm-page-pad { padding: 40px 24px; }
+}
+
+/* ─── ヒーローセクション ─────────────────── */
+.mm-hero {
+  padding: 48px 20px 56px;
+}
+@media (min-width: 640px) {
+  .mm-hero { padding: 72px 24px 80px; }
+}
+
+.mm-hero h1 {
+  font-size: 40px;
+}
+@media (min-width: 640px) {
+  .mm-hero h1 { font-size: 58px; }
+}

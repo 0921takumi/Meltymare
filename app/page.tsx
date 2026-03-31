@@ -43,9 +43,9 @@ export default function HomePage() {
       <Header user={null} />
 
       {/* ━━━ HERO ━━━ */}
-      <section style={{
+      <section className="mm-hero" style={{
         background: 'linear-gradient(135deg, #1a2f4a 0%, #2d6a9f 55%, #6aaad4 100%)',
-        padding: '72px 24px 80px', textAlign: 'center', position: 'relative', overflow: 'hidden',
+        textAlign: 'center', position: 'relative', overflow: 'hidden',
       }}>
         <div style={{ position: 'absolute', inset: 0, opacity: 0.04,
           backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
@@ -57,8 +57,8 @@ export default function HomePage() {
               ✦ 会員数1,240名突破
             </span>
           </div>
-          <h1 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 58, fontWeight: 600,
-            color: 'white', letterSpacing: '0.1em', marginBottom: 16, lineHeight: 1.1 }}>Meltymare</h1>
+          <h1 className="mm-hero" style={{ fontFamily: 'Cormorant Garamond, serif', fontWeight: 600,
+            color: 'white', letterSpacing: '0.1em', marginBottom: 16, lineHeight: 1.1, padding: 0 }}>Meltymare</h1>
           <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.88)', marginBottom: 8, lineHeight: 1.8, fontWeight: 500 }}>
             クリエイターの限定写真・動画を購入できるプラットフォーム
           </p>
@@ -78,8 +78,7 @@ export default function HomePage() {
 
       {/* ━━━ STATS ━━━ */}
       <section style={{ background: 'white', borderBottom: '1px solid var(--mm-border)' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px',
-          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="mm-stats-grid" style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px' }}>
           {STATS.map(({ icon: Icon, value, label }) => (
             <div key={label} style={{ padding: '20px 16px', textAlign: 'center', borderRight: '1px solid var(--mm-border)' }}>
               <Icon size={18} color="var(--mm-primary)" style={{ marginBottom: 6, display: 'inline-block' }} />
@@ -91,7 +90,7 @@ export default function HomePage() {
       </section>
 
       {/* ━━━ 人気キャスト ━━━ */}
-      <section style={{ maxWidth: 1100, margin: '0 auto', padding: '60px 24px 0' }}>
+      <section style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 16px 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
           <div>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 6 }}>CREATOR</p>
@@ -99,7 +98,7 @@ export default function HomePage() {
           </div>
           <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-primary)', textDecoration: 'none', fontWeight: 600 }}>全員を見る →</Link>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 16 }}>
+        <div className="mm-cast-grid">
           {MOCK_CASTS.map(cast => (
             <Link key={cast.id} href="/contents" style={{ textDecoration: 'none' }}>
               <div className="mm-card" style={{ padding: '20px 16px', textAlign: 'center', cursor: 'pointer' }}>
@@ -127,7 +126,7 @@ export default function HomePage() {
       </section>
 
       {/* ━━━ 新着コンテンツ ━━━ */}
-      <section style={{ maxWidth: 1100, margin: '0 auto', padding: '56px 24px 0' }}>
+      <section style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 16px 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
           <div>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 6 }}>CONTENTS</p>
@@ -135,7 +134,7 @@ export default function HomePage() {
           </div>
           <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-primary)', textDecoration: 'none', fontWeight: 600 }}>もっと見る →</Link>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 18 }}>
+        <div className="mm-content-grid">
           {MOCK_CONTENTS.map(item => {
             const remain = item.stock ? item.stock - item.sold : null
             const soldOut = remain !== null && remain <= 0
@@ -186,7 +185,7 @@ export default function HomePage() {
           <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 8 }}>HOW TO</p>
           <h2 style={{ fontSize: 22, fontWeight: 700 }}>ご利用の流れ</h2>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20 }}>
+        <div className="mm-howto-grid">
           {HOW_TO.map((step, i) => (
             <div key={i} className="mm-card" style={{ padding: '28px 24px', textAlign: 'center', position: 'relative' }}>
               <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 40, fontWeight: 600,
@@ -203,7 +202,7 @@ export default function HomePage() {
       <section style={{ maxWidth: 900, margin: '60px auto 0', padding: '0 24px' }}>
         <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 16, padding: '36px 32px' }}>
           <h2 style={{ fontSize: 18, fontWeight: 700, textAlign: 'center', marginBottom: 28 }}>🔒 安心・安全のプラットフォーム</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20 }}>
+          <div className="mm-trust-grid">
             {[
               { icon: '🛡️', text: 'Stripe認定の安全決済' },
               { icon: '🙈', text: '閲覧履歴は完全非公開' },
