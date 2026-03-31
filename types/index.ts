@@ -44,6 +44,9 @@ export interface Purchase {
   amount: number
   stripe_payment_intent_id: string
   status: 'pending' | 'completed' | 'failed'
+  delivery_status: 'pending' | 'delivered'
+  delivered_file_url?: string
+  delivered_at?: string
   created_at: string
   content?: Content
   user?: Profile

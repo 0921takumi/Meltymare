@@ -26,21 +26,23 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
 
   // 購入済みチェック
   let isPurchased = false
+  let deliveryStatus: 'pending' | 'delivered' | null = null
   let downloadUrl = null
   if (user) {
     const { data: purchase } = await supabase
       .from('purchases')
-      .select('id')
+      .select('id, delivery_status, delivered_file_url')
       .eq('user_id', user.id)
       .eq('content_id', id)
       .eq('status', 'completed')
       .single()
     isPurchased = !!purchase
+    deliveryStatus = purchase?.delivery_status ?? null
 
-    if (isPurchased) {
+    if (isPurchased && purchase?.delivery_status === 'delivered' && purchase?.delivered_file_url) {
       const { data: urlData } = await supabase.storage
-        .from('contents')
-        .createSignedUrl(content.file_url, 3600)
+        .from('deliveries')
+        .createSignedUrl(purchase.delivered_file_url, 3600)
       downloadUrl = urlData?.signedUrl ?? null
     }
   }
@@ -91,6 +93,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
               contentId={content.id}
               price={content.price}
               isPurchased={isPurchased}
+              deliveryStatus={deliveryStatus}
               isSoldOut={isSoldOut}
               isLoggedIn={!!user}
               downloadUrl={downloadUrl}

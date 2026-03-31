@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Header from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Edit, Eye, EyeOff } from 'lucide-react'
+import { Plus, Edit, Eye, EyeOff, ClipboardList } from 'lucide-react'
 
 export default async function CreatorDashboard() {
   const supabase = await createClient()
@@ -18,6 +18,12 @@ export default async function CreatorDashboard() {
     .eq('creator_id', user.id)
     .order('created_at', { ascending: false })
 
+  const contentIds = contents?.map(c => c.id) ?? []
+  const { data: pendingPurchases } = contentIds.length > 0
+    ? await supabase.from('purchases').select('id').in('content_id', contentIds).eq('status', 'completed').eq('delivery_status', 'pending')
+    : { data: [] }
+  const pendingCount = pendingPurchases?.length ?? 0
+
   const totalSales = contents?.reduce((sum, c) => sum + (c.sold_count * c.price), 0) ?? 0
   const totalSold = contents?.reduce((sum, c) => sum + c.sold_count, 0) ?? 0
   const feeRate = profile?.fee_rate ?? 30
@@ -30,11 +36,16 @@ export default async function CreatorDashboard() {
 
       <div className="mm-page-pad" style={{ maxWidth: 1000, margin: '0 auto' }}>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>管理ダッシュボード</h1>
-          <Link href="/creator/upload" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--mm-primary)', color: 'white', padding: '9px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
-            <Plus size={15} /> コンテンツ追加
-          </Link>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Link href="/creator/orders" style={{ display: 'flex', alignItems: 'center', gap: 6, background: pendingCount > 0 ? '#d97706' : 'white', color: pendingCount > 0 ? 'white' : 'var(--mm-primary)', border: `1px solid ${pendingCount > 0 ? '#d97706' : 'var(--mm-primary)'}`, padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+              <ClipboardList size={15} /> 注文管理{pendingCount > 0 ? ` (未納品 ${pendingCount}件)` : ''}
+            </Link>
+            <Link href="/creator/upload" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--mm-primary)', color: 'white', padding: '9px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+              <Plus size={15} /> コンテンツ追加
+            </Link>
+          </div>
         </div>
 
         {/* サマリーカード */}
