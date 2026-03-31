@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Header from '@/components/layout/Header'
 import PurchaseButton from './PurchaseButton'
 import ContentCard from '@/components/ui/ContentCard'
+import ReviewSection from './ReviewSection'
 import { notFound } from 'next/navigation'
 import { ImageIcon, VideoIcon, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
@@ -68,6 +69,18 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
       .from('purchases').select('content_id')
       .eq('user_id', user.id).eq('status', 'completed')
     purchasedIds = allPurchases?.map(p => p.content_id) ?? []
+  }
+
+  // レビュー取得
+  const { data: reviews } = await supabase
+    .from('reviews')
+    .select('*, user:profiles(display_name)')
+    .eq('content_id', id)
+    .order('created_at', { ascending: false })
+
+  let myReview: any = null
+  if (user) {
+    myReview = reviews?.find(r => r.user_id === user.id) ?? null
   }
 
   // おすすめクリエイター（このクリエイター以外、最大4名）
@@ -189,6 +202,15 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
             </div>
           </div>
         )}
+
+        {/* レビュー */}
+        <ReviewSection
+          contentId={id}
+          reviews={(reviews ?? []) as any}
+          canReview={isPurchased}
+          existingRating={myReview?.rating}
+          existingComment={myReview?.comment ?? ''}
+        />
 
         {/* おすすめクリエイター */}
         {recCreators && recCreators.length > 0 && (

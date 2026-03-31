@@ -1,16 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Users, ShoppingBag, TrendingUp, Wallet, Package, MessageSquare } from 'lucide-react'
+import { LayoutDashboard, Users, ShoppingBag, TrendingUp, Wallet, Package, MessageSquare, Image } from 'lucide-react'
 
 const NAV = [
-  { href: '/admin',          icon: LayoutDashboard, label: 'ダッシュボード' },
-  { href: '/admin/creators', icon: Users,            label: 'クリエイター管理' },
-  { href: '/admin/contents', icon: Package,          label: '商品管理・審査' },
-  { href: '/admin/sales',    icon: TrendingUp,       label: '売上管理' },
-  { href: '/admin/payouts',  icon: Wallet,           label: '振込管理' },
-  { href: '/admin/orders',   icon: ShoppingBag,      label: '注文管理' },
-  { href: '/admin/inquiries',icon: MessageSquare,    label: '問い合わせ' },
+  { href: '/admin',           icon: LayoutDashboard, label: 'ダッシュボード' },
+  { href: '/admin/creators',  icon: Users,            label: 'クリエイター管理' },
+  { href: '/admin/contents',  icon: Package,          label: '商品管理・審査' },
+  { href: '/admin/sales',     icon: TrendingUp,       label: '売上管理' },
+  { href: '/admin/payouts',   icon: Wallet,           label: '振込管理' },
+  { href: '/admin/orders',    icon: ShoppingBag,      label: '注文管理' },
+  { href: '/admin/banners',   icon: Image,            label: '特集バナー' },
+  { href: '/admin/inquiries', icon: MessageSquare,    label: '問い合わせ' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

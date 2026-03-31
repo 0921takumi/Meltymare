@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Header from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Edit, Eye, EyeOff, ClipboardList } from 'lucide-react'
+import { Plus, Edit, Eye, EyeOff, ClipboardList, MessageSquare, Tag } from 'lucide-react'
 
 export default async function CreatorDashboard() {
   const supabase = await createClient()
@@ -24,6 +24,13 @@ export default async function CreatorDashboard() {
     : { data: [] }
   const pendingCount = pendingPurchases?.length ?? 0
 
+  // リクエスト pending 件数
+  const { count: pendingRequestCount } = await supabase
+    .from('requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('creator_id', user.id)
+    .eq('status', 'pending')
+
   const totalSales = contents?.reduce((sum, c) => sum + (c.sold_count * c.price), 0) ?? 0
   const totalSold = contents?.reduce((sum, c) => sum + c.sold_count, 0) ?? 0
   const feeRate = profile?.fee_rate ?? 30
@@ -41,6 +48,12 @@ export default async function CreatorDashboard() {
           <div style={{ display: 'flex', gap: 8 }}>
             <Link href="/creator/orders" style={{ display: 'flex', alignItems: 'center', gap: 6, background: pendingCount > 0 ? '#d97706' : 'white', color: pendingCount > 0 ? 'white' : 'var(--mm-primary)', border: `1px solid ${pendingCount > 0 ? '#d97706' : 'var(--mm-primary)'}`, padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
               <ClipboardList size={15} /> 注文管理{pendingCount > 0 ? ` (未納品 ${pendingCount}件)` : ''}
+            </Link>
+            <Link href="/creator/requests" style={{ display: 'flex', alignItems: 'center', gap: 6, background: (pendingRequestCount ?? 0) > 0 ? '#7c3aed' : 'white', color: (pendingRequestCount ?? 0) > 0 ? 'white' : 'var(--mm-text-sub)', border: `1px solid ${(pendingRequestCount ?? 0) > 0 ? '#7c3aed' : 'var(--mm-border)'}`, padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+              <MessageSquare size={15} /> リクエスト{(pendingRequestCount ?? 0) > 0 ? ` (${pendingRequestCount}件)` : ''}
+            </Link>
+            <Link href="/creator/coupons" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', color: 'var(--mm-text-sub)', border: '1px solid var(--mm-border)', padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+              <Tag size={15} /> クーポン
             </Link>
             <Link href="/creator/upload" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--mm-primary)', color: 'white', padding: '9px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
               <Plus size={15} /> コンテンツ追加

@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Header from '@/components/layout/Header'
+import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 
 export default function ProfileEditPage() {
   const router = useRouter()
@@ -55,10 +57,10 @@ export default function ProfileEditPage() {
       let avatarUrl = profile?.avatar_url
       if (avatarFile) {
         const ext = avatarFile.name.split('.').pop()
-        const path = `${user.id}/avatar.${ext}`
-        await supabase.storage.from('avatars').upload(path, avatarFile, { upsert: true })
-        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
-        avatarUrl = urlData.publicUrl
+        const path = `avatars/${user.id}.${ext}`
+        await supabase.storage.from('thumbnails').upload(path, avatarFile, { upsert: true })
+        const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
+        avatarUrl = urlData.publicUrl + `?t=${Date.now()}`
       }
 
       const { error: updateError } = await supabase.from('profiles').update({
@@ -72,7 +74,13 @@ export default function ProfileEditPage() {
 
       if (updateError) throw updateError
       setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
+      setTimeout(() => {
+        if (profile?.role === 'creator') {
+          router.push(`/creator/${profile.username}`)
+        } else {
+          router.push('/mypage')
+        }
+      }, 1500)
     } catch (e: any) {
       setError(e.message ?? '保存に失敗しました')
     } finally {
@@ -87,6 +95,9 @@ export default function ProfileEditPage() {
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
       <Header user={profile} />
       <div style={{ maxWidth: 560, margin: '0 auto', padding: '40px 24px' }}>
+        <Link href="/mypage" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--mm-text-muted)', textDecoration: 'none', marginBottom: 16 }}>
+          <ArrowLeft size={14} /> マイページへ戻る
+        </Link>
         <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 28 }}>プロフィール編集</h1>
 
         <div className="mm-card" style={{ padding: 32 }}>

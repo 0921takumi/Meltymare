@@ -76,6 +76,14 @@ export default async function HomePage() {
     }
   }
 
+  // 特集バナー取得
+  const { data: banners } = await supabase
+    .from('featured_banners')
+    .select('*, creator:profiles(id, display_name, username, avatar_url), content:contents(id, title, thumbnail_url)')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .limit(5)
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
       <Header user={profile} />
@@ -126,6 +134,42 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* ━━━ 特集バナー ━━━ */}
+      {banners && banners.length > 0 && (
+        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 16px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em' }}>✦ FEATURED</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: banners.length === 1 ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+            {(banners as any[]).map((b: any) => {
+              const href = b.link_url ?? (b.content_id ? `/contents/${b.content_id}` : b.creator?.username ? `/creator/${b.creator.username}` : '#')
+              return (
+                <Link key={b.id} href={href} style={{ textDecoration: 'none' }}>
+                  <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', background: 'linear-gradient(135deg, #2d6a9f, #7c3aed)', minHeight: 120, display: 'flex', alignItems: 'flex-end', padding: 20, boxShadow: '0 4px 20px rgba(45,106,159,0.3)' }}>
+                    {b.content?.thumbnail_url && (
+                      <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${b.content.thumbnail_url})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.25 }} />
+                    )}
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <p style={{ fontSize: 18, fontWeight: 700, color: 'white', marginBottom: 4, lineHeight: 1.3 }}>{b.title}</p>
+                      {b.subtitle && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>{b.subtitle}</p>}
+                      {b.creator && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {b.creator.avatar_url ? <img src={b.creator.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
+                          </div>
+                          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>{b.creator.display_name}</span>
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ position: 'relative', fontSize: 13, color: 'rgba(255,255,255,0.9)', fontWeight: 700, flexShrink: 0 }}>→</span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {/* ━━━ 人気クリエイター ━━━ */}
       {creators && creators.length > 0 && (

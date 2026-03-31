@@ -1,10 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Download, ShoppingCart, Lock, Clock } from 'lucide-react'
-import { loadStripe } from '@stripe/stripe-js'
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+import { Download, ShoppingCart, Lock, Clock, Tag } from 'lucide-react'
 
 interface Props {
   contentId: string
@@ -19,6 +16,10 @@ interface Props {
 export default function PurchaseButton({ contentId, price, isPurchased, deliveryStatus, isSoldOut, isLoggedIn, downloadUrl }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [couponCode, setCouponCode] = useState('')
+  const [couponLoading, setCouponLoading] = useState(false)
+  const [couponData, setCouponData] = useState<{ discount_amount: number; final_price: number; code: string } | null>(null)
+  const [couponError, setCouponError] = useState('')
 
   // 購入済み・納品済み → ダウンロード
   if (isPurchased && deliveryStatus === 'delivered' && downloadUrl) {
@@ -74,18 +75,33 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
     )
   }
 
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) return
+    setCouponLoading(true)
+    setCouponError('')
+    setCouponData(null)
+    try {
+      const res = await fetch(`/api/coupon?code=${encodeURIComponent(couponCode.trim())}&price=${price}`)
+      const data = await res.json()
+      if (!res.ok) { setCouponError(data.error); return }
+      setCouponData(data)
+    } finally {
+      setCouponLoading(false)
+    }
+  }
+
+  const finalPrice = couponData ? couponData.final_price : price
+
   const handlePurchase = async () => {
     setLoading(true)
     try {
       const res = await fetch('/api/purchase', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contentId }),
+        body: JSON.stringify({ contentId, couponCode: couponData?.code }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-
-      // Stripe Checkout URLへリダイレクト
       window.location.href = data.checkoutUrl
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '購入処理に失敗しました'
@@ -95,10 +111,38 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
   }
 
   return (
-    <button onClick={handlePurchase} disabled={loading}
-      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', background: 'var(--mm-primary)', color: 'white', padding: '14px 24px', borderRadius: 10, fontWeight: 700, fontSize: 15, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
-      <ShoppingCart size={17} />
-      {loading ? '処理中...' : `購入する ¥${price.toLocaleString()}`}
-    </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* クーポン入力 */}
+      <div className="mm-card" style={{ padding: '14px 16px' }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <Tag size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--mm-text-muted)', pointerEvents: 'none' }} />
+            <input
+              value={couponCode}
+              onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponData(null); setCouponError('') }}
+              placeholder="クーポンコード"
+              style={{ width: '100%', padding: '9px 12px 9px 30px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace', letterSpacing: '0.05em' }}
+            />
+          </div>
+          <button onClick={applyCoupon} disabled={couponLoading || !couponCode.trim()}
+            style={{ padding: '9px 14px', background: 'var(--mm-primary-light)', color: 'var(--mm-primary)', border: '1px solid var(--mm-primary)', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            {couponLoading ? '...' : '適用'}
+          </button>
+        </div>
+        {couponError && <p style={{ fontSize: 12, color: '#dc2626', marginTop: 6 }}>{couponError}</p>}
+        {couponData && (
+          <div style={{ marginTop: 8, padding: '8px 12px', background: '#f0fdf4', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13, color: '#059669', fontWeight: 700 }}>¥{couponData.discount_amount.toLocaleString()} 割引</span>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>→ ¥{couponData.final_price.toLocaleString()}</span>
+          </div>
+        )}
+      </div>
+
+      <button onClick={handlePurchase} disabled={loading}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', background: 'var(--mm-primary)', color: 'white', padding: '14px 24px', borderRadius: 10, fontWeight: 700, fontSize: 15, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+        <ShoppingCart size={17} />
+        {loading ? '処理中...' : `購入する ¥${finalPrice.toLocaleString()}`}
+      </button>
+    </div>
   )
 }
