@@ -53,8 +53,8 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
       <Header user={profile} />
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 32, alignItems: 'start' }}>
+      <div className="mm-page-pad" style={{ maxWidth: 900, margin: '0 auto' }}>
+        <div className="mm-content-detail" style={{ alignItems: 'start' }}>
 
           {/* サムネイル */}
           <div className="mm-card" style={{ overflow: 'hidden', aspectRatio: '4/3', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--mm-primary-light)' }}>

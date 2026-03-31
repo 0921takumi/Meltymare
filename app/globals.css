@@ -132,6 +132,27 @@ body {
   .mm-page-pad { padding: 40px 24px; }
 }
 
+/* ─── コンテンツ詳細 2カラム ─────────────────── */
+.mm-content-detail {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+@media (min-width: 640px) {
+  .mm-content-detail { grid-template-columns: 1fr 360px; gap: 32px; }
+}
+
+/* ─── クリエイタープロフィールヘッダー ─────────────────── */
+.mm-creator-profile-header {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: flex-start;
+}
+@media (min-width: 640px) {
+  .mm-creator-profile-header { flex-direction: row; gap: 28px; align-items: flex-start; }
+}
+
 /* ─── ヒーローセクション ─────────────────── */
 .mm-hero {
   padding: 48px 20px 56px;

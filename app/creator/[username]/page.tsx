@@ -47,10 +47,11 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
       <Header user={myProfile} />
 
-      <div style={{ maxWidth: 1000, margin: '0 auto', padding: '40px 24px' }}>
+      <div className="mm-page-pad" style={{ maxWidth: 1000, margin: '0 auto' }}>
 
         {/* クリエイターヘッダー */}
-        <div className="mm-card" style={{ padding: '32px 36px', marginBottom: 36, display: 'flex', gap: 28, alignItems: 'flex-start' }}>
+        <div className="mm-card" style={{ padding: '20px 24px', marginBottom: 28 }}>
+          <div className="mm-creator-profile-header">
           {/* アバター */}
           <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--mm-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, flexShrink: 0, overflow: 'hidden' }}>
             {creator.avatar_url
@@ -88,20 +89,21 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
           </div>
 
           {/* 統計 */}
-          <div style={{ textAlign: 'center', flexShrink: 0 }}>
-            <p style={{ fontSize: 28, fontWeight: 700, color: 'var(--mm-primary)' }}>{contents?.length ?? 0}</p>
+          <div style={{ flexShrink: 0 }}>
+            <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--mm-primary)' }}>{contents?.length ?? 0}</p>
             <p style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>コンテンツ</p>
+          </div>
           </div>
         </div>
 
         {/* コンテンツ一覧 */}
-        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 20 }}>コンテンツ一覧</h2>
+        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 16 }}>コンテンツ一覧</h2>
         {!contents || contents.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--mm-text-muted)' }}>
             <p>まだコンテンツがありません</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
+          <div className="mm-content-grid">
             {contents.map((content: any) => (
               <ContentCard key={content.id} content={content} isPurchased={purchasedIds.includes(content.id)} />
             ))}

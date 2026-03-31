@@ -1,27 +1,8 @@
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
+import ContentCard from '@/components/ui/ContentCard'
+import { createClient } from '@/lib/supabase/server'
 import { Lock, ImageIcon, VideoIcon, Star, Users, Package, TrendingUp } from 'lucide-react'
-
-// ─── モックデータ ────────────────────────────────────────────────
-const MOCK_CASTS = [
-  { id: 'rina',   name: '月島 りな',   ruby: 'Rina Tsukishima', count: 23, badge: '人気No.1', color: '#e8b4c8', text: '#8b2252' },
-  { id: 'aina',   name: '桜井 あいな', ruby: 'Aina Sakurai',    count: 15, badge: 'NEW',      color: '#b4d4e8', text: '#1a5276' },
-  { id: 'yuka',   name: '夢野 ゆか',   ruby: 'Yuka Yumeno',    count: 31, badge: null,       color: '#c8e8b4', text: '#1e5631' },
-  { id: 'miu',    name: '星河 みう',   ruby: 'Miu Hoshikawa',  count: 8,  badge: 'NEW',      color: '#e8d4b4', text: '#7d4e12' },
-  { id: 'kotone', name: '七瀬 ことね', ruby: 'Kotone Nanase',  count: 19, badge: null,       color: '#d4b4e8', text: '#512e5f' },
-  { id: 'rena',   name: '白石 れな',   ruby: 'Rena Shiraishi', count: 27, badge: '限定配信', color: '#e8e4b4', text: '#7d6608' },
-]
-
-const MOCK_CONTENTS = [
-  { id: '1', type: 'image', title: '水着撮影会 完全版セット',        cast: '月島 りな',   price: 1500, stock: null, gradient: 'linear-gradient(135deg,#e8b4c8,#c8a0b8)', sold: 0 },
-  { id: '2', type: 'video', title: '独占インタビュー動画 30min',     cast: '桜井 あいな', price: 3000, stock: 30,   gradient: 'linear-gradient(135deg,#b4cce8,#8aade0)', sold: 12 },
-  { id: '3', type: 'image', title: 'プライベート浴衣フォト 20枚',    cast: '夢野 ゆか',   price: 800,  stock: null, gradient: 'linear-gradient(135deg,#c8e8b4,#a0c890)', sold: 0 },
-  { id: '4', type: 'video', title: '密着1日ショートムービー',        cast: '星河 みう',   price: 2000, stock: 20,   gradient: 'linear-gradient(135deg,#e8d4b4,#d4b880)', sold: 5 },
-  { id: '5', type: 'image', title: 'ランジェリー写真集 15枚',        cast: '七瀬 ことね', price: 1200, stock: null, gradient: 'linear-gradient(135deg,#d4b4e8,#b890d4)', sold: 0 },
-  { id: '6', type: 'video', title: 'お部屋配信アーカイブ',           cast: '白石 れな',   price: 500,  stock: 50,   gradient: 'linear-gradient(135deg,#e8e4b4,#d4c870)', sold: 31 },
-  { id: '7', type: 'image', title: 'オフショット写真100枚まとめ',    cast: '月島 りな',   price: 2500, stock: 10,   gradient: 'linear-gradient(135deg,#f4c6d8,#e8a0bc)', sold: 7 },
-  { id: '8', type: 'video', title: '誕生日特別動画メッセージ',       cast: '桜井 あいな', price: 1800, stock: null, gradient: 'linear-gradient(135deg,#c0d8f4,#90b8e8)', sold: 0 },
-]
 
 const STATS = [
   { icon: Users,      value: '1,240+', label: '会員数' },
@@ -31,16 +12,73 @@ const STATS = [
 ]
 
 const HOW_TO = [
-  { step: '01', icon: '📝', title: '無料で会員登録',       desc: 'メールアドレスだけで30秒登録。クレカ登録は購入時のみでOK。' },
+  { step: '01', icon: '📝', title: '無料で会員登録',         desc: 'メールアドレスだけで30秒登録。クレカ登録は購入時のみでOK。' },
   { step: '02', icon: '🔍', title: '好きなクリエイターを探す', desc: 'クリエイター一覧やコンテンツ一覧から気になる子をチェック。' },
-  { step: '03', icon: '💳', title: 'カードで安全に購入',   desc: 'Stripe決済で安心。購入後はマイページからいつでも閲覧可能。' },
+  { step: '03', icon: '💳', title: 'カードで安全に購入',     desc: 'Stripe決済で安心。購入後はクリエイターがメッセージを書き込んでお届け。' },
 ]
-// ──────────────────────────────────────────────────────────────────
 
-export default function HomePage() {
+const CREATOR_COLORS = [
+  { bg: '#e8b4c8', text: '#8b2252' },
+  { bg: '#b4d4e8', text: '#1a5276' },
+  { bg: '#c8e8b4', text: '#1e5631' },
+  { bg: '#e8d4b4', text: '#7d4e12' },
+  { bg: '#d4b4e8', text: '#512e5f' },
+  { bg: '#e8e4b4', text: '#7d6608' },
+]
+
+export default async function HomePage() {
+  const supabase = await createClient()
+
+  // ログイン状態
+  const { data: { user } } = await supabase.auth.getUser()
+  let profile = null
+  if (user) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    profile = data
+  }
+
+  // クリエイター一覧（最大6名）
+  const { data: creators } = await supabase
+    .from('profiles')
+    .select('id, display_name, username, avatar_url, bio')
+    .eq('role', 'creator')
+    .limit(6)
+
+  // コンテンツ一覧（最新8件）
+  const { data: contents } = await supabase
+    .from('contents')
+    .select('*, creator:profiles(id, display_name, avatar_url)')
+    .eq('is_published', true)
+    .order('created_at', { ascending: false })
+    .limit(8)
+
+  // 購入済みIDリスト
+  let purchasedIds: string[] = []
+  if (user) {
+    const { data: purchases } = await supabase
+      .from('purchases')
+      .select('content_id')
+      .eq('user_id', user.id)
+      .eq('status', 'completed')
+    purchasedIds = purchases?.map(p => p.content_id) ?? []
+  }
+
+  // クリエイターごとのコンテンツ数
+  const creatorContentCounts: Record<string, number> = {}
+  if (creators && contents) {
+    for (const c of creators) {
+      const { count } = await supabase
+        .from('contents')
+        .select('id', { count: 'exact', head: true })
+        .eq('creator_id', c.id)
+        .eq('is_published', true)
+      creatorContentCounts[c.id] = count ?? 0
+    }
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
-      <Header user={null} />
+      <Header user={profile} />
 
       {/* ━━━ HERO ━━━ */}
       <section className="mm-hero" style={{
@@ -63,7 +101,7 @@ export default function HomePage() {
             クリエイターの限定写真・動画を購入できるプラットフォーム
           </p>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 44, letterSpacing: '0.03em' }}>
-            SNSには絶対に載せない — あなただけへの特別なコンテンツ
+            メッセージを書き込んだ特別な一枚 — あなただけへ届ける
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link href="/contents" style={{ background: 'white', color: 'var(--mm-primary)',
@@ -89,95 +127,69 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ━━━ 人気キャスト ━━━ */}
-      <section style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 16px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 6 }}>CREATOR</p>
-            <h2 style={{ fontSize: 22, fontWeight: 700 }}>人気のクリエイター</h2>
+      {/* ━━━ 人気クリエイター ━━━ */}
+      {creators && creators.length > 0 && (
+        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 16px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 6 }}>CREATOR</p>
+              <h2 style={{ fontSize: 22, fontWeight: 700 }}>人気のクリエイター</h2>
+            </div>
+            <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-primary)', textDecoration: 'none', fontWeight: 600 }}>全員を見る →</Link>
           </div>
-          <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-primary)', textDecoration: 'none', fontWeight: 600 }}>全員を見る →</Link>
-        </div>
-        <div className="mm-cast-grid">
-          {MOCK_CASTS.map(cast => (
-            <Link key={cast.id} href="/contents" style={{ textDecoration: 'none' }}>
-              <div className="mm-card" style={{ padding: '20px 16px', textAlign: 'center', cursor: 'pointer' }}>
-                <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
-                  <div style={{ width: 72, height: 72, borderRadius: '50%', background: cast.color,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 22, fontWeight: 700, color: cast.text, margin: '0 auto',
-                    border: '3px solid white', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
-                    {cast.name[0]}
-                  </div>
-                  {cast.badge && (
-                    <span style={{ position: 'absolute', top: -4, right: -8, color: 'white', fontSize: 9, fontWeight: 700,
-                      padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap',
-                      background: cast.badge === 'NEW' ? '#ef4444' : cast.badge === '人気No.1' ? '#f59e0b' : 'var(--mm-primary)',
-                    }}>{cast.badge}</span>
-                  )}
-                </div>
-                <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--mm-text)', marginBottom: 2 }}>{cast.name}</p>
-                <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 8 }}>{cast.ruby}</p>
-                <p style={{ fontSize: 12, color: 'var(--mm-primary)', fontWeight: 600 }}>📦 {cast.count}件</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* ━━━ 新着コンテンツ ━━━ */}
-      <section style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 16px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 6 }}>CONTENTS</p>
-            <h2 style={{ fontSize: 22, fontWeight: 700 }}>新着コンテンツ</h2>
-          </div>
-          <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-primary)', textDecoration: 'none', fontWeight: 600 }}>もっと見る →</Link>
-        </div>
-        <div className="mm-content-grid">
-          {MOCK_CONTENTS.map(item => {
-            const remain = item.stock ? item.stock - item.sold : null
-            const soldOut = remain !== null && remain <= 0
-            return (
-              <Link key={item.id} href="/auth/signup" style={{ textDecoration: 'none', display: 'block' }}>
-                <div className="mm-card" style={{ cursor: 'pointer' }}>
-                  <div style={{ position: 'relative', aspectRatio: '4/3', background: item.gradient,
-                    overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ opacity: 0.25, transform: 'scale(2.5)' }}>
-                      {item.type === 'video' ? <VideoIcon size={32} color="white" /> : <ImageIcon size={32} color="white" />}
-                    </div>
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.18)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <div style={{ background: 'rgba(0,0,0,0.5)', borderRadius: '50%', width: 36, height: 36,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Lock size={16} color="white" />
+          <div className="mm-cast-grid">
+            {creators.map((creator, i) => {
+              const color = CREATOR_COLORS[i % CREATOR_COLORS.length]
+              const count = creatorContentCounts[creator.id] ?? 0
+              return (
+                <Link key={creator.id} href={`/creator/${creator.username}`} style={{ textDecoration: 'none' }}>
+                  <div className="mm-card" style={{ padding: '20px 16px', textAlign: 'center', cursor: 'pointer' }}>
+                    <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
+                      <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden',
+                        background: color.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 22, fontWeight: 700, color: color.text, margin: '0 auto',
+                        border: '3px solid white', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
+                        {creator.avatar_url
+                          ? <img src={creator.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : creator.display_name[0]}
                       </div>
-                    </div>
-                    <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', gap: 5 }}>
-                      <span style={{ background: item.type === 'video' ? '#7c3aed' : 'var(--mm-primary)',
-                        color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>
-                        {item.type === 'video' ? '動画' : '画像'}
-                      </span>
-                      {soldOut && <span style={{ background: '#6b7280', color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>SOLD OUT</span>}
-                    </div>
-                  </div>
-                  <div style={{ padding: '12px 14px' }}>
-                    <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 4 }}>{item.cast}</p>
-                    <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--mm-text)', marginBottom: 8,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--mm-primary)' }}>¥{item.price.toLocaleString()}</span>
-                      {item.stock && !soldOut && (
-                        <span style={{ fontSize: 11, color: remain! <= 5 ? '#dc2626' : 'var(--mm-text-muted)' }}>残り {remain} 枚</span>
+                      {i === 0 && (
+                        <span style={{ position: 'absolute', top: -4, right: -8, background: '#f59e0b', color: 'white',
+                          fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>人気No.1</span>
                       )}
                     </div>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--mm-text)', marginBottom: 2 }}>{creator.display_name}</p>
+                    <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 8 }}>@{creator.username}</p>
+                    <p style={{ fontSize: 12, color: 'var(--mm-primary)', fontWeight: 600 }}>📦 {count}件</p>
                   </div>
-                </div>
-              </Link>
-            )
-          })}
-        </div>
-      </section>
+                </Link>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ━━━ 新着コンテンツ ━━━ */}
+      {contents && contents.length > 0 && (
+        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 16px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 6 }}>CONTENTS</p>
+              <h2 style={{ fontSize: 22, fontWeight: 700 }}>新着コンテンツ</h2>
+            </div>
+            <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-primary)', textDecoration: 'none', fontWeight: 600 }}>もっと見る →</Link>
+          </div>
+          <div className="mm-content-grid">
+            {contents.map((content: any) => (
+              <ContentCard
+                key={content.id}
+                content={content}
+                isPurchased={purchasedIds.includes(content.id)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ━━━ HOW TO ━━━ */}
       <section style={{ maxWidth: 900, margin: '64px auto 0', padding: '0 24px' }}>
@@ -206,7 +218,7 @@ export default function HomePage() {
             {[
               { icon: '🛡️', text: 'Stripe認定の安全決済' },
               { icon: '🙈', text: '閲覧履歴は完全非公開' },
-              { icon: '📲', text: '購入後は永久保存' },
+              { icon: '✍️', text: '手書きメッセージ付き納品' },
               { icon: '💬', text: '24時間サポート対応' },
             ].map((item, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
