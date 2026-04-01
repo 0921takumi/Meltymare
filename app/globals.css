@@ -174,3 +174,49 @@ body {
 @media (min-width: 640px) {
   .mm-hero h1 { font-size: 58px; }
 }
+
+/* ─── モバイル追加調整 ─────────────────── */
+
+/* カードのパディングをモバイルで締める */
+@media (max-width: 480px) {
+  .mm-card { border-radius: 10px; }
+}
+
+/* ボタン類のタッチターゲット確保 */
+@media (max-width: 640px) {
+  button, a { -webkit-tap-highlight-color: transparent; }
+}
+
+/* クリエイターダッシュボードのボタン群 モバイルで折り返し */
+.mm-dashboard-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 管理画面: サイドバーをモバイルで非表示 */
+@media (max-width: 768px) {
+  .mm-admin-sidebar { display: none; }
+  .mm-admin-main { margin-left: 0 !important; }
+}
+
+/* コンテンツ詳細: モバイルでサムネイルのアスペクト比を緩める */
+@media (max-width: 480px) {
+  .mm-content-detail > div:first-child {
+    aspect-ratio: 16/9;
+  }
+}
+
+/* スクロールバーを細くする */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--mm-border); border-radius: 4px; }
+
+/* フォーカスリングをブランドカラーに */
+:focus-visible { outline: 2px solid var(--mm-primary); outline-offset: 2px; }
+
+/* 画像の選択防止 */
+img { user-select: none; -webkit-user-drag: none; }
+
+/* リンクのデフォルトカラー */
+a { color: inherit; }

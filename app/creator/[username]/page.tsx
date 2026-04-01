@@ -5,6 +5,30 @@ import { notFound } from 'next/navigation'
 import { ExternalLink } from 'lucide-react'
 import FollowButton from './FollowButton'
 import Link from 'next/link'
+import type { Metadata } from 'next'
+
+export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {
+  const { username } = await params
+  const supabase = await createClient()
+  const { data: creator } = await supabase
+    .from('profiles')
+    .select('display_name, bio, avatar_url')
+    .eq('username', username)
+    .eq('role', 'creator')
+    .single()
+  if (!creator) return { title: 'クリエイターが見つかりません' }
+  const desc = creator.bio ?? `${creator.display_name} のクリエイターページ`
+  return {
+    title: creator.display_name,
+    description: desc,
+    openGraph: {
+      title: `${creator.display_name} | Meltymare`,
+      description: desc,
+      images: creator.avatar_url ? [{ url: creator.avatar_url }] : [],
+    },
+    twitter: { card: 'summary_large_image', title: creator.display_name, description: desc },
+  }
+}
 
 export default async function CreatorProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params

@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
+import Footer from '@/components/layout/Footer'
 import ContentCard from '@/components/ui/ContentCard'
 import { createClient } from '@/lib/supabase/server'
 import { Lock, ImageIcon, VideoIcon, Star, Users, Package, TrendingUp } from 'lucide-react'
@@ -291,12 +292,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* フッター */}
-      <footer style={{ borderTop: '1px solid var(--mm-border)', padding: '24px', textAlign: 'center' }}>
-        <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>
-          © 2025 Meltymare · <Link href="/contact" style={{ color: 'var(--mm-text-muted)' }}>お問い合わせ</Link>
-        </p>
-      </footer>
+      <Footer />
     </div>
   )
 }

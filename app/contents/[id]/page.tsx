@@ -6,6 +6,30 @@ import ReviewSection from './ReviewSection'
 import { notFound } from 'next/navigation'
 import { ImageIcon, VideoIcon, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
+import type { Metadata } from 'next'
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const supabase = await createClient()
+  const { data: content } = await supabase
+    .from('contents')
+    .select('title, description, thumbnail_url, price, creator:profiles(display_name)')
+    .eq('id', id)
+    .single()
+  if (!content) return { title: 'コンテンツが見つかりません' }
+  const creator = content.creator as any
+  const desc = content.description ?? `${creator?.display_name ?? ''} の限定コンテンツ ¥${content.price.toLocaleString()}`
+  return {
+    title: content.title,
+    description: desc,
+    openGraph: {
+      title: `${content.title} | Meltymare`,
+      description: desc,
+      images: content.thumbnail_url ? [{ url: content.thumbnail_url }] : [],
+    },
+    twitter: { card: 'summary_large_image', title: content.title, description: desc },
+  }
+}
 
 export default async function ContentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

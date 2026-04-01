@@ -18,6 +18,14 @@ export default async function MyPage() {
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
 
+  // フォロー中クリエイター
+  const { data: follows } = await supabase
+    .from('follows')
+    .select('creator:profiles!follows_creator_id_fkey(id, display_name, username, avatar_url)')
+    .eq('follower_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(12)
+
   const totalCount = purchases?.length ?? 0
   const deliveredCount = purchases?.filter(p => p.delivery_status === 'delivered').length ?? 0
   const pendingCount = totalCount - deliveredCount
@@ -53,6 +61,33 @@ export default async function MyPage() {
             </div>
           </div>
         </div>
+
+        {/* フォロー中クリエイター */}
+        {follows && follows.length > 0 && (
+          <div style={{ marginBottom: 32 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 14 }}>フォロー中のクリエイター</h2>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {follows.map((f: any) => {
+                const c = f.creator
+                if (!c) return null
+                return (
+                  <Link key={c.id} href={`/creator/${c.username}`} style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 72 }}>
+                      <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: '2px solid white', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                        {c.avatar_url
+                          ? <img src={c.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : '👤'}
+                      </div>
+                      <p style={{ fontSize: 11, color: 'var(--mm-text-sub)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', fontWeight: 600 }}>
+                        {c.display_name}
+                      </p>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 16 }}>購入済みコンテンツ</h2>
 
