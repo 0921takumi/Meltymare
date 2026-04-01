@@ -44,7 +44,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
 
   const { data: content } = await supabase
     .from('contents')
-    .select('*, creator:profiles(id, display_name, avatar_url, bio, twitter_url, instagram_url, tiktok_url)')
+    .select('*, creator:profiles(id, display_name, username, avatar_url, bio, twitter_url, instagram_url, tiktok_url)')
     .eq('id', id)
     .eq('is_published', true)
     .single()
@@ -169,7 +169,8 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
             {content.creator && (
               <div className="mm-card" style={{ padding: 20 }}>
                 <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 10 }}>クリエイター</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Link href={`/creator/${(content.creator as any).username}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                   <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--mm-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
                     {content.creator.avatar_url ? (
                       <img src={content.creator.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -182,6 +183,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
                     {content.creator.bio && <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2 }}>{content.creator.bio}</p>}
                   </div>
                 </div>
+                </Link>
                 {(content.creator.twitter_url || content.creator.instagram_url || content.creator.tiktok_url) && (
                   <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
                     {content.creator.twitter_url && (
