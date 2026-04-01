@@ -69,6 +69,13 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
         .eq('id', purchaseId)
       if (updErr) throw updErr
 
+      // 納品完了メール送信（バックグラウンド）
+      fetch('/api/notify/delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchase_id: purchaseId }),
+      }).catch(() => {})
+
       setDone(true)
     } catch (e: any) {
       setError(e.message ?? '納品に失敗しました')

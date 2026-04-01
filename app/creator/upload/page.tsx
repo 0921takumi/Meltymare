@@ -3,7 +3,9 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Header from '@/components/layout/Header'
-import { Upload, ImageIcon, VideoIcon } from 'lucide-react'
+import { Upload, ImageIcon, VideoIcon, X, Plus } from 'lucide-react'
+
+const SUGGESTED_TAGS = ['チェキ', 'メッセージ', 'コスプレ', 'バースデー', '動画', '制服', 'プライベート', 'サイン入り', 'オフショット', 'カスタム']
 
 function UploadForm() {
   const router = useRouter()
@@ -20,6 +22,8 @@ function UploadForm() {
   const [isPublished, setIsPublished] = useState(false)
   const [contentFile, setContentFile] = useState<File | null>(null)
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -40,6 +44,7 @@ function UploadForm() {
           setStockLimit(content.stock_limit ? String(content.stock_limit) : '')
           setContentType(content.content_type)
           setIsPublished(content.is_published)
+          setTags(Array.isArray(content.tags) ? content.tags : [])
         }
       }
     }
@@ -84,6 +89,7 @@ function UploadForm() {
         content_type: contentType,
         stock_limit: stockLimit ? parseInt(stockLimit) : null,
         is_published: isPublished,
+        tags: tags.length > 0 ? tags : [],
       }
       if (fileUrl) payload.file_url = fileUrl
       if (thumbnailUrl) payload.thumbnail_url = thumbnailUrl
@@ -103,6 +109,13 @@ function UploadForm() {
       setLoading(false)
     }
   }
+
+  const addTag = (tag: string) => {
+    const t = tag.trim().replace(/^#/, '')
+    if (t && !tags.includes(t) && tags.length < 10) setTags(prev => [...prev, t])
+    setTagInput('')
+  }
+  const removeTag = (tag: string) => setTags(prev => prev.filter(t => t !== tag))
 
   const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' as const }
   const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--mm-text-sub)' }
@@ -171,6 +184,44 @@ function UploadForm() {
                 <span style={{ fontSize: 14 }}>{thumbnailFile ? thumbnailFile.name : 'サムネイルを選択...'}</span>
                 <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setThumbnailFile(e.target.files?.[0] ?? null)} />
               </label>
+            </div>
+
+            {/* タグ */}
+            <div>
+              <label style={labelStyle}>タグ（最大10個）</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                {tags.map(tag => (
+                  <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: 'var(--mm-primary-light)', color: 'var(--mm-primary)', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
+                    #{tag}
+                    <button type="button" onClick={() => removeTag(tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: 'var(--mm-primary)' }}>
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput) } }}
+                  placeholder="タグを入力してEnter"
+                  style={{ ...inputStyle, flex: 1 }}
+                  disabled={tags.length >= 10}
+                />
+                <button type="button" onClick={() => addTag(tagInput)} disabled={!tagInput.trim() || tags.length >= 10}
+                  style={{ padding: '10px 16px', background: 'var(--mm-primary)', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>
+                  <Plus size={14} />
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                <span style={{ fontSize: 11, color: 'var(--mm-text-muted)', alignSelf: 'center' }}>候補:</span>
+                {SUGGESTED_TAGS.filter(t => !tags.includes(t)).map(t => (
+                  <button key={t} type="button" onClick={() => addTag(t)}
+                    style={{ padding: '3px 10px', border: '1px solid var(--mm-border)', borderRadius: 20, fontSize: 12, background: 'white', cursor: 'pointer', color: 'var(--mm-text-sub)' }}>
+                    #{t}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--mm-bg)', borderRadius: 8 }}>
