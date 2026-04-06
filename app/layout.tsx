@@ -1,13 +1,13 @@
 import type { Metadata } from 'next'
 import './globals.css'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://meltymare.vercel.app'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: {
-    default: 'Meltymare | クリエイターの限定コンテンツを購入',
-    template: '%s | Meltymare',
+    default: 'MyFocus | クリエイターの限定コンテンツを購入',
+    template: '%s | MyFocus',
   },
   description: 'コンセプトカフェ・クリエイターの限定写真・動画を直接購入できるプラットフォーム。メッセージ入りチェキ、パーソナルビデオなど、あなただけの特別なコンテンツをお届けします。',
   keywords: ['コンセプトカフェ', 'チェキ', 'クリエイター', '限定写真', 'パーソナルコンテンツ', '推し活'],
@@ -15,14 +15,14 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'ja_JP',
     url: APP_URL,
-    siteName: 'Meltymare',
-    title: 'Meltymare | クリエイターの限定コンテンツを購入',
+    siteName: 'MyFocus',
+    title: 'MyFocus | クリエイターの限定コンテンツを購入',
     description: 'コンセプトカフェ・クリエイターの限定写真・動画を直接購入できるプラットフォーム',
-    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: 'Meltymare' }],
+    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: 'MyFocus' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Meltymare | クリエイターの限定コンテンツを購入',
+    title: 'MyFocus | クリエイターの限定コンテンツを購入',
     description: 'コンセプトカフェ・クリエイターの限定写真・動画を直接購入できるプラットフォーム',
     images: ['/og-default.png'],
   },

@@ -36,7 +36,7 @@ export default function Header({ user }: HeaderProps) {
         {/* Logo */}
         <Link href="/" style={{ textDecoration: 'none', flexShrink: 0 }}>
           <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, fontWeight: 600, color: 'var(--mm-primary)', letterSpacing: '0.05em' }}>
-            Meltymare
+            MyFocus
           </span>
         </Link>
 

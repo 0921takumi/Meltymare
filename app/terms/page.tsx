@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: '利用規約' }
 const SECTIONS = [
   {
     title: '第1条（適用）',
-    content: '本規約は、Meltymare（以下「当サービス」）が提供するサービスの利用条件を定めるものです。登録ユーザーの皆様には、本規約に従って当サービスをご利用いただきます。'
+    content: '本規約は、MyFocus（以下「当サービス」）が提供するサービスの利用条件を定めるものです。登録ユーザーの皆様には、本規約に従って当サービスをご利用いただきます。'
   },
   {
     title: '第2条（利用登録）',
@@ -52,7 +52,7 @@ export default function TermsPage() {
 
         <div className="mm-card" style={{ padding: '32px 40px' }}>
           <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.8, marginBottom: 32 }}>
-            本利用規約（以下「本規約」）は、Meltymare（以下「当サービス」）がこのウェブサイト上で提供するサービス（以下「本サービス」）の利用条件を定めるものです。登録ユーザーの皆様（以下「ユーザー」）には、本規約に従って、本サービスをご利用いただきます。
+            本利用規約（以下「本規約」）は、MyFocus（以下「当サービス」）がこのウェブサイト上で提供するサービス（以下「本サービス」）の利用条件を定めるものです。登録ユーザーの皆様（以下「ユーザー」）には、本規約に従って、本サービスをご利用いただきます。
           </p>
 
           {SECTIONS.map((s, i) => (
@@ -63,7 +63,10 @@ export default function TermsPage() {
           ))}
 
           <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--mm-border)', fontSize: 13, color: 'var(--mm-text-muted)' }}>
-            <p>以上</p>
+            <p style={{ marginBottom: 8 }}>【運営会社】</p>
+            <p>株式会社91&amp;Co.</p>
+            <p>〒114-0001 東京都北区神谷2-21-7</p>
+            <p>お問い合わせ: <a href="mailto:info@my-focus.jp" style={{ color: 'var(--mm-primary)' }}>info@my-focus.jp</a></p>
           </div>
         </div>
       </div>

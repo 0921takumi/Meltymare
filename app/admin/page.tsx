@@ -40,7 +40,7 @@ export default async function AdminDashboard() {
     <div style={{ padding: '32px 32px' }}>
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>ダッシュボード</h1>
-        <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>Meltymare 運営管理コンソール</p>
+        <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>MyFocus 運営管理コンソール</p>
       </div>
 
       {/* KPIカード */}

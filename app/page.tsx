@@ -105,12 +105,12 @@ export default async function HomePage() {
             </span>
           </div>
           <h1 className="mm-hero" style={{ fontFamily: 'Cormorant Garamond, serif', fontWeight: 600,
-            color: 'white', letterSpacing: '0.1em', marginBottom: 16, lineHeight: 1.1, padding: 0 }}>Meltymare</h1>
+            color: 'white', letterSpacing: '0.1em', marginBottom: 16, lineHeight: 1.1, padding: 0 }}>MyFocus</h1>
           <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.88)', marginBottom: 8, lineHeight: 1.8, fontWeight: 500 }}>
             クリエイターの限定写真・動画を購入できるプラットフォーム
           </p>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 44, letterSpacing: '0.03em' }}>
-            メッセージを書き込んだ特別な一枚 — あなただけへ届ける
+            メッセージを書き込んだ特別な一枚 ― あなただけへ届ける
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link href="/contents" style={{ background: 'white', color: 'var(--mm-primary)',

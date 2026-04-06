@@ -8,7 +8,7 @@ export default function Footer() {
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 32, marginBottom: 36 }}>
           <div>
             <p style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, fontWeight: 600, color: 'white', letterSpacing: '0.08em', marginBottom: 8 }}>
-              Meltymare
+              MyFocus
             </p>
             <p style={{ fontSize: 13, lineHeight: 1.7, maxWidth: 260 }}>
               コンセプトカフェ・クリエイターの限定写真・動画を直接購入できるプラットフォーム
@@ -45,7 +45,7 @@ export default function Footer() {
 
         {/* 下段 */}
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-          <p style={{ fontSize: 12 }}>© 2025 Meltymare. All rights reserved.</p>
+          <p style={{ fontSize: 12 }}>© 2025 株式会社91&amp;Co. All rights reserved.</p>
           <p style={{ fontSize: 12 }}>Powered by Stripe · Supabase</p>
         </div>
       </div>
