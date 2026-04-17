@@ -1,4 +1,4 @@
-# Meltymare セットアップ手順
+# MyFocus セットアップ手順
 
 ## 技術スタック
 - Next.js 15 (App Router) + TypeScript

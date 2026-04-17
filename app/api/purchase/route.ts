@@ -10,7 +10,12 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
 
-    const { contentId, couponCode } = await req.json()
+    const { contentId, couponCode, tipPercent: rawTipPercent } = await req.json()
+
+    // チップ率のバリデーション（0/5/10/15 のみ許可）
+    const tipPercent: 0 | 5 | 10 | 15 = [0, 5, 10, 15].includes(Number(rawTipPercent))
+      ? (Number(rawTipPercent) as 0 | 5 | 10 | 15)
+      : 0
 
     // コンテンツ取得
     const { data: content, error: contentError } = await supabase
@@ -63,15 +68,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const finalPrice = Math.max(content.price - discountAmount, 0)
+    const discountedContentPrice = Math.max(content.price - discountAmount, 0)
+    // チップは割引後の商品価格に対して計算（Math.floorで切り捨て統一）
+    const tipAmount = Math.floor(discountedContentPrice * tipPercent / 100)
+    const finalPrice = discountedContentPrice + tipAmount
     const appUrl = process.env.NEXT_PUBLIC_APP_URL
 
-    // 無料（割引100%）の場合は直接完了
+    // 無料（割引100% かつ チップなし）の場合は直接完了
     if (finalPrice === 0) {
       const { data: purchase } = await supabase.from('purchases').insert({
         user_id: user.id,
         content_id: contentId,
         amount: 0,
+        content_price: 0,
+        tip_amount: 0,
+        tip_percent: 0,
         original_amount: content.price,
         discount_amount: discountAmount,
         coupon_id: appliedCouponId,
@@ -91,16 +102,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Stripe Checkout Session作成
+    // 商品本体は割引後の価格で1明細。チップがあれば別明細として追加（明細上の可視化のため）
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
           currency: 'jpy',
           product_data: {
-            name: content.title,
+            name: discountAmount > 0
+              ? `${content.title}（クーポン適用後）`
+              : content.title,
             images: content.thumbnail_url ? [content.thumbnail_url] : [],
           },
-          unit_amount: finalPrice,
+          unit_amount: discountedContentPrice,
         },
         quantity: 1,
       }],
@@ -113,16 +127,18 @@ export async function POST(req: NextRequest) {
         coupon_id: appliedCouponId ?? '',
         original_amount: String(content.price),
         discount_amount: String(discountAmount),
+        tip_amount: String(tipAmount),
+        tip_percent: String(tipPercent),
       },
     }
 
-    // 割引がある場合は明細に表示
-    if (discountAmount > 0) {
+    // チップがある場合は明細に追加（商品代金への任意の上乗せとして表示）
+    if (tipAmount > 0) {
       sessionParams.line_items!.push({
         price_data: {
           currency: 'jpy',
-          product_data: { name: `クーポン割引 (${couponCode})` },
-          unit_amount: -discountAmount,
+          product_data: { name: `応援チップ (${tipPercent}%)` },
+          unit_amount: tipAmount,
         },
         quantity: 1,
       })
@@ -135,6 +151,9 @@ export async function POST(req: NextRequest) {
       user_id: user.id,
       content_id: contentId,
       amount: finalPrice,
+      content_price: discountedContentPrice,
+      tip_amount: tipAmount,
+      tip_percent: tipPercent,
       original_amount: content.price,
       discount_amount: discountAmount,
       coupon_id: appliedCouponId,

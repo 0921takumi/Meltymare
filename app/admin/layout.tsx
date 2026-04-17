@@ -35,7 +35,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           <Link href="/" style={{ textDecoration: 'none' }}>
             <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 20, fontWeight: 600, color: 'white', letterSpacing: '0.05em' }}>
-              Meltymare
+              MyFocus
             </span>
           </Link>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 4, letterSpacing: '0.1em' }}>

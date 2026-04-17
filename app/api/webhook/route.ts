@@ -72,7 +72,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, purchaseId: 
     const email = authUser?.user?.email
     if (!email) return
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://meltymare.vercel.app'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
     const creator = content.creator as any
 
     // Resend / SMTP がなければ Supabase Edge Function or fetch
@@ -87,7 +87,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, purchaseId: 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Meltymare <noreply@meltymare.com>',
+        from: 'MyFocus <noreply@my-focus.jp>',
         to: email,
         subject: `【購入完了】${content.title}`,
         html: `
@@ -106,7 +106,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, purchaseId: 
               マイページで確認する
             </a>
 
-            <p style="margin-top: 32px; font-size: 12px; color: #aaa;">このメールは Meltymare から自動送信されています。</p>
+            <p style="margin-top: 32px; font-size: 12px; color: #aaa;">このメールは MyFocus から自動送信されています。</p>
           </div>
         `,
       }),
@@ -136,7 +136,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
     if (!resendKey) return
 
     const content = purchase.content as any
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://meltymare.vercel.app'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
 
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -145,7 +145,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Meltymare <noreply@meltymare.com>',
+        from: 'MyFocus <noreply@my-focus.jp>',
         to: email,
         subject: `【納品完了】${content?.title} が届きました！`,
         html: `
@@ -164,7 +164,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
               今すぐダウンロード
             </a>
 
-            <p style="margin-top: 32px; font-size: 12px; color: #aaa;">このメールは Meltymare から自動送信されています。</p>
+            <p style="margin-top: 32px; font-size: 12px; color: #aaa;">このメールは MyFocus から自動送信されています。</p>
           </div>
         `,
       }),

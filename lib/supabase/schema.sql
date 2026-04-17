@@ -1,5 +1,5 @@
 -- ==========================================
--- Meltymare Database Schema
+-- MyFocus Database Schema
 -- Supabase SQL Editorで実行してください
 -- ==========================================
 

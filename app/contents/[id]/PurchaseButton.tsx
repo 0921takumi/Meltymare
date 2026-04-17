@@ -1,7 +1,15 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Download, ShoppingCart, Lock, Clock, Tag } from 'lucide-react'
+import { Download, ShoppingCart, Lock, Clock, Tag, Heart } from 'lucide-react'
+
+type TipPercent = 0 | 5 | 10 | 15
+const TIP_OPTIONS: { value: TipPercent; label: string }[] = [
+  { value: 0, label: 'なし' },
+  { value: 5, label: '5%' },
+  { value: 10, label: '10%' },
+  { value: 15, label: '15%' },
+]
 
 interface Props {
   contentId: string
@@ -20,6 +28,7 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
   const [couponLoading, setCouponLoading] = useState(false)
   const [couponData, setCouponData] = useState<{ discount_amount: number; final_price: number; code: string } | null>(null)
   const [couponError, setCouponError] = useState('')
+  const [tipPercent, setTipPercent] = useState<TipPercent>(0)
 
   // 購入済み・納品済み → ダウンロード
   if (isPurchased && deliveryStatus === 'delivered' && downloadUrl) {
@@ -90,7 +99,9 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
     }
   }
 
-  const finalPrice = couponData ? couponData.final_price : price
+  const contentPriceAfterCoupon = couponData ? couponData.final_price : price
+  const tipAmount = Math.floor(contentPriceAfterCoupon * tipPercent / 100)
+  const finalPrice = contentPriceAfterCoupon + tipAmount
 
   const handlePurchase = async () => {
     setLoading(true)
@@ -98,7 +109,7 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
       const res = await fetch('/api/purchase', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contentId, couponCode: couponData?.code }),
+        body: JSON.stringify({ contentId, couponCode: couponData?.code, tipPercent }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -136,6 +147,51 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
             <span style={{ fontSize: 13, fontWeight: 700 }}>→ ¥{couponData.final_price.toLocaleString()}</span>
           </div>
         )}
+      </div>
+
+      {/* 応援チップ選択 */}
+      <div className="mm-card" style={{ padding: '14px 16px', background: 'linear-gradient(135deg, #fefaf3 0%, #ffffff 100%)', border: '1px solid #e8d7b4' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <Heart size={14} style={{ color: '#b8956a' }} fill="#b8956a" />
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#8a6a3f' }}>応援チップ（任意）</span>
+        </div>
+        <p style={{ fontSize: 11, color: '#a78968', marginBottom: 10, lineHeight: 1.5 }}>
+          商品代金への上乗せで、推しのクリエイターに応援を届けられます。
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+          {TIP_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setTipPercent(opt.value)}
+              style={{
+                padding: '10px 4px',
+                fontSize: 13,
+                fontWeight: 700,
+                borderRadius: 8,
+                border: tipPercent === opt.value ? '2px solid #b8956a' : '1px solid var(--mm-border)',
+                background: tipPercent === opt.value ? '#b8956a' : 'white',
+                color: tipPercent === opt.value ? 'white' : 'var(--mm-text-sub)',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {tipAmount > 0 && (
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(184, 149, 106, 0.1)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12, color: '#8a6a3f', fontWeight: 600 }}>チップ ({tipPercent}%)</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#8a6a3f' }}>+¥{tipAmount.toLocaleString()}</span>
+          </div>
+        )}
+      </div>
+
+      {/* 合計 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 4px' }}>
+        <span style={{ fontSize: 13, color: 'var(--mm-text-muted)', fontWeight: 600 }}>合計</span>
+        <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--mm-text)' }}>¥{finalPrice.toLocaleString()}</span>
       </div>
 
       <button onClick={handlePurchase} disabled={loading}

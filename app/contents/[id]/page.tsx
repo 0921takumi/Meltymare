@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     title: content.title,
     description: desc,
     openGraph: {
-      title: `${content.title} | Meltymare`,
+      title: `${content.title} | MyFocus`,
       description: desc,
       images: content.thumbnail_url ? [{ url: content.thumbnail_url }] : [],
     },

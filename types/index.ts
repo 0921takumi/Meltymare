@@ -42,6 +42,9 @@ export interface Purchase {
   user_id: string
   content_id: string
   amount: number
+  content_price: number
+  tip_amount: number
+  tip_percent: 0 | 5 | 10 | 15
   stripe_payment_intent_id: string
   status: 'pending' | 'completed' | 'failed'
   delivery_status: 'pending' | 'delivered'

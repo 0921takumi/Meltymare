@@ -19,10 +19,11 @@ export default async function CreatorDashboard() {
     .order('created_at', { ascending: false })
 
   const contentIds = contents?.map(c => c.id) ?? []
-  const { data: pendingPurchases } = contentIds.length > 0
-    ? await supabase.from('purchases').select('id').in('content_id', contentIds).eq('status', 'completed').eq('delivery_status', 'pending')
+  const { data: completedPurchases } = contentIds.length > 0
+    ? await supabase.from('purchases').select('*').in('content_id', contentIds).eq('status', 'completed')
     : { data: [] }
-  const pendingCount = pendingPurchases?.length ?? 0
+
+  const pendingCount = completedPurchases?.filter(p => (p as any).delivery_status === 'pending').length ?? 0
 
   // リクエスト pending 件数
   const { count: pendingRequestCount } = await supabase
@@ -31,11 +32,18 @@ export default async function CreatorDashboard() {
     .eq('creator_id', user.id)
     .eq('status', 'pending')
 
-  const totalSales = contents?.reduce((sum, c) => sum + (c.sold_count * c.price), 0) ?? 0
-  const totalSold = contents?.reduce((sum, c) => sum + c.sold_count, 0) ?? 0
+  // コンテンツ売上（商品代金のみ、チップ除く） / チップ売上 / 販売件数
+  const contentSales = completedPurchases?.reduce((sum, p) => sum + ((p as any).content_price ?? p.amount ?? 0), 0) ?? 0
+  const tipSales = completedPurchases?.reduce((sum, p) => sum + ((p as any).tip_amount ?? 0), 0) ?? 0
+  const tipCount = completedPurchases?.filter(p => ((p as any).tip_amount ?? 0) > 0).length ?? 0
+  const totalSold = completedPurchases?.length ?? 0
+
   const feeRate = profile?.fee_rate ?? 30
-  const feeAmount = Math.floor(totalSales * feeRate / 100)
-  const netAmount = totalSales - feeAmount
+  // 手数料はコンテンツ売上にのみかかる（チップは手数料0%、全額クリエイターへ）
+  const feeAmount = Math.floor(contentSales * feeRate / 100)
+  const contentNet = contentSales - feeAmount
+  const netAmount = contentNet + tipSales
+  const totalSales = contentSales + tipSales
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
@@ -62,13 +70,13 @@ export default async function CreatorDashboard() {
         </div>
 
         {/* サマリーカード */}
-        <div className="mm-creator-stats" style={{ marginBottom: 28 }}>
+        <div className="mm-creator-stats" style={{ marginBottom: 16 }}>
           {[
             { label: 'コンテンツ数', value: `${contents?.length ?? 0} 件`, color: 'var(--mm-primary)', sub: null },
             { label: '総販売数', value: `${totalSold} 件`, color: '#7c3aed', sub: null },
-            { label: '売上合計', value: `¥${totalSales.toLocaleString()}`, color: '#059669', sub: '税込' },
+            { label: 'コンテンツ売上', value: `¥${contentSales.toLocaleString()}`, color: '#059669', sub: '税込' },
             { label: `手数料 (${feeRate}%)`, value: `¥${feeAmount.toLocaleString()}`, color: '#dc2626', sub: '運営取り分' },
-            { label: '振込予定額', value: `¥${netAmount.toLocaleString()}`, color: 'var(--mm-primary)', sub: '確定売上ベース' },
+            { label: '振込予定額', value: `¥${netAmount.toLocaleString()}`, color: 'var(--mm-primary)', sub: '売上 - 手数料 + チップ' },
           ].map((s, i) => (
             <div key={i} className="mm-card" style={{ padding: '16px', textAlign: 'center' }}>
               <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 6 }}>{s.label}</p>
@@ -76,6 +84,20 @@ export default async function CreatorDashboard() {
               {s.sub && <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>{s.sub}</p>}
             </div>
           ))}
+        </div>
+
+        {/* 応援チップ売上（別枠） */}
+        <div className="mm-card" style={{ padding: '18px 20px', marginBottom: 28, background: 'linear-gradient(135deg, #fefaf3 0%, #ffffff 100%)', border: '1px solid #e8d7b4' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <p style={{ fontSize: 12, color: '#8a6a3f', fontWeight: 700, marginBottom: 4 }}>♥ 応援チップ売上</p>
+              <p style={{ fontSize: 11, color: '#a78968' }}>チップは手数料0%、全額クリエイターへ還元されます</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: 22, fontWeight: 800, color: '#b8956a' }}>¥{tipSales.toLocaleString()}</p>
+              <p style={{ fontSize: 11, color: '#a78968', marginTop: 2 }}>{tipCount}件のサポーターから</p>
+            </div>
+          </div>
         </div>
 
         {/* コンテンツ一覧テーブル */}
