@@ -65,18 +65,29 @@ function UploadForm() {
 
       if (!isEdit && !contentFile) throw new Error('ファイルを選択してください')
 
+      // MIME/サイズ検証
+      const { validateUpload } = await import('@/lib/sanitize')
+
       if (contentFile) {
-        const ext = contentFile.name.split('.').pop()
-        const path = `${user.id}/${Date.now()}.${ext}`
-        const { error: upErr } = await supabase.storage.from('contents').upload(path, contentFile)
+        const v = validateUpload(contentFile, contentType)
+        if (!v.ok) throw new Error(v.error)
+        const ext = (contentFile.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        const path = `${user.id}/${Date.now()}.${ext || 'bin'}`
+        const { error: upErr } = await supabase.storage.from('contents').upload(path, contentFile, {
+          contentType: contentFile.type,
+        })
         if (upErr) throw upErr
         fileUrl = path
       }
 
       if (thumbnailFile) {
-        const ext = thumbnailFile.name.split('.').pop()
-        const path = `${user.id}/${Date.now()}_thumb.${ext}`
-        const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, thumbnailFile)
+        const v = validateUpload(thumbnailFile, 'image')
+        if (!v.ok) throw new Error(v.error)
+        const ext = (thumbnailFile.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        const path = `${user.id}/${Date.now()}_thumb.${ext || 'jpg'}`
+        const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, thumbnailFile, {
+          contentType: thumbnailFile.type,
+        })
         if (upErr) throw upErr
         const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
         thumbnailUrl = urlData.publicUrl

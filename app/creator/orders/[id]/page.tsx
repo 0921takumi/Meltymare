@@ -54,9 +54,16 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Unauthorized')
 
-      const ext = deliveryFile.name.split('.').pop()
-      const path = `${user.id}/${purchaseId}_${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('deliveries').upload(path, deliveryFile)
+      const { validateUpload } = await import('@/lib/sanitize')
+      const kind: 'image' | 'video' = deliveryFile.type.startsWith('video/') ? 'video' : 'image'
+      const v = validateUpload(deliveryFile, kind)
+      if (!v.ok) throw new Error(v.error)
+
+      const ext = (deliveryFile.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      const path = `${user.id}/${purchaseId}_${Date.now()}.${ext || 'bin'}`
+      const { error: upErr } = await supabase.storage.from('deliveries').upload(path, deliveryFile, {
+        contentType: deliveryFile.type,
+      })
       if (upErr) throw upErr
 
       const { error: updErr } = await supabase

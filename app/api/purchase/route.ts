@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit } from '@/lib/rate-limit'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
@@ -10,12 +11,21 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
 
+    // レート制限: 1ユーザーあたり 10req/分
+    const rl = rateLimit({ key: `purchase:${user.id}`, limit: 10, windowSec: 60 })
+    if (!rl.ok) return NextResponse.json({ error: 'リクエストが多すぎます。しばらくしてから再試行してください' }, { status: 429 })
+
     const { contentId, couponCode, tipPercent: rawTipPercent } = await req.json()
 
     // チップ率のバリデーション（0/5/10/15 のみ許可）
     const tipPercent: 0 | 5 | 10 | 15 = [0, 5, 10, 15].includes(Number(rawTipPercent))
       ? (Number(rawTipPercent) as 0 | 5 | 10 | 15)
       : 0
+
+    // contentId は UUID 形式のみ許可
+    if (typeof contentId !== 'string' || !/^[0-9a-f-]{36}$/i.test(contentId)) {
+      return NextResponse.json({ error: 'Invalid contentId' }, { status: 400 })
+    }
 
     // コンテンツ取得
     const { data: content, error: contentError } = await supabase
@@ -25,6 +35,11 @@ export async function POST(req: NextRequest) {
       .eq('is_published', true)
       .single()
     if (contentError || !content) return NextResponse.json({ error: 'コンテンツが見つかりません' }, { status: 404 })
+
+    // 自分のコンテンツは購入不可
+    if (content.creator_id === user.id) {
+      return NextResponse.json({ error: '自分のコンテンツは購入できません' }, { status: 400 })
+    }
 
     // 在庫チェック
     if (content.stock_limit != null && content.sold_count >= content.stock_limit) {
@@ -45,7 +60,7 @@ export async function POST(req: NextRequest) {
     let discountAmount = 0
     let appliedCouponId: string | null = null
 
-    if (couponCode) {
+    if (couponCode && typeof couponCode === 'string') {
       const { data: coupon } = await supabase
         .from('coupons')
         .select('*')
@@ -76,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     // 無料（割引100% かつ チップなし）の場合は直接完了
     if (finalPrice === 0) {
-      const { data: purchase } = await supabase.from('purchases').insert({
+      await supabase.from('purchases').insert({
         user_id: user.id,
         content_id: contentId,
         amount: 0,
@@ -102,7 +117,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Stripe Checkout Session作成
-    // 商品本体は割引後の価格で1明細。チップがあれば別明細として追加（明細上の可視化のため）
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ['card'],
       line_items: [{
@@ -132,7 +146,6 @@ export async function POST(req: NextRequest) {
       },
     }
 
-    // チップがある場合は明細に追加（商品代金への任意の上乗せとして表示）
     if (tipAmount > 0) {
       sessionParams.line_items!.push({
         price_data: {
@@ -146,7 +159,6 @@ export async function POST(req: NextRequest) {
 
     const session = await stripe.checkout.sessions.create(sessionParams)
 
-    // purchaseレコード作成（pending）
     await supabase.from('purchases').insert({
       user_id: user.id,
       content_id: contentId,
@@ -163,7 +175,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ sessionId: session.id, checkoutUrl: session.url })
   } catch (e: unknown) {
-    console.error(e)
+    console.error('purchase error:', e)
     return NextResponse.json({ error: '購入処理に失敗しました' }, { status: 500 })
   }
 }

@@ -54,21 +54,31 @@ export default function ProfileEditPage() {
     if (!user) return
 
     try {
+      const { validateUpload, sanitizeText, sanitizeOptional, sanitizeUrl } = await import('@/lib/sanitize')
+
       let avatarUrl = profile?.avatar_url
       if (avatarFile) {
-        const ext = avatarFile.name.split('.').pop()
-        const path = `avatars/${user.id}.${ext}`
-        await supabase.storage.from('thumbnails').upload(path, avatarFile, { upsert: true })
+        const v = validateUpload(avatarFile, 'image')
+        if (!v.ok) throw new Error(v.error)
+        const ext = (avatarFile.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        const path = `avatars/${user.id}.${ext || 'jpg'}`
+        await supabase.storage.from('thumbnails').upload(path, avatarFile, {
+          upsert: true,
+          contentType: avatarFile.type,
+        })
         const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
         avatarUrl = urlData.publicUrl + `?t=${Date.now()}`
       }
 
+      const cleanDisplayName = sanitizeText(displayName, { maxLength: 50, allowNewlines: false })
+      if (!cleanDisplayName) throw new Error('表示名を入力してください')
+
       const { error: updateError } = await supabase.from('profiles').update({
-        display_name: displayName,
-        bio: bio || null,
-        twitter_url: twitterUrl || null,
-        instagram_url: instagramUrl || null,
-        tiktok_url: tiktokUrl || null,
+        display_name: cleanDisplayName,
+        bio: sanitizeOptional(bio, { maxLength: 500 }),
+        twitter_url: sanitizeUrl(twitterUrl),
+        instagram_url: sanitizeUrl(instagramUrl),
+        tiktok_url: sanitizeUrl(tiktokUrl),
         avatar_url: avatarUrl,
       }).eq('id', user.id)
 
