@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendDeliveryEmail } from '@/app/api/webhook/route'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { rateLimit } from '@/lib/rate-limit'
 
 const UUID_RE = /^[0-9a-f-]{36}$/i
@@ -24,15 +25,30 @@ export async function POST(req: NextRequest) {
     // 所有権チェック: クリエイターが納品したコンテンツに紐づく purchase のみ
     const { data: purchase } = await supabase
       .from('purchases')
-      .select('id, content:contents(creator_id)')
+      .select('id, user_id, content:contents(title, creator_id)')
       .eq('id', purchase_id)
       .single()
-    const creatorId = (purchase?.content as any)?.creator_id
+    const content = purchase?.content as any
+    const creatorId = content?.creator_id
     if (!purchase || creatorId !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     await sendDeliveryEmail(purchase_id)
+
+    // 購入者へ納品完了通知
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    await admin.from('notifications').insert({
+      user_id: purchase.user_id,
+      type: 'delivery',
+      title: 'コンテンツが納品されました',
+      body: `${content?.title ?? 'コンテンツ'} が届きました`,
+      link: '/mypage',
+    })
+
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error(e)

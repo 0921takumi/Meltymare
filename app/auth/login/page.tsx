@@ -1,15 +1,22 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const search = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const err = search.get('error')
+    if (err) setError(err)
+  }, [search])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,7 +68,21 @@ export default function LoginPage() {
               style={{ background: 'var(--mm-primary)', color: 'white', padding: '12px', borderRadius: 8, fontWeight: 700, fontSize: 15, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
               {loading ? 'ログイン中...' : 'ログイン'}
             </button>
+
+            <div style={{ textAlign: 'right' }}>
+              <Link href="/auth/reset-password" style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>
+                パスワードを忘れた方はこちら
+              </Link>
+            </div>
           </form>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0 16px' }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
+            <span style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>または</span>
+            <div style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
+          </div>
+
+          <GoogleLoginButton />
 
           <p style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--mm-text-muted)' }}>
             アカウントがない方は{' '}
@@ -70,5 +91,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh' }} />}>
+      <LoginForm />
+    </Suspense>
   )
 }

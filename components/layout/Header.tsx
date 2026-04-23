@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ShoppingBag, User, LogIn, Menu, Search, X } from 'lucide-react'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import NotificationBell from '@/components/NotificationBell'
 
 interface HeaderProps {
   user?: { display_name: string; role: string } | null
@@ -62,6 +63,7 @@ export default function Header({ user }: HeaderProps) {
           </Link>
           {user ? (
             <>
+              <NotificationBell />
               <Link href="/mypage" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 14, color: 'var(--mm-text-sub)', textDecoration: 'none' }}>
                 <ShoppingBag size={16} />マイページ
               </Link>

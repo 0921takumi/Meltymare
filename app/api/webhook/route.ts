@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     // チップの場合
     if (metadata.tip === '1') {
-      const { creator_id, user_id } = metadata
+      const { creator_id, user_id, tip_amount } = metadata
       if (creator_id && user_id) {
         await supabase
           .from('tips')
@@ -35,6 +35,16 @@ export async function POST(req: NextRequest) {
           .eq('creator_id', creator_id)
           .eq('user_id', user_id)
           .eq('status', 'pending')
+
+        // クリエイターに通知
+        const { data: sender } = await supabase.from('profiles').select('display_name, username').eq('id', user_id).single()
+        await supabase.from('notifications').insert({
+          user_id: creator_id,
+          type: 'tip',
+          title: 'チップを受け取りました 🎁',
+          body: `${sender?.display_name ?? 'ファン'} さんから ¥${Number(tip_amount ?? 0).toLocaleString()} のチップ`,
+          link: '/creator/dashboard',
+        })
       }
       return NextResponse.json({ ok: true })
     }
@@ -63,9 +73,30 @@ export async function POST(req: NextRequest) {
         .eq('id', coupon_id)
     }
 
-    // 購入完了メール送信
+    // 購入完了メール送信 + 通知作成
     if (purchase) {
       await sendPurchaseEmail(user_id, content_id, purchase.id)
+
+      const { data: content } = await supabase.from('contents').select('title, creator_id').eq('id', content_id).single()
+      if (content) {
+        // 購入者への通知
+        await supabase.from('notifications').insert({
+          user_id,
+          type: 'purchase',
+          title: 'ご購入ありがとうございます',
+          body: `${content.title} の購入が完了しました`,
+          link: '/mypage',
+        })
+        // クリエイターへの通知
+        const { data: buyer } = await supabase.from('profiles').select('display_name').eq('id', user_id).single()
+        await supabase.from('notifications').insert({
+          user_id: content.creator_id,
+          type: 'purchase',
+          title: '新しい購入がありました',
+          body: `${buyer?.display_name ?? 'ファン'} さんが ${content.title} を購入しました`,
+          link: '/creator/orders',
+        })
+      }
     }
   }
 

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
 
@@ -25,6 +26,21 @@ export async function POST(req: NextRequest) {
     .insert({ follower_id: user.id, creator_id })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  // クリエイターへ通知
+  const { data: follower } = await supabase.from('profiles').select('display_name, username').eq('id', user.id).single()
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  await admin.from('notifications').insert({
+    user_id: creator_id,
+    type: 'follow',
+    title: '新しいフォロワー',
+    body: `${follower?.display_name ?? 'ファン'} さんがあなたをフォローしました`,
+    link: follower?.username ? `/creator/${follower.username}` : '/creator/dashboard',
+  })
+
   return NextResponse.json({ followed: true })
 }
 
