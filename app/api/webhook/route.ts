@@ -23,7 +23,23 @@ export async function POST(req: NextRequest) {
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session
-    const { content_id, user_id, coupon_id } = session.metadata ?? {}
+    const metadata = session.metadata ?? {}
+
+    // チップの場合
+    if (metadata.tip === '1') {
+      const { creator_id, user_id } = metadata
+      if (creator_id && user_id) {
+        await supabase
+          .from('tips')
+          .update({ status: 'completed' })
+          .eq('creator_id', creator_id)
+          .eq('user_id', user_id)
+          .eq('status', 'pending')
+      }
+      return NextResponse.json({ ok: true })
+    }
+
+    const { content_id, user_id, coupon_id } = metadata
     if (!content_id || !user_id) return NextResponse.json({ ok: true })
 
     // purchaseをcompletedに更新
@@ -87,7 +103,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, purchaseId: 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'MyFocus <noreply@my-focus.jp>',
+        from: process.env.RESEND_FROM_EMAIL ?? 'MyFocus <noreply@my-focus.jp>',
         to: email,
         subject: `【購入完了】${content.title}`,
         html: `
@@ -145,7 +161,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'MyFocus <noreply@my-focus.jp>',
+        from: process.env.RESEND_FROM_EMAIL ?? 'MyFocus <noreply@my-focus.jp>',
         to: email,
         subject: `【納品完了】${content?.title} が届きました！`,
         html: `

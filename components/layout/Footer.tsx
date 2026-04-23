@@ -35,6 +35,7 @@ export default function Footer() {
                   { href: '/contact', label: 'お問い合わせ' },
                   { href: '/terms', label: '利用規約' },
                   { href: '/privacy', label: 'プライバシーポリシー' },
+                  { href: '/tokushoho', label: '特定商取引法に基づく表記' },
                 ].map(({ href, label }) => (
                   <Link key={href} href={href} style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>{label}</Link>
                 ))}

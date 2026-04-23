@@ -4,6 +4,7 @@ import ContentCard from '@/components/ui/ContentCard'
 import { notFound } from 'next/navigation'
 import { ExternalLink } from 'lucide-react'
 import FollowButton from './FollowButton'
+import TipButton from '@/components/TipButton'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 
@@ -142,12 +143,17 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
                 )}
               </div>
 
-              {/* 販売リクエストボタン */}
-              {user && user.id !== creator.id && (
-                <Link href={`/requests/new?creator_id=${creator.id}`}
-                  style={{ display: 'inline-block', padding: '9px 20px', background: 'var(--mm-primary-light)', color: 'var(--mm-primary)', border: '1px solid var(--mm-primary)', borderRadius: 20, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
-                  ✉️ カスタムリクエストを送る
-                </Link>
+              {/* アクションボタン群 */}
+              {(!user || user.id !== creator.id) && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <TipButton creatorId={creator.id} creatorName={creator.display_name} isLoggedIn={!!user} />
+                  {user && (
+                    <Link href={`/requests/new?creator_id=${creator.id}`}
+                      style={{ display: 'inline-flex', alignItems: 'center', padding: '9px 20px', background: 'var(--mm-primary-light)', color: 'var(--mm-primary)', border: '1px solid var(--mm-primary)', borderRadius: 20, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                      ✉️ カスタムリクエスト
+                    </Link>
+                  )}
+                </div>
               )}
             </div>
 
