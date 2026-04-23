@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     if (coupon_id) {
       await supabase
         .from('coupons')
-        .update({ used_count: supabase.rpc('increment', { x: 1 }) as any })
+        .update({ used_count: supabase.rpc('increment', { x: 1 }) as unknown as number })
         .eq('id', coupon_id)
     }
 
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
-async function sendPurchaseEmail(userId: string, contentId: string, purchaseId: string) {
+async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId: string) {
   try {
     const { data: user } = await supabase.from('profiles').select('display_name').eq('id', userId).single()
     const { data: content } = await supabase
@@ -120,7 +120,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, purchaseId: 
     if (!email) return
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
-    const creator = content.creator as any
+    const creator = content.creator as { display_name?: string; id?: string } | null
 
     // Resend / SMTP がなければ Supabase Edge Function or fetch
     // ここでは Resend API を使う（RESEND_API_KEY 環境変数が必要）
@@ -182,7 +182,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
     const resendKey = process.env.RESEND_API_KEY
     if (!resendKey) return
 
-    const content = purchase.content as any
+    const content = purchase.content as { title?: string; creator?: { display_name?: string } } | null
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
 
     await fetch('https://api.resend.com/emails', {

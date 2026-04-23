@@ -4,7 +4,9 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Check, Trash2, ShoppingBag, Package, Heart, Gift, MessageSquare, Info } from 'lucide-react'
 
-const TYPE_ICONS: Record<string, any> = {
+type NotifItem = { id: string; type: string; title: string; body: string | null; link: string | null; read: boolean; created_at: string }
+
+const TYPE_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   purchase: ShoppingBag,
   delivery: Package,
   follow: Heart,
@@ -21,7 +23,7 @@ const TYPE_COLORS: Record<string, string> = {
   system: '#6b7280',
 }
 
-export default function NotificationsList({ initial }: { initial: any[] }) {
+export default function NotificationsList({ initial }: { initial: NotifItem[] }) {
   const [items, setItems] = useState(initial)
   const [busy, setBusy] = useState(false)
 

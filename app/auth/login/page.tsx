@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -8,15 +8,11 @@ import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
 function LoginForm() {
   const router = useRouter()
   const search = useSearchParams()
+  const initialError = search.get('error') ?? ''
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(initialError)
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    const err = search.get('error')
-    if (err) setError(err)
-  }, [search])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()

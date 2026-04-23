@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       .select('id, user_id, content:contents(title, creator_id)')
       .eq('id', purchase_id)
       .single()
-    const content = purchase?.content as any
+    const content = purchase?.content as { title?: string; creator_id?: string } | null
     const creatorId = content?.creator_id
     if (!purchase || creatorId !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

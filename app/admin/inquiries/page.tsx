@@ -15,7 +15,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
   const { data: messages } = await q.limit(200)
 
   const { data: counts } = await supabase.from('contact_messages').select('status')
-  const countBy = (s: string) => counts?.filter((m: any) => m.status === s).length ?? 0
+  const countBy = (s: string) => counts?.filter((m: { status: string }) => m.status === s).length ?? 0
 
   return (
     <div style={{ padding: 32 }}>

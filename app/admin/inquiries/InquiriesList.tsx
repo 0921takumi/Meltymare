@@ -18,13 +18,25 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   resolved: { label: '解決', color: '#059669', bg: '#ecfdf5' },
 }
 
-export default function InquiriesList({ messages, currentStatus }: { messages: any[]; currentStatus: string }) {
+type Inquiry = {
+  id: string
+  name: string
+  email: string
+  category: string
+  subject: string
+  message: string
+  status: string
+  admin_note: string | null
+  created_at: string
+}
+
+export default function InquiriesList({ messages, currentStatus }: { messages: Inquiry[]; currentStatus: string }) {
   const router = useRouter()
-  const [selected, setSelected] = useState<any | null>(null)
+  const [selected, setSelected] = useState<Inquiry | null>(null)
   const [adminNote, setAdminNote] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const open = (m: any) => {
+  const open = (m: Inquiry) => {
     setSelected(m)
     setAdminNote(m.admin_note ?? '')
   }

@@ -34,12 +34,9 @@ export async function GET(req: NextRequest) {
       .single()
 
     if (!existing) {
-      const displayName =
-        (user.user_metadata as any)?.full_name ??
-        (user.user_metadata as any)?.name ??
-        (user.email?.split('@')[0]) ??
-        'ユーザー'
-      const avatarUrl = (user.user_metadata as any)?.avatar_url ?? null
+      const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string; avatar_url?: string }
+      const displayName = meta.full_name ?? meta.name ?? user.email?.split('@')[0] ?? 'ユーザー'
+      const avatarUrl = meta.avatar_url ?? null
 
       await supabase.from('profiles').insert({
         id: user.id,
