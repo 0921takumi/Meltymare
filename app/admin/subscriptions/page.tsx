@@ -98,36 +98,43 @@ export default async function AdminSubscriptionsPage() {
       </div>
 
       {/* プランランキング */}
-      <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>人気プラン Top 20</h2>
-      <div className="mm-card" style={{ overflow: 'hidden', marginBottom: 28 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--mm-ink)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+        人気プラン Top 20
+      </h2>
+      <div className="admin-table-wrap" style={{ marginBottom: 32 }}>
+        <table className="admin-table admin-table-mobile-card">
           <thead>
-            <tr style={{ background: 'var(--mm-bg)' }}>
-              {['#', 'クリエイター', 'プラン', '月額', '会員数', 'MRR', 'ステータス'].map(h => (
-                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)' }}>{h}</th>
-              ))}
+            <tr>
+              <th className="num">#</th>
+              <th>クリエイター</th>
+              <th>プラン</th>
+              <th className="num">月額</th>
+              <th className="num">会員数</th>
+              <th className="num">MRR</th>
+              <th>ステータス</th>
             </tr>
           </thead>
           <tbody>
             {plans.slice(0, 20).map((p, i) => (
-              <tr key={p.id} style={{ borderBottom: '1px solid var(--mm-border)' }}>
-                <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--mm-text-muted)' }}>{i + 1}</td>
-                <td style={{ padding: '10px 14px' }}>
-                  <Link href={`/creator/${p.creator?.username}`} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-                    <div style={{ width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', background: 'var(--mm-primary-light)' }}>
+              <tr key={p.id}>
+                <td data-label="#" className="num" style={{ fontWeight: 700, color: 'var(--mm-text-muted)' }}>{i + 1}</td>
+                <td data-label="クリエイター">
+                  <Link href={`/creator/${p.creator?.username}`} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'var(--mm-ink)' }}>
+                    <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', background: 'var(--mm-primary-light)', flexShrink: 0 }}>
                       {p.creator?.avatar_url ? <img src={p.creator.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{p.creator?.display_name}</span>
                   </Link>
                 </td>
-                <td style={{ padding: '10px 14px' }}>
+                <td data-label="プラン">
                   <span style={{ fontSize: 12, fontWeight: 700, color: p.badge_color }}>{p.badge_emoji} {p.name}</span>
                 </td>
-                <td style={{ padding: '10px 14px', fontWeight: 700 }}>¥{p.monthly_price.toLocaleString()}</td>
-                <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--mm-primary)' }}>{p.member_count}</td>
-                <td style={{ padding: '10px 14px', fontWeight: 700, color: '#059669' }}>¥{(p.monthly_price * p.member_count).toLocaleString()}</td>
-                <td style={{ padding: '10px 14px' }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: p.is_active ? '#d1fae5' : '#fee2e2', color: p.is_active ? '#065f46' : '#991b1b' }}>{p.is_active ? '公開' : '停止'}</span>
+                <td data-label="月額" className="num" style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>¥{p.monthly_price.toLocaleString()}</td>
+                <td data-label="会員数" className="num" style={{ fontWeight: 700, color: 'var(--mm-primary)' }}>{p.member_count}</td>
+                <td data-label="MRR" className="num" style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>¥{(p.monthly_price * p.member_count).toLocaleString()}</td>
+                <td data-label="ステータス">
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: p.is_active ? '#d1fae5' : '#fee2e2', color: p.is_active ? '#065f46' : '#991b1b' }}>{p.is_active ? '公開' : '停止'}</span>
                 </td>
               </tr>
             ))}
@@ -136,16 +143,19 @@ export default async function AdminSubscriptionsPage() {
       </div>
 
       {/* 最近の加入 */}
-      <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>最近の加入</h2>
-      <div className="mm-card" style={{ overflow: 'hidden' }}>
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--mm-ink)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+        最近の加入
+      </h2>
+      <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 12, overflow: 'hidden' }}>
         {recentSubs.map((s, i) => (
-          <div key={s.id} style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: i < recentSubs.length - 1 ? '1px solid var(--mm-border)' : 'none' }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', flexShrink: 0 }}>
+          <div key={s.id} style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: i < recentSubs.length - 1 ? '1px solid var(--mm-border)' : 'none' }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', flexShrink: 0 }}>
               {s.user?.avatar_url ? <img src={s.user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 12, fontWeight: 700 }}>{s.user?.display_name} → {s.creator?.display_name}</p>
-              <p style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>{s.plan?.name} · ¥{s.plan?.monthly_price.toLocaleString()}/月 · {new Date(s.started_at).toLocaleDateString('ja-JP')}</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--mm-ink)' }}>{s.user?.display_name} <span style={{ color: 'var(--mm-text-muted)' }}>→</span> {s.creator?.display_name}</p>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 2 }}>{s.plan?.name} · ¥{s.plan?.monthly_price.toLocaleString()}/月 · {new Date(s.started_at).toLocaleDateString('ja-JP')}</p>
             </div>
           </div>
         ))}

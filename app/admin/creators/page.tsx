@@ -21,64 +21,60 @@ export default async function AdminCreatorsPage() {
 
   return (
     <div className="admin-page">
-      <div style={{ marginBottom: 28 }}>
-        <h1 className="admin-h1">クリエイター管理</h1>
-        <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>手数料率・振込情報・売上を管理します</p>
-      </div>
+      <h1 className="admin-h1">クリエイター管理</h1>
+      <p className="admin-h1-sub" style={{ marginBottom: 22 }}>手数料率・振込情報・売上を管理します（在籍 {creatorsWithStats.length}名）</p>
 
-      <div className="mm-card" style={{ overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--mm-border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>在籍クリエイター ({creatorsWithStats.length}名)</span>
+      {creatorsWithStats.length === 0 ? (
+        <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 12, padding: 48, textAlign: 'center', color: 'var(--mm-text-muted)', fontSize: 13 }}>
+          クリエイターが登録されていません
         </div>
-
-        {creatorsWithStats.length === 0 ? (
-          <div style={{ padding: 40, textAlign: 'center', color: 'var(--mm-text-muted)', fontSize: 14 }}>
-            クリエイターが登録されていません
-          </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table admin-table-mobile-card">
             <thead>
-              <tr style={{ background: 'var(--mm-bg)' }}>
-                {['クリエイター', '売上合計', '手数料率', '手数料額', '振込予定額', '振込先', ''].map(h => (
-                  <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11,
-                    color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)' }}>{h}</th>
-                ))}
+              <tr>
+                <th>クリエイター</th>
+                <th className="num">売上合計</th>
+                <th>手数料率</th>
+                <th className="num">手数料額</th>
+                <th className="num">振込予定額</th>
+                <th>振込先</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {creatorsWithStats.map((c: any) => (
-                <tr key={c.id} style={{ borderBottom: '1px solid var(--mm-border)' }}>
-                  <td style={{ padding: '12px 16px' }}>
-                    <p style={{ fontWeight: 700 }}>{c.display_name}</p>
+                <tr key={c.id}>
+                  <td data-label="クリエイター">
+                    <p style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>{c.display_name}</p>
                     <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>@{c.username}</p>
                   </td>
-                  <td style={{ padding: '12px 16px', fontWeight: 700, color: '#059669' }}>
+                  <td data-label="売上合計" className="num" style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>
                     ¥{c.totalSales.toLocaleString()}
                   </td>
-                  <td style={{ padding: '12px 16px' }}>
+                  <td data-label="手数料率">
                     <FeeRateEditor creatorId={c.id} currentRate={c.fee_rate} />
                   </td>
-                  <td style={{ padding: '12px 16px', color: '#dc2626', fontWeight: 600 }}>
+                  <td data-label="手数料額" className="num" style={{ color: '#dc2626', fontWeight: 600 }}>
                     ¥{c.feeAmount.toLocaleString()}
                   </td>
-                  <td style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--mm-primary)' }}>
+                  <td data-label="振込予定額" className="num" style={{ fontWeight: 700, color: 'var(--mm-primary)' }}>
                     ¥{c.netAmount.toLocaleString()}
                   </td>
-                  <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--mm-text-muted)' }}>
-                    {c.bank_name ? `${c.bank_name} ${c.bank_branch}` : <span style={{ color: '#f59e0b' }}>未登録</span>}
+                  <td data-label="振込先" style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>
+                    {c.bank_name ? `${c.bank_name} ${c.bank_branch}` : <span style={{ color: '#f59e0b', fontWeight: 600 }}>未登録</span>}
                   </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <a href={`/admin/creators/${c.id}`} style={{ fontSize: 12, color: 'var(--mm-primary)', fontWeight: 600, textDecoration: 'none' }}>
-                      詳細 →
+                  <td data-label="操作">
+                    <a href={`/admin/creators/${c.id}`} style={{ fontSize: 12, color: 'var(--mm-text)', fontWeight: 600, textDecoration: 'none', borderBottom: '1px solid var(--mm-ink)', paddingBottom: 1 }}>
+                      詳細 <span style={{ color: 'var(--mm-primary)' }}>→</span>
                     </a>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

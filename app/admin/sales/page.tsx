@@ -42,88 +42,88 @@ export default async function AdminSalesPage() {
 
   return (
     <div className="admin-page">
-      <div style={{ marginBottom: 28 }}>
-        <h1 className="admin-h1">売上管理</h1>
-        <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>総売上・手数料・振込予定額を確認できます</p>
-      </div>
+      <h1 className="admin-h1">売上管理</h1>
+      <p className="admin-h1-sub" style={{ marginBottom: 28 }}>総売上・手数料・振込予定額を確認できます</p>
 
       {/* サマリー */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 32 }}>
         {[
-          { label: 'コンテンツ売上', value: `¥${totalContentSales.toLocaleString()}`, color: '#059669', note: `${purchases?.length ?? 0}件` },
-          { label: 'チップ売上', value: `¥${totalTipSales.toLocaleString()}`, color: '#b8956a', note: `${tipCount}件のチップ` },
-          { label: '運営手数料合計', value: `¥${totalFee.toLocaleString()}`, color: '#dc2626', note: 'コンテンツ代金に対してのみ' },
-          { label: 'クリエイター支払合計', value: `¥${totalNet.toLocaleString()}`, color: 'var(--mm-primary)', note: '振込予定（チップ含む）' },
+          { label: 'コンテンツ売上', value: totalContentSales, color: '#059669', note: `${purchases?.length ?? 0}件` },
+          { label: 'チップ売上', value: totalTipSales, color: '#b8956a', note: `${tipCount}件のチップ` },
+          { label: '運営手数料合計', value: totalFee, color: '#dc2626', note: 'コンテンツ代金に対してのみ' },
+          { label: 'クリエイター支払合計', value: totalNet, color: 'var(--mm-primary)', note: '振込予定（チップ含む）' },
         ].map(s => (
-          <div key={s.label} className="mm-card" style={{ padding: '20px 24px' }}>
-            <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginBottom: 6 }}>{s.label}</p>
-            <p style={{ fontSize: 26, fontWeight: 700, color: s.color, marginBottom: 4 }}>{s.value}</p>
-            <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>{s.note}</p>
+          <div key={s.label} style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 12, padding: '18px 22px', borderLeft: `3px solid ${s.color}` }}>
+            <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>{s.label}</p>
+            <p className="font-serif-display" style={{ fontSize: 30, fontWeight: 600, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: '0.55em', verticalAlign: '0.3em', marginRight: 2, opacity: 0.7 }}>¥</span>
+              {s.value.toLocaleString()}
+            </p>
+            <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 6 }}>{s.note}</p>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
-        {/* クリエイター別 */}
-        <div className="mm-card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--mm-border)', fontWeight: 700, fontSize: 14 }}>
-            クリエイター別売上
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: 'var(--mm-bg)' }}>
-                {['クリエイター', 'コンテンツ売上', 'チップ', '手数料', '振込額'].map(h => (
-                  <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontSize: 11,
-                    color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)' }}>{h}</th>
-                ))}
+      {/* クリエイター別売上 */}
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--mm-ink)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+        クリエイター別売上
+      </h2>
+      <div className="admin-table-wrap" style={{ marginBottom: 32 }}>
+        <table className="admin-table admin-table-mobile-card">
+          <thead>
+            <tr>
+              <th>クリエイター</th>
+              <th className="num">コンテンツ売上</th>
+              <th className="num">チップ</th>
+              <th className="num">手数料</th>
+              <th className="num">振込額</th>
+            </tr>
+          </thead>
+          <tbody>
+            {creatorRanking.map(c => (
+              <tr key={c.name}>
+                <td data-label="クリエイター" style={{ fontWeight: 600, color: 'var(--mm-ink)' }}>{c.name}</td>
+                <td data-label="コンテンツ売上" className="num" style={{ color: 'var(--mm-ink)', fontWeight: 700 }}>¥{c.sales.toLocaleString()}</td>
+                <td data-label="チップ" className="num" style={{ color: '#b8956a', fontWeight: 700 }}>¥{c.tip.toLocaleString()}</td>
+                <td data-label="手数料" className="num" style={{ color: '#dc2626' }}>¥{c.fee.toLocaleString()}</td>
+                <td data-label="振込額" className="num" style={{ color: 'var(--mm-primary)', fontWeight: 700 }}>¥{c.net.toLocaleString()}</td>
               </tr>
-            </thead>
-            <tbody>
-              {creatorRanking.map(c => (
-                <tr key={c.name} style={{ borderBottom: '1px solid var(--mm-border)' }}>
-                  <td style={{ padding: '10px 14px', fontWeight: 600 }}>{c.name}</td>
-                  <td style={{ padding: '10px 14px', color: '#059669', fontWeight: 700 }}>¥{c.sales.toLocaleString()}</td>
-                  <td style={{ padding: '10px 14px', color: '#b8956a', fontWeight: 700 }}>¥{c.tip.toLocaleString()}</td>
-                  <td style={{ padding: '10px 14px', color: '#dc2626' }}>¥{c.fee.toLocaleString()}</td>
-                  <td style={{ padding: '10px 14px', color: 'var(--mm-primary)', fontWeight: 700 }}>¥{c.net.toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-        {/* 注文一覧 */}
-        <div className="mm-card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--mm-border)', fontWeight: 700, fontSize: 14 }}>
-            注文一覧（最新20件）
-          </div>
-          <div style={{ overflowY: 'auto', maxHeight: 400 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: 'var(--mm-bg)', position: 'sticky', top: 0 }}>
-                  {['購入者', 'コンテンツ', '金額', '日時'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10,
-                      color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {purchases?.slice(0, 20).map((p: any) => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid var(--mm-border)' }}>
-                    <td style={{ padding: '9px 12px', fontWeight: 600, fontSize: 11 }}>{p.user?.display_name ?? '—'}</td>
-                    <td style={{ padding: '9px 12px', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.content?.title ?? '—'}
-                    </td>
-                    <td style={{ padding: '9px 12px', fontWeight: 700, color: '#059669' }}>¥{p.amount.toLocaleString()}</td>
-                    <td style={{ padding: '9px 12px', color: 'var(--mm-text-muted)' }}>
-                      {new Date(p.created_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {/* 注文一覧 */}
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--mm-ink)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+        注文一覧（最新20件）
+      </h2>
+      <div className="admin-table-wrap">
+        <table className="admin-table admin-table-mobile-card">
+          <thead>
+            <tr>
+              <th>購入者</th>
+              <th>コンテンツ</th>
+              <th className="num">金額</th>
+              <th>日時</th>
+            </tr>
+          </thead>
+          <tbody>
+            {purchases?.slice(0, 20).map((p: any) => (
+              <tr key={p.id}>
+                <td data-label="購入者" style={{ fontWeight: 600, color: 'var(--mm-ink)' }}>{p.user?.display_name ?? '—'}</td>
+                <td data-label="コンテンツ" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--mm-text-sub)' }}>
+                  {p.content?.title ?? '—'}
+                </td>
+                <td data-label="金額" className="num" style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>¥{p.amount.toLocaleString()}</td>
+                <td data-label="日時" style={{ color: 'var(--mm-text-muted)', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
+                  {new Date(p.created_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
