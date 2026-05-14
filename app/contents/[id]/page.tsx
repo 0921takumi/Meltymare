@@ -165,19 +165,39 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
           {/* 詳細 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* コンテンツ情報 */}
-            <div className="mm-card" style={{ padding: 24 }}>
-              <span style={{ display: 'inline-block', background: content.content_type === 'video' ? '#7c3aed' : 'var(--mm-primary)', color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20, marginBottom: 12 }}>
-                {content.content_type === 'video' ? '動画' : '画像'}
-              </span>
-              <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, lineHeight: 1.4 }}>{content.title}</h1>
+            <div className="mm-card" style={{ padding: 28 }}>
+              {/* eyebrow: 種別バッジ */}
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 14, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+                {content.content_type === 'video' ? '▷ Video' : '◇ Photo'}
+              </p>
+              <h1 className="font-serif-display" style={{
+                fontSize: 'clamp(24px, 3vw, 32px)',
+                fontWeight: 500, fontStyle: 'italic',
+                color: 'var(--mm-ink)', lineHeight: 1.25,
+                marginBottom: 14, letterSpacing: '0.01em',
+              }}>
+                {content.title}
+              </h1>
               {content.description && (
-                <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.7, marginBottom: 16 }}>{content.description}</p>
+                <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.85, marginBottom: 20 }}>
+                  {content.description}
+                </p>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16, borderTop: '1px solid var(--mm-border)' }}>
-                <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--mm-primary)' }}>¥{content.price.toLocaleString()}</span>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', paddingTop: 18, borderTop: '1px solid var(--mm-border)' }}>
+                <span className="font-serif-display" style={{
+                  fontSize: 38, fontWeight: 600, color: 'var(--mm-ink)', lineHeight: 1, letterSpacing: '-0.01em',
+                }}>
+                  <span style={{ fontSize: '0.6em', verticalAlign: '0.25em', marginRight: 2, color: 'var(--mm-text-muted)' }}>¥</span>
+                  {content.price.toLocaleString()}
+                </span>
                 {content.stock_limit && (
-                  <span style={{ fontSize: 12, color: isSoldOut ? '#dc2626' : 'var(--mm-text-muted)' }}>
-                    残り {Math.max(0, content.stock_limit - content.sold_count)} 枚
+                  <span style={{
+                    fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
+                    color: isSoldOut ? '#dc2626' : 'var(--mm-text-muted)',
+                    fontWeight: isSoldOut ? 700 : 500,
+                  }}>
+                    {isSoldOut ? 'Sold out' : `残 ${Math.max(0, content.stock_limit - content.sold_count)}`}
                   </span>
                 )}
               </div>
@@ -196,20 +216,23 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
 
             {/* クリエイター */}
             {content.creator && (
-              <div className="mm-card" style={{ padding: 20 }}>
-                <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 10 }}>クリエイター</p>
+              <div className="mm-card" style={{ padding: 22 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 14, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+                  Creator
+                </p>
                 <Link href={`/creator/${(content.creator as any).username}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--mm-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 8, background: 'var(--mm-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
                     {content.creator.avatar_url ? (
                       <img src={content.creator.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
-                      <span style={{ fontSize: 18 }}>👤</span>
+                      <span className="font-serif-display" style={{ fontSize: 28, fontStyle: 'italic', color: 'var(--mm-primary)' }}>{content.creator.display_name[0]}</span>
                     )}
                   </div>
-                  <div>
-                    <p style={{ fontWeight: 700, fontSize: 15 }}>{content.creator.display_name}</p>
-                    {content.creator.bio && <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2 }}>{content.creator.bio}</p>}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--mm-ink)', marginBottom: 2 }}>{content.creator.display_name}</p>
+                    {content.creator.bio && <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', lineHeight: 1.6, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{content.creator.bio}</p>}
                   </div>
                 </div>
                 </Link>
@@ -239,14 +262,20 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
 
         {/* 同クリエイターの他のコンテンツ */}
         {relatedContents && relatedContents.length > 0 && (
-          <div style={{ marginTop: 48 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 700 }}>
-                {content.creator?.display_name} の他のコンテンツ
-              </h2>
+          <div style={{ marginTop: 64 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24 }}>
+              <div>
+                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+                  More from this creator
+                </p>
+                <h2 className="font-serif-display" style={{ fontSize: 24, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-ink)' }}>
+                  {content.creator?.display_name} の他のコンテンツ
+                </h2>
+              </div>
               {content.creator && (
-                <Link href={`/creator/${(content.creator as any).username ?? ''}`} style={{ fontSize: 13, color: 'var(--mm-primary)', fontWeight: 600, textDecoration: 'none' }}>
-                  全て見る →
+                <Link href={`/creator/${(content.creator as any).username ?? ''}`} style={{ fontSize: 13, color: 'var(--mm-text)', fontWeight: 600, textDecoration: 'none', borderBottom: '1px solid var(--mm-ink)', paddingBottom: 2 }}>
+                  全て見る <span style={{ color: 'var(--mm-primary)' }}>→</span>
                 </Link>
               )}
             </div>
@@ -274,9 +303,13 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
 
         {/* おすすめクリエイター */}
         {recCreators && recCreators.length > 0 && (
-          <div style={{ marginTop: 48 }}>
-            <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 16 }}>
-              このクリエイターを見ている方へのおすすめ
+          <div style={{ marginTop: 64 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+              Discover
+            </p>
+            <h2 className="font-serif-display" style={{ fontSize: 24, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-ink)', marginBottom: 20 }}>
+              このクリエイターを見ている方へ
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
               {recCreators.map((c: any, i: number) => (

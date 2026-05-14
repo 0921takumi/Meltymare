@@ -136,21 +136,36 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
 
       <div className="mm-page-pad" style={{ maxWidth: 1000, margin: '0 auto' }}>
 
-        {/* クリエイターヘッダー */}
-        <div className="mm-card" style={{ padding: '24px', marginBottom: 28 }}>
+        {/* クリエイターヘッダー（エディトリアル） */}
+        <div className="mm-card" style={{ padding: '28px', marginBottom: 32 }}>
           <div className="mm-creator-profile-header">
-            {/* アバター */}
-            <div style={{ width: 88, height: 88, borderRadius: '50%', background: 'var(--mm-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, flexShrink: 0, overflow: 'hidden', border: '3px solid white', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
+            {/* アバター（フォトカード風） */}
+            <div style={{
+              width: 108, height: 108, borderRadius: 10,
+              background: 'var(--mm-primary-light)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, overflow: 'hidden',
+              boxShadow: '0 4px 16px -6px rgba(31,26,21,0.16)',
+            }}>
               {creator.avatar_url
-                ? <img src={creator.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : '👤'}
+                ? <img src={creator.avatar_url} alt={creator.display_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <span className="font-serif-display" style={{ fontSize: 56, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-primary)' }}>{creator.display_name[0]}</span>}
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div>
-                  <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{creator.display_name}</h1>
-                  <p style={{ fontSize: 13, color: 'var(--mm-text-muted)', marginBottom: 10 }}>@{creator.username}</p>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+                    Creator
+                  </p>
+                  <h1 className="font-serif-display" style={{
+                    fontSize: 'clamp(28px, 4vw, 38px)',
+                    fontWeight: 500, fontStyle: 'italic',
+                    color: 'var(--mm-ink)', lineHeight: 1.1,
+                    marginBottom: 4, letterSpacing: '0.01em',
+                  }}>{creator.display_name}</h1>
+                  <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', letterSpacing: '0.04em', marginBottom: 14 }}>@{creator.username}</p>
                 </div>
                 {/* フォローボタン（自分以外） */}
                 {(!user || user.id !== creator.id) && (
@@ -164,26 +179,26 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
               </div>
 
               {creator.bio && (
-                <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.7, marginBottom: 14 }}>{creator.bio}</p>
+                <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.85, marginBottom: 18, maxWidth: 560 }}>{creator.bio}</p>
               )}
 
               {/* SNSリンク */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
                 {creator.twitter_url && (
                   <a href={creator.twitter_url} target="_blank" rel="noopener noreferrer"
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--mm-primary)', fontWeight: 600, textDecoration: 'none', padding: '5px 12px', border: '1px solid var(--mm-border)', borderRadius: 20 }}>
-                    <ExternalLink size={13} /> X (Twitter)
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--mm-text)', fontWeight: 600, textDecoration: 'none', padding: '6px 14px', border: '1px solid var(--mm-border)', borderRadius: 999 }}>
+                    <ExternalLink size={12} /> X
                   </a>
                 )}
                 {creator.instagram_url && (
                   <a href={creator.instagram_url} target="_blank" rel="noopener noreferrer"
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--mm-primary)', fontWeight: 600, textDecoration: 'none', padding: '5px 12px', border: '1px solid var(--mm-border)', borderRadius: 20 }}>
-                    <ExternalLink size={13} /> Instagram
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--mm-text)', fontWeight: 600, textDecoration: 'none', padding: '6px 14px', border: '1px solid var(--mm-border)', borderRadius: 999 }}>
+                    <ExternalLink size={12} /> Instagram
                   </a>
                 )}
                 {creator.tiktok_url && (
                   <a href={creator.tiktok_url} target="_blank" rel="noopener noreferrer"
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--mm-primary)', fontWeight: 600, textDecoration: 'none', padding: '5px 12px', border: '1px solid var(--mm-border)', borderRadius: 20 }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--mm-text)', fontWeight: 600, textDecoration: 'none', padding: '6px 14px', border: '1px solid var(--mm-border)', borderRadius: 999 }}>
                     🎵 TikTok
                   </a>
                 )}
@@ -192,25 +207,33 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
               {/* 販売リクエストボタン */}
               {user && user.id !== creator.id && (
                 <Link href={`/requests/new?creator_id=${creator.id}`}
-                  style={{ display: 'inline-block', padding: '9px 20px', background: 'var(--mm-primary-light)', color: 'var(--mm-primary)', border: '1px solid var(--mm-primary)', borderRadius: 20, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
-                  ✉️ カスタムリクエストを送る
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    padding: '11px 22px',
+                    background: 'var(--mm-ink)', color: 'white',
+                    borderRadius: 999, fontSize: 13, fontWeight: 600,
+                    letterSpacing: '0.04em', textDecoration: 'none',
+                  }}>
+                  ✉️ カスタムリクエストを送る <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 16 }}>→</span>
                 </Link>
               )}
             </div>
 
-            {/* 統計 */}
-            <div style={{ flexShrink: 0, display: 'flex', gap: 20, alignItems: 'center' }}>
+            {/* 統計（誌面風数値） */}
+            <div style={{ flexShrink: 0, display: 'flex', gap: 24, alignItems: 'center' }}>
               <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: 24, fontWeight: 700, color: 'var(--mm-primary)' }}>{contents?.length ?? 0}</p>
-                <p style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>コンテンツ</p>
+                <p className="font-serif-display" style={{ fontSize: 32, fontWeight: 600, color: 'var(--mm-ink)', lineHeight: 1 }}>{contents?.length ?? 0}</p>
+                <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.18em', textTransform: 'uppercase', marginTop: 6, fontWeight: 600 }}>Items</p>
               </div>
+              <div style={{ width: 1, height: 36, background: 'var(--mm-border)' }} />
               <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: 24, fontWeight: 700, color: '#059669' }}>{totalSold}</p>
-                <p style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>販売数</p>
+                <p className="font-serif-display" style={{ fontSize: 32, fontWeight: 600, color: 'var(--mm-ink)', lineHeight: 1 }}>{totalSold}</p>
+                <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.18em', textTransform: 'uppercase', marginTop: 6, fontWeight: 600 }}>Sales</p>
               </div>
+              <div style={{ width: 1, height: 36, background: 'var(--mm-border)' }} />
               <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: 24, fontWeight: 700, color: '#ec4899' }}>{followerCount ?? 0}</p>
-                <p style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>フォロワー</p>
+                <p className="font-serif-display" style={{ fontSize: 32, fontWeight: 600, color: 'var(--mm-ink)', lineHeight: 1 }}>{followerCount ?? 0}</p>
+                <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.18em', textTransform: 'uppercase', marginTop: 6, fontWeight: 600 }}>Fans</p>
               </div>
             </div>
           </div>
