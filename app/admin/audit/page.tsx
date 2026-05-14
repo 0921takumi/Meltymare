@@ -43,9 +43,9 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
   const rows = (data ?? []) as unknown as AuditRow[]
 
   return (
-    <div style={{ padding: '32px 32px' }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>操作ログ</h1>
-      <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginBottom: 22 }}>管理者の操作履歴（最新200件）</p>
+    <div className="admin-page">
+      <h1 className="admin-h1">操作ログ</h1>
+      <p className="admin-h1-sub" style={{ marginBottom: 22 }}>管理者の操作履歴（最新200件）</p>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
         <Link href="/admin/audit?type=all" style={tabStyle(type === 'all')}>すべて</Link>

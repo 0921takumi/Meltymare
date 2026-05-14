@@ -35,9 +35,9 @@ export default async function AdminPayoutsPage() {
     .limit(30)
 
   return (
-    <div style={{ padding: '32px' }}>
+    <div className="admin-page">
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>振込管理</h1>
+        <h1 className="admin-h1">振込管理</h1>
         <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>クリエイターへの振込予定・履歴を管理します</p>
       </div>
 

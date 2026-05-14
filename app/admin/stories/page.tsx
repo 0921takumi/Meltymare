@@ -29,7 +29,7 @@ export default async function AdminStoriesPage() {
   const stories = (data ?? []) as unknown as StoryRow[]
 
   return (
-    <div style={{ padding: '32px 32px' }}>
+    <div className="admin-page">
       <div style={{ marginBottom: 22 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>ストーリー管理</h1>
         <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 4 }}>公開中のストーリー（24時間以内） · 不適切な投稿を削除</p>

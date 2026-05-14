@@ -78,9 +78,9 @@ export default async function AdminAnalyticsPage() {
   const total30Signups = weeks.slice(-4).reduce((s, w) => s + w.signups, 0)
 
   return (
-    <div style={{ padding: '32px 32px' }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>📊 分析・KPI</h1>
-      <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginBottom: 22 }}>過去90日のトレンドとランキング</p>
+    <div className="admin-page">
+      <h1 className="admin-h1">📊 分析・KPI</h1>
+      <p className="admin-h1-sub" style={{ marginBottom: 22 }}>過去90日のトレンドとランキング</p>
 
       {/* サマリーKPI */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 26 }}>

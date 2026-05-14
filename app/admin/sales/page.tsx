@@ -41,9 +41,9 @@ export default async function AdminSalesPage() {
   const creatorRanking = Object.values(byCreator).sort((a, b) => (b.sales + b.tip) - (a.sales + a.tip))
 
   return (
-    <div style={{ padding: '32px' }}>
+    <div className="admin-page">
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>売上管理</h1>
+        <h1 className="admin-h1">売上管理</h1>
         <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>総売上・手数料・振込予定額を確認できます</p>
       </div>
 

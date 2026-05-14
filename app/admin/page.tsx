@@ -95,11 +95,15 @@ export default async function AdminDashboard() {
   if ((openInquiries ?? 0) > 0) alerts.push({ kind: 'info', label: '未対応問い合わせ', count: openInquiries ?? 0, href: '/admin/inquiries' })
 
   return (
-    <div style={{ padding: '32px 32px' }}>
+    <div className="admin-page">
       {/* ヘッダー */}
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>ダッシュボード</h1>
-        <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>
+        <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+          Dashboard
+        </p>
+        <h1 className="admin-h1">ダッシュボード</h1>
+        <p className="admin-h1-sub">
           {today.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} · My Focus 運営管理コンソール
         </p>
       </div>
@@ -176,8 +180,8 @@ export default async function AdminDashboard() {
         </div>
       </div>
 
-      {/* 2カラム: 最近の注文 + 新規ユーザー */}
-      <div className="dash-2col" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18 }}>
+      {/* 2カラム: 最近の注文 + 新規ユーザー（モバイル: 1col） */}
+      <div className="dash-2col" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18, marginBottom: 24 }}>
         {/* 最近の購入 */}
         <div className="mm-card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--mm-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

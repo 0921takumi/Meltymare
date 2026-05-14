@@ -45,7 +45,7 @@ export default async function AdminAuctionsPage({ searchParams }: { searchParams
   const totalBudget = auctions.reduce((s, a) => s + a.budget_max, 0)
 
   return (
-    <div style={{ padding: '32px 32px' }}>
+    <div className="admin-page">
       <div style={{ marginBottom: 22 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>オークション管理</h1>
         <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 4 }}>{auctions.length}件 · 予算合計 ¥{totalBudget.toLocaleString()}</p>

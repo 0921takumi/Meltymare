@@ -41,7 +41,7 @@ export default async function AdminLivesPage({ searchParams }: { searchParams: P
   }
 
   return (
-    <div style={{ padding: '32px 32px' }}>
+    <div className="admin-page">
       <div style={{ marginBottom: 22 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>ライブ配信管理</h1>
         <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 4 }}>すべての配信 / 緊急停止</p>

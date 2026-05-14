@@ -26,8 +26,8 @@ export default async function AdminInvitesPage() {
   const invites = (data ?? []) as InviteRow[]
 
   return (
-    <div style={{ padding: '32px 32px' }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>招待コード管理</h1>
+    <div className="admin-page">
+      <h1 className="admin-h1">招待コード管理</h1>
       <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginBottom: 18 }}>
         現在の動作モード: <strong style={{ color: SERVICE_MODE.inviteOnly ? '#dc2626' : '#059669' }}>
           {SERVICE_MODE.inviteOnly ? '🔒 招待制 ON（招待コード必須）' : '🌐 公開モード（誰でも登録可）'}

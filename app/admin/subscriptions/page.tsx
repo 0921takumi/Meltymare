@@ -58,9 +58,9 @@ export default async function AdminSubscriptionsPage() {
   const churnRate = activeCount + cancelledCount > 0 ? (cancelledCount / (activeCount + cancelledCount) * 100).toFixed(1) : '0'
 
   return (
-    <div style={{ padding: '32px 32px' }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>サブスク管理</h1>
-      <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginBottom: 22 }}>月額メンバーシップ全体ビュー</p>
+    <div className="admin-page">
+      <h1 className="admin-h1">サブスク管理</h1>
+      <p className="admin-h1-sub" style={{ marginBottom: 22 }}>月額メンバーシップ全体ビュー</p>
 
       {/* KPI */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 26 }}>

@@ -50,9 +50,9 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   }
 
   return (
-    <div style={{ padding: '32px 32px' }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>ユーザー管理</h1>
-      <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginBottom: 22 }}>すべてのアカウント / 凍結処理</p>
+    <div className="admin-page">
+      <h1 className="admin-h1">ユーザー管理</h1>
+      <p className="admin-h1-sub" style={{ marginBottom: 22 }}>すべてのアカウント / 凍結処理</p>
 
       {/* フィルタ */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>

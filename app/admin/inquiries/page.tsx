@@ -59,7 +59,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
   }
 
   return (
-    <div style={{ padding: '32px 32px' }}>
+    <div className="admin-page">
       <div style={{ marginBottom: 22 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>問い合わせ管理</h1>
         <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 4 }}>ユーザーからの問い合わせとサポートチケット</p>

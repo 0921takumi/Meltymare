@@ -48,9 +48,9 @@ export default async function AdminContentsPage({
   ]
 
   return (
-    <div style={{ padding: '32px' }}>
+    <div className="admin-page">
       <div style={{ marginBottom: 22 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>商品管理・審査</h1>
+        <h1 className="admin-h1">商品管理・審査</h1>
         <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>投稿されたコンテンツの審査・承認・却下を管理します</p>
       </div>
 

@@ -20,9 +20,9 @@ export default async function AdminCreatorsPage() {
   }) ?? []
 
   return (
-    <div style={{ padding: '32px' }}>
+    <div className="admin-page">
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>クリエイター管理</h1>
+        <h1 className="admin-h1">クリエイター管理</h1>
         <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>手数料率・振込情報・売上を管理します</p>
       </div>
 

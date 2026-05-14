@@ -47,7 +47,7 @@ export default async function AdminVerificationsPage({
   ]
 
   return (
-    <div style={{ padding: '32px' }}>
+    <div className="admin-page">
       <div style={{ marginBottom: 22 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
           <ShieldCheck size={20} color="var(--mm-primary)" />

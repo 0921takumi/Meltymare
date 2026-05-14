@@ -54,7 +54,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
   const totalAmount = filtered.reduce((s, o) => s + (o.amount ?? 0) + (o.tip_amount ?? 0), 0)
 
   return (
-    <div style={{ padding: '32px 32px' }}>
+    <div className="admin-page">
       <div style={{ marginBottom: 22 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>注文管理</h1>
         <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 4 }}>すべての購入トランザクション</p>
