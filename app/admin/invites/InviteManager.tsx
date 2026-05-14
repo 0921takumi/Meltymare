@@ -68,46 +68,51 @@ export default function InviteManager({ initialInvites }: { initialInvites: Invi
 
   return (
     <>
-      <button onClick={() => setShowForm(!showForm)} disabled={pending} style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px',
-        background: 'var(--mm-primary)', color: 'white', border: 'none',
-        borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: 'pointer', marginBottom: 18,
-      }}>
+      <button onClick={() => setShowForm(!showForm)} disabled={pending} className="admin-btn" style={{ marginBottom: 18 }}>
         <Plus size={14} />招待コードを発行
       </button>
 
       {showForm && (
-        <div className="mm-card" style={{ padding: 22, marginBottom: 22 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>新規発行</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)' }}>メモ（誰に渡したか）</label>
+        <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 12, padding: 24, marginBottom: 22 }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
+            New invite
+          </p>
+          <div className="invite-form-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 14, marginBottom: 18 }}>
+            <div className="admin-field" style={{ marginBottom: 0 }}>
+              <label className="admin-label">メモ（誰に渡したか）</label>
               <input value={note} onChange={e => setNote(e.target.value)}
-                style={{ width: '100%', marginTop: 4, padding: '8px 10px', border: '1px solid var(--mm-border)', borderRadius: 6, fontSize: 13 }}
-                placeholder="例: ナオト氏" />
+                className="admin-input" placeholder="例: ナオト氏" />
             </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)' }}>使用回数上限</label>
+            <div className="admin-field" style={{ marginBottom: 0 }}>
+              <label className="admin-label">使用回数上限</label>
               <input type="number" value={maxUses} onChange={e => setMaxUses(Number(e.target.value))} min={1} max={100}
-                style={{ width: '100%', marginTop: 4, padding: '8px 10px', border: '1px solid var(--mm-border)', borderRadius: 6, fontSize: 13 }} />
+                className="admin-input" />
             </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)' }}>有効期間（日）</label>
+            <div className="admin-field" style={{ marginBottom: 0 }}>
+              <label className="admin-label">有効期間（日）</label>
               <input type="number" value={days} onChange={e => setDays(Number(e.target.value))} min={1}
-                style={{ width: '100%', marginTop: 4, padding: '8px 10px', border: '1px solid var(--mm-border)', borderRadius: 6, fontSize: 13 }} />
+                className="admin-input" />
             </div>
           </div>
-          <button onClick={create} disabled={pending} style={{ padding: '8px 18px', background: 'var(--mm-primary)', color: 'white', border: 'none', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>発行</button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={create} disabled={pending} className="admin-btn">発行</button>
+            <button onClick={() => setShowForm(false)} className="admin-btn admin-btn-ghost">キャンセル</button>
+          </div>
+          <style>{`@media (max-width: 700px) { .invite-form-grid { grid-template-columns: 1fr !important; } }`}</style>
         </div>
       )}
 
-      <div className="mm-card" style={{ overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <div className="admin-table-wrap">
+        <table className="admin-table admin-table-mobile-card">
           <thead>
-            <tr style={{ background: 'var(--mm-bg)' }}>
-              {['コード', 'メモ', '使用', '有効期限', '状態', ''].map(h => (
-                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)' }}>{h}</th>
-              ))}
+            <tr>
+              <th>コード</th>
+              <th>メモ</th>
+              <th className="num">使用</th>
+              <th>有効期限</th>
+              <th>状態</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -115,31 +120,31 @@ export default function InviteManager({ initialInvites }: { initialInvites: Invi
               const expired = i.expires_at && new Date(i.expires_at) < new Date()
               const usedUp = i.used_count >= i.max_uses
               return (
-                <tr key={i.id} style={{ borderBottom: '1px solid var(--mm-border)', opacity: i.is_active && !expired && !usedUp ? 1 : 0.5 }}>
-                  <td style={{ padding: '11px 14px', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' }}>
+                <tr key={i.id} style={{ opacity: i.is_active && !expired && !usedUp ? 1 : 0.55 }}>
+                  <td data-label="コード" style={{ fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--mm-ink)' }}>
                     {i.code}
-                    <button onClick={() => copy(i.code)} style={{ marginLeft: 6, padding: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: copiedCode === i.code ? '#059669' : 'var(--mm-text-muted)' }}>
-                      <Copy size={11} />
+                    <button onClick={() => copy(i.code)} style={{ marginLeft: 8, padding: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: copiedCode === i.code ? '#065f46' : 'var(--mm-text-muted)' }} title="コピー">
+                      <Copy size={12} />
                     </button>
                   </td>
-                  <td style={{ padding: '11px 14px', color: 'var(--mm-text-sub)' }}>{i.note ?? '—'}</td>
-                  <td style={{ padding: '11px 14px', fontWeight: 700 }}>{i.used_count} / {i.max_uses}</td>
-                  <td style={{ padding: '11px 14px', fontSize: 11, color: 'var(--mm-text-muted)' }}>
+                  <td data-label="メモ" style={{ color: 'var(--mm-text-sub)' }}>{i.note ?? '—'}</td>
+                  <td data-label="使用" className="num" style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>{i.used_count} / {i.max_uses}</td>
+                  <td data-label="有効期限" style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                     {i.expires_at ? new Date(i.expires_at).toLocaleDateString('ja-JP') : '無期限'}
                   </td>
-                  <td style={{ padding: '11px 14px' }}>
-                    {expired ? <span style={{ fontSize: 10, color: '#6b7280' }}>期限切れ</span>
-                      : usedUp ? <span style={{ fontSize: 10, color: '#6b7280' }}>使用済</span>
-                      : i.is_active ? <span style={{ fontSize: 10, fontWeight: 700, color: '#065f46', background: '#d1fae5', padding: '2px 8px', borderRadius: 999 }}>有効</span>
-                      : <span style={{ fontSize: 10, color: '#6b7280' }}>無効</span>}
+                  <td data-label="状態">
+                    {expired ? <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 700 }}>期限切れ</span>
+                      : usedUp ? <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 700 }}>使用済</span>
+                      : i.is_active ? <span style={{ fontSize: 10, fontWeight: 700, color: '#065f46', background: '#d1fae5', padding: '3px 9px', borderRadius: 999 }}>有効</span>
+                      : <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 700 }}>無効</span>}
                   </td>
-                  <td style={{ padding: '11px 14px' }}>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button onClick={() => toggle(i.id, !i.is_active)} disabled={pending} style={{ padding: '4px 10px', background: 'transparent', border: '1px solid var(--mm-border)', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>
+                  <td data-label="操作">
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => toggle(i.id, !i.is_active)} disabled={pending} className="admin-btn admin-btn-secondary" style={{ padding: '5px 11px', fontSize: 11 }}>
                         {i.is_active ? '無効化' : '有効化'}
                       </button>
-                      <button onClick={() => remove(i.id)} disabled={pending} style={{ padding: '4px 8px', background: 'transparent', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6, cursor: 'pointer' }}>
-                        <Trash2 size={11} />
+                      <button onClick={() => remove(i.id)} disabled={pending} className="admin-btn admin-btn-secondary" style={{ padding: '5px 9px', color: '#dc2626', borderColor: '#fecaca' }} title="削除">
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   </td>

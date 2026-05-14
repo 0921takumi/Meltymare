@@ -55,10 +55,8 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
 
   return (
     <div className="admin-page">
-      <div style={{ marginBottom: 22 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700 }}>注文管理</h1>
-        <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 4 }}>すべての購入トランザクション</p>
-      </div>
+      <h1 className="admin-h1">注文管理</h1>
+      <p className="admin-h1-sub" style={{ marginBottom: 22 }}>すべての購入トランザクション</p>
 
       {/* タブ */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -82,64 +80,68 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
       <form method="get" style={{ display: 'flex', gap: 8, marginBottom: 18, alignItems: 'center' }}>
         <input type="hidden" name="status" value={status} />
         <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--mm-text-muted)' }} />
+          <Search size={14} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--mm-text-muted)', pointerEvents: 'none' }} />
           <input name="q" defaultValue={q} placeholder="購入者名・メール・コンテンツ名で検索"
-            style={{ width: '100%', padding: '9px 12px 9px 34px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 13 }} />
+            className="admin-input" style={{ paddingLeft: 36 }} />
         </div>
       </form>
 
       <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginBottom: 12 }}>
-        {filtered.length}件 / 合計 ¥{totalAmount.toLocaleString()}
+        {filtered.length}件 / 合計 <strong style={{ color: 'var(--mm-ink)' }}>¥{totalAmount.toLocaleString()}</strong>
       </p>
 
-      <div className="mm-card" style={{ overflow: 'hidden' }}>
-        <div className="mm-table-wrap">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: 'var(--mm-bg)' }}>
-                {['購入者', 'コンテンツ', 'クリエイター', '金額', '決済', '納品', '日時'].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
+      <div className="admin-table-wrap">
+        <table className="admin-table admin-table-mobile-card">
+          <thead>
+            <tr>
+              <th>購入者</th>
+              <th>コンテンツ</th>
+              <th>クリエイター</th>
+              <th className="num">金額</th>
+              <th>決済</th>
+              <th>納品</th>
+              <th>日時</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(o => (
+              <tr key={o.id}>
+                <td data-label="購入者">
+                  <p style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>{o.user?.display_name ?? '—'}</p>
+                  <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>{o.user?.email}</p>
+                </td>
+                <td data-label="コンテンツ" style={{ maxWidth: 220 }}>
+                  <Link href={`/contents/${o.content?.id}`} style={{ color: 'var(--mm-ink)', textDecoration: 'none', borderBottom: '1px solid var(--mm-border)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: '100%' }}>
+                    {o.content?.title ?? '—'}
+                  </Link>
+                </td>
+                <td data-label="クリエイター">
+                  {o.creator && <Link href={`/creator/${o.creator.username}`} style={{ color: 'var(--mm-text-sub)', textDecoration: 'none' }}>@{o.creator.display_name}</Link>}
+                </td>
+                <td data-label="金額" className="num" style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>
+                  ¥{((o.amount ?? 0) + (o.tip_amount ?? 0)).toLocaleString()}
+                  {(o.tip_amount ?? 0) > 0 && <div style={{ fontSize: 10, color: 'var(--mm-primary)', fontWeight: 600 }}>+ Tip ¥{o.tip_amount?.toLocaleString()}</div>}
+                </td>
+                <td data-label="決済">
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+                    background: o.status === 'completed' ? '#d1fae5' : o.status === 'pending' ? '#fef3c7' : '#fee2e2',
+                    color: o.status === 'completed' ? '#065f46' : o.status === 'pending' ? '#92400e' : '#991b1b',
+                  }}>{o.status === 'completed' ? '完了' : o.status === 'pending' ? '保留' : '失敗'}</span>
+                </td>
+                <td data-label="納品">
+                  {o.delivery_status === 'delivered' ? (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#065f46', padding: '3px 9px', background: '#d1fae5', borderRadius: 999 }}>納品済</span>
+                  ) : o.delivery_status === 'pending' ? (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#92400e', padding: '3px 9px', background: '#fef3c7', borderRadius: 999 }}>納品待</span>
+                  ) : <span style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>—</span>}
+                </td>
+                <td data-label="日時" style={{ color: 'var(--mm-text-muted)', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
+                  {new Date(o.created_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filtered.map(o => (
-                <tr key={o.id} style={{ borderBottom: '1px solid var(--mm-border)' }}>
-                  <td style={{ padding: '11px 14px' }}>
-                    <p style={{ fontWeight: 700 }}>{o.user?.display_name ?? '—'}</p>
-                    <p style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>{o.user?.email}</p>
-                  </td>
-                  <td style={{ padding: '11px 14px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <Link href={`/contents/${o.content?.id}`} style={{ color: 'var(--mm-primary)', textDecoration: 'none' }}>{o.content?.title ?? '—'}</Link>
-                  </td>
-                  <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
-                    {o.creator && <Link href={`/creator/${o.creator.username}`} style={{ color: 'var(--mm-text-sub)', textDecoration: 'none' }}>{o.creator.display_name}</Link>}
-                  </td>
-                  <td style={{ padding: '11px 14px', fontWeight: 700, color: '#059669', whiteSpace: 'nowrap' }}>
-                    ¥{((o.amount ?? 0) + (o.tip_amount ?? 0)).toLocaleString()}
-                    {(o.tip_amount ?? 0) > 0 && <p style={{ fontSize: 9, color: '#7c3aed', fontWeight: 600 }}>+チップ ¥{o.tip_amount?.toLocaleString()}</p>}
-                  </td>
-                  <td style={{ padding: '11px 14px' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
-                      background: o.status === 'completed' ? '#d1fae5' : o.status === 'pending' ? '#fef3c7' : '#fee2e2',
-                      color: o.status === 'completed' ? '#065f46' : o.status === 'pending' ? '#92400e' : '#991b1b',
-                    }}>{o.status === 'completed' ? '完了' : o.status === 'pending' ? '保留' : '失敗'}</span>
-                  </td>
-                  <td style={{ padding: '11px 14px' }}>
-                    {o.delivery_status === 'delivered' ? (
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#059669' }}>納品済</span>
-                    ) : o.delivery_status === 'pending' ? (
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#d97706' }}>納品待</span>
-                    ) : <span style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>—</span>}
-                  </td>
-                  <td style={{ padding: '11px 14px', color: 'var(--mm-text-muted)', fontSize: 11, whiteSpace: 'nowrap' }}>
-                    {new Date(o.created_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* ページネーション */}

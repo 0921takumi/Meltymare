@@ -55,41 +55,46 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
       </div>
 
       {rows.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--mm-text-muted)' }}>
-          <FileText size={36} />
-          <p style={{ fontSize: 13, marginTop: 8 }}>操作履歴がありません</p>
+        <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 12, textAlign: 'center', padding: '64px 24px', color: 'var(--mm-text-muted)' }}>
+          <FileText size={36} style={{ opacity: 0.3 }} />
+          <p style={{ fontSize: 13, marginTop: 12 }}>操作履歴がありません</p>
         </div>
       ) : (
-        <div className="mm-card" style={{ overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <div className="admin-table-wrap">
+          <table className="admin-table admin-table-mobile-card">
             <thead>
-              <tr style={{ background: 'var(--mm-bg)' }}>
-                {['日時', '管理者', '操作', '対象', '詳細'].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)' }}>{h}</th>
-                ))}
+              <tr>
+                <th>日時</th>
+                <th>管理者</th>
+                <th>操作</th>
+                <th>対象</th>
+                <th>詳細</th>
               </tr>
             </thead>
             <tbody>
               {rows.map(r => {
                 const cfg = ACTION_LABELS[r.action_type] ?? { label: r.action_type, color: 'var(--mm-text-sub)' }
                 return (
-                  <tr key={r.id} style={{ borderBottom: '1px solid var(--mm-border)' }}>
-                    <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--mm-text-muted)', whiteSpace: 'nowrap' }}>
+                  <tr key={r.id}>
+                    <td data-label="日時" style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                       {new Date(r.created_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden' }}>
+                    <td data-label="管理者">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', flexShrink: 0 }}>
                           {r.admin?.avatar_url ? <img src={r.admin.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
                         </div>
-                        <span style={{ fontSize: 11, fontWeight: 600 }}>{r.admin?.display_name ?? '—'}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--mm-ink)' }}>{r.admin?.display_name ?? '—'}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '10px 14px' }}>
+                    <td data-label="操作">
                       <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 999, color: cfg.color, border: `1px solid ${cfg.color}30`, background: `${cfg.color}10` }}>{cfg.label}</span>
                     </td>
-                    <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--mm-text-sub)' }}>{r.target_type}{r.target_id && <span style={{ marginLeft: 6, color: 'var(--mm-text-muted)', fontSize: 10 }}>{r.target_id.slice(0, 8)}...</span>}</td>
-                    <td style={{ padding: '10px 14px', fontSize: 10, color: 'var(--mm-text-muted)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
+                    <td data-label="対象" style={{ fontSize: 11, color: 'var(--mm-text-sub)' }}>
+                      {r.target_type}
+                      {r.target_id && <span style={{ marginLeft: 6, color: 'var(--mm-text-muted)', fontSize: 10, fontFamily: 'monospace' }}>{r.target_id.slice(0, 8)}…</span>}
+                    </td>
+                    <td data-label="詳細" style={{ fontSize: 10, color: 'var(--mm-text-muted)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
                       {r.detail ? JSON.stringify(r.detail) : '—'}
                     </td>
                   </tr>

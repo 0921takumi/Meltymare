@@ -49,10 +49,8 @@ export default async function AdminContentsPage({
 
   return (
     <div className="admin-page">
-      <div style={{ marginBottom: 22 }}>
-        <h1 className="admin-h1">商品管理・審査</h1>
-        <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>投稿されたコンテンツの審査・承認・却下を管理します</p>
-      </div>
+      <h1 className="admin-h1">商品管理・審査</h1>
+      <p className="admin-h1-sub" style={{ marginBottom: 22 }}>投稿されたコンテンツの審査・承認・却下を管理します</p>
 
       {/* SLA Alert Banner */}
       {counts.pending > 0 && (

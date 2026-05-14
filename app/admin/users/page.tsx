@@ -75,75 +75,79 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
       <form method="get" style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
         <input type="hidden" name="role" value={role} />
         <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--mm-text-muted)' }} />
+          <Search size={14} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--mm-text-muted)', pointerEvents: 'none' }} />
           <input name="q" defaultValue={q} placeholder="名前・メール・username で検索"
-            style={{ width: '100%', padding: '9px 12px 9px 34px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 13 }} />
+            className="admin-input"
+            style={{ paddingLeft: 36 }} />
         </div>
       </form>
 
       <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginBottom: 12 }}>{users.length}名（最新200件）</p>
 
-      <div className="mm-card" style={{ overflow: 'hidden' }}>
-        <div className="mm-table-wrap">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: 'var(--mm-bg)' }}>
-                {['ユーザー', 'ロール', '購入数', '累計支援', '本人確認', 'ステータス', '登録日', ''].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(u => {
-                const stat = purchaseStats.get(u.id) ?? { count: 0, total: 0 }
-                return (
-                  <tr key={u.id} style={{ borderBottom: '1px solid var(--mm-border)', opacity: u.is_suspended ? 0.5 : 1 }}>
-                    <td style={{ padding: '10px 14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', flexShrink: 0 }}>
-                          {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>{u.display_name}</p>
-                          <p style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>@{u.username} · {u.email}</p>
-                        </div>
+      <div className="admin-table-wrap">
+        <table className="admin-table admin-table-mobile-card">
+          <thead>
+            <tr>
+              <th>ユーザー</th>
+              <th>ロール</th>
+              <th className="num">購入数</th>
+              <th className="num">累計支援</th>
+              <th>本人確認</th>
+              <th>ステータス</th>
+              <th>登録日</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(u => {
+              const stat = purchaseStats.get(u.id) ?? { count: 0, total: 0 }
+              return (
+                <tr key={u.id} style={{ opacity: u.is_suspended ? 0.55 : 1 }}>
+                  <td data-label="ユーザー">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', flexShrink: 0 }}>
+                        {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
                       </div>
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
-                        background: u.role === 'admin' ? '#fef3c7' : u.role === 'creator' ? '#ede9fe' : '#dbeafe',
-                        color: u.role === 'admin' ? '#92400e' : u.role === 'creator' ? '#7c3aed' : '#1e40af',
-                      }}>{u.role}</span>
-                    </td>
-                    <td style={{ padding: '10px 14px', fontWeight: 700 }}>{stat.count}</td>
-                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#059669' }}>¥{stat.total.toLocaleString()}</td>
-                    <td style={{ padding: '10px 14px' }}>
-                      {u.role === 'creator' && u.identity_status ? (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
-                          background: u.identity_status === 'approved' ? '#d1fae5' : u.identity_status === 'pending' ? '#fef3c7' : '#fee2e2',
-                          color: u.identity_status === 'approved' ? '#065f46' : u.identity_status === 'pending' ? '#92400e' : '#991b1b',
-                        }}>{u.identity_status === 'approved' ? '承認' : u.identity_status === 'pending' ? '審査中' : u.identity_status === 'rejected' ? '却下' : '—'}</span>
-                      ) : <span style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>—</span>}
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      {u.is_suspended ? (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#fee2e2', color: '#991b1b', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <AlertCircle size={9} />凍結
-                        </span>
-                      ) : <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>正常</span>}
-                    </td>
-                    <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--mm-text-muted)' }}>
-                      {new Date(u.created_at).toLocaleDateString('ja-JP', { year: '2-digit', month: 'numeric', day: 'numeric' })}
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <UserActions user={u} />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180, color: 'var(--mm-ink)' }}>{u.display_name}</p>
+                        <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>@{u.username} · {u.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td data-label="ロール">
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999, letterSpacing: '0.08em', textTransform: 'uppercase',
+                      background: u.role === 'admin' ? '#fef3c7' : u.role === 'creator' ? 'var(--mm-primary-light)' : 'var(--mm-accent-light)',
+                      color: u.role === 'admin' ? '#92400e' : u.role === 'creator' ? 'var(--mm-primary)' : 'var(--mm-accent)',
+                    }}>{u.role}</span>
+                  </td>
+                  <td data-label="購入数" className="num" style={{ fontWeight: 700 }}>{stat.count}</td>
+                  <td data-label="累計支援" className="num" style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>¥{stat.total.toLocaleString()}</td>
+                  <td data-label="本人確認">
+                    {u.role === 'creator' && u.identity_status ? (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+                        background: u.identity_status === 'approved' ? '#d1fae5' : u.identity_status === 'pending' ? '#fef3c7' : '#fee2e2',
+                        color: u.identity_status === 'approved' ? '#065f46' : u.identity_status === 'pending' ? '#92400e' : '#991b1b',
+                      }}>{u.identity_status === 'approved' ? '承認' : u.identity_status === 'pending' ? '審査中' : u.identity_status === 'rejected' ? '却下' : '—'}</span>
+                    ) : <span style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>—</span>}
+                  </td>
+                  <td data-label="ステータス">
+                    {u.is_suspended ? (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#fee2e2', color: '#991b1b', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <AlertCircle size={10} />凍結
+                      </span>
+                    ) : <span style={{ fontSize: 10, color: '#065f46', fontWeight: 700, padding: '3px 9px', background: '#d1fae5', borderRadius: 999 }}>正常</span>}
+                  </td>
+                  <td data-label="登録日" style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                    {new Date(u.created_at).toLocaleDateString('ja-JP', { year: '2-digit', month: 'numeric', day: 'numeric' })}
+                  </td>
+                  <td data-label="操作">
+                    <UserActions user={u} />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )
