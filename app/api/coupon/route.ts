@@ -7,7 +7,7 @@ import { sanitizeText } from '@/lib/sanitize'
 // GET /api/coupon?code=XXX&price=NNN  → クーポン検証 + 割引額返却
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req)
-  const rl = rateLimit({ key: `coupon-get:${ip}`, limit: 30, windowSec: 60 })
+  const rl = await rateLimit({ key: `coupon-get:${ip}`, limit: 30, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   const rawCode = req.nextUrl.searchParams.get('code') ?? ''
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   if (ctx instanceof NextResponse) return ctx
   const { supabase, user } = ctx
 
-  const rl = rateLimit({ key: `coupon-post:${user.id}`, limit: 10, windowSec: 60 })
+  const rl = await rateLimit({ key: `coupon-post:${user.id}`, limit: 10, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   const body = await req.json()

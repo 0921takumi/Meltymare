@@ -1,4 +1,4 @@
-# MyFocus セットアップ手順
+# My Focus セットアップ手順
 
 ## 技術スタック
 - Next.js 15 (App Router) + TypeScript

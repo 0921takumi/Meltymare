@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import PayoutStatusChanger from './PayoutStatusChanger'
+import { FINANCE } from '@/lib/config'
 
 export default async function AdminPayoutsPage() {
   const supabase = await createClient()
@@ -19,7 +20,7 @@ export default async function AdminPayoutsPage() {
   const pendingByCreator: Record<string, { sales: number; net: number }> = {}
   purchases?.forEach((p: any) => {
     const creatorId = p.content?.creator_id
-    const feeRate = p.content?.creator?.fee_rate ?? 30
+    const feeRate = p.content?.creator?.fee_rate ?? FINANCE.defaultFeeRate
     if (!creatorId) return
     if (!pendingByCreator[creatorId]) pendingByCreator[creatorId] = { sales: 0, net: 0 }
     pendingByCreator[creatorId].sales += p.amount
@@ -81,9 +82,11 @@ export default async function AdminPayoutsPage() {
                       : <span style={{ color: '#f59e0b', fontWeight: 600 }}>口座未登録</span>}
                   </td>
                   <td style={{ padding: '12px 16px' }}>
-                    {stats.net > 0
-                      ? <span style={{ background: '#fef3c7', color: '#d97706', padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>振込待ち</span>
-                      : <span style={{ color: 'var(--mm-text-muted)', fontSize: 12 }}>—</span>}
+                    {stats.net >= FINANCE.minPayoutYen
+                      ? <span style={{ background: '#d1fae5', color: '#065f46', padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>振込可</span>
+                      : stats.net > 0
+                        ? <span style={{ background: '#fef3c7', color: '#d97706', padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }} title={`最低${FINANCE.minPayoutYen.toLocaleString()}円必要`}>繰越（最低未達）</span>
+                        : <span style={{ color: 'var(--mm-text-muted)', fontSize: 12 }}>—</span>}
                   </td>
                 </tr>
               )

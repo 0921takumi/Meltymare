@@ -1,21 +1,46 @@
-// 簡易レートリミッタ（インメモリ）
-// 本番でマルチインスタンスになる場合は Upstash Redis 等に差し替え。
-// Vercel Serverless では同一インスタンスに同じキーが来る保証はないので、
-// 「最後の防波堤」としてのベストエフォート制限。厳密な制御は Supabase 側の RLS/制約で担保する。
+/**
+ * レートリミッタ — Upstash Redis 優先、未設定時は in-memory フォールバック。
+ *
+ * 設計:
+ *   - 本番（Vercel等）でマルチインスタンスになるため、グローバルに集計できる Upstash を最優先。
+ *   - `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` が未設定でも開発環境では動くよう
+ *     インメモリにフォールバック（dev/test 用のみ。本番では必ず Upstash 設定すること）。
+ *   - API 経由でしか触らない（Edge runtime でも動く）ので REST 版を使用。
+ *
+ * 使い方:
+ *   const rl = await rateLimit({ key: `purchase:${userId}`, limit: 10, windowSec: 60 })
+ *   if (!rl.ok) return NextResponse.json({ error: '...' }, { status: 429 })
+ */
 
+import { Redis } from '@upstash/redis'
+
+// ─── Upstash クライアント（環境変数あれば初期化） ──────────────────
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN
+
+const redis: Redis | null = (REDIS_URL && REDIS_TOKEN)
+  ? new Redis({ url: REDIS_URL, token: REDIS_TOKEN })
+  : null
+
+if (!redis && process.env.NODE_ENV === 'production') {
+  // 本番で Upstash 未設定は危険なので明示的に警告。
+  // throw にすると起動失敗するので console.warn にとどめる（運用ミス検知用）。
+  console.warn('[rate-limit] UPSTASH_REDIS_REST_URL / TOKEN 未設定。本番では必ず設定してください。')
+}
+
+// ─── インメモリフォールバック（dev/test 用） ─────────────────────
 type Bucket = { count: number; resetAt: number }
-const buckets = new Map<string, Bucket>()
-
-// 定期的に古いバケットを掃除
+const memBuckets = new Map<string, Bucket>()
 let lastCleanup = Date.now()
-function cleanup(now: number) {
+function memCleanup(now: number) {
   if (now - lastCleanup < 60_000) return
   lastCleanup = now
-  for (const [key, b] of buckets) {
-    if (b.resetAt < now) buckets.delete(key)
+  for (const [key, b] of memBuckets) {
+    if (b.resetAt < now) memBuckets.delete(key)
   }
 }
 
+// ─── パブリック API ──────────────────────────────────────────────
 export interface RateLimitOptions {
   /** 識別子（ユーザーID優先、無ければIP） */
   key: string
@@ -31,17 +56,48 @@ export interface RateLimitResult {
   resetAt: number
 }
 
-export function rateLimit({ key, limit, windowSec }: RateLimitOptions): RateLimitResult {
+/**
+ * レート制限チェック。**非同期**になった点に注意（Upstash REST 呼び出しのため）。
+ *
+ * 既存呼び出し側（同期で `rateLimit({...})` していたコード）は `await` を追加すること。
+ */
+export async function rateLimit({ key, limit, windowSec }: RateLimitOptions): Promise<RateLimitResult> {
   const now = Date.now()
-  cleanup(now)
+  const fullKey = `rl:${key}`
 
-  const bucket = buckets.get(key)
-  if (!bucket || bucket.resetAt < now) {
-    const resetAt = now + windowSec * 1000
-    buckets.set(key, { count: 1, resetAt })
-    return { ok: true, remaining: limit - 1, resetAt }
+  // ─── Upstash 版（本番想定） ─────────────────────
+  if (redis) {
+    try {
+      // INCR + EXPIRE のパターン。初回は EXPIRE で TTL を設定。
+      // pipeline で1往復にまとめてレイテンシ削減。
+      const pipe = redis.pipeline()
+      pipe.incr(fullKey)
+      pipe.expire(fullKey, windowSec, 'NX')  // NX: 既存TTLは上書きしない
+      pipe.pttl(fullKey)
+      const [count, , pttl] = (await pipe.exec()) as [number, unknown, number]
+
+      const resetAt = pttl > 0 ? now + pttl : now + windowSec * 1000
+      if (count > limit) {
+        return { ok: false, remaining: 0, resetAt }
+      }
+      return { ok: true, remaining: limit - count, resetAt }
+    } catch (err) {
+      // Redis 障害時はフェイルオープン（リクエストを通す）。
+      // セキュリティ的にはフェイルクローズの方が安全だが、Redis が落ちただけで
+      // サービス全停止するのも避けたい。代わりに log だけ残す。
+      console.error('[rate-limit] Upstash error, falling open:', err)
+      return { ok: true, remaining: limit, resetAt: now + windowSec * 1000 }
+    }
   }
 
+  // ─── インメモリ版（dev フォールバック） ──────────
+  memCleanup(now)
+  const bucket = memBuckets.get(fullKey)
+  if (!bucket || bucket.resetAt < now) {
+    const resetAt = now + windowSec * 1000
+    memBuckets.set(fullKey, { count: 1, resetAt })
+    return { ok: true, remaining: limit - 1, resetAt }
+  }
   bucket.count += 1
   if (bucket.count > limit) {
     return { ok: false, remaining: 0, resetAt: bucket.resetAt }

@@ -12,7 +12,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const rl = rateLimit({ key: `download:${user.id}`, limit: 30, windowSec: 60 })
+  const rl = await rateLimit({ key: `download:${user.id}`, limit: 30, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   // 購入レコードを検証（自分の購入かつ納品済み）

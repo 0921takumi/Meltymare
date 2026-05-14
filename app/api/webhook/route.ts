@@ -87,12 +87,12 @@ async function sendPurchaseEmail(userId: string, contentId: string, purchaseId: 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'MyFocus <noreply@my-focus.jp>',
+        from: 'My Focus <noreply@my-focus.jp>',
         to: email,
         subject: `【購入完了】${content.title}`,
         html: `
           <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; background: #fafafa;">
-            <h2 style="color: #2d6a9f; margin-bottom: 8px;">ご購入ありがとうございます 🎉</h2>
+            <h2 style="color: #d36b24; margin-bottom: 8px;">ご購入ありがとうございます 🎉</h2>
             <p style="color: #555;">${user.display_name} さん、ご購入が完了しました。</p>
 
             <div style="background: white; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1px solid #e5e7eb;">
@@ -102,11 +102,11 @@ async function sendPurchaseEmail(userId: string, contentId: string, purchaseId: 
 
             <p style="color: #555;">クリエイターがあなただけのメッセージを書き込んで納品します。<br>マイページから納品状況をご確認いただけます。</p>
 
-            <a href="${appUrl}/mypage" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: #2d6a9f; color: white; border-radius: 8px; text-decoration: none; font-weight: bold;">
+            <a href="${appUrl}/mypage" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: #d36b24; color: white; border-radius: 8px; text-decoration: none; font-weight: bold;">
               マイページで確認する
             </a>
 
-            <p style="margin-top: 32px; font-size: 12px; color: #aaa;">このメールは MyFocus から自動送信されています。</p>
+            <p style="margin-top: 32px; font-size: 12px; color: #aaa;">このメールは My Focus から自動送信されています。</p>
           </div>
         `,
       }),
@@ -145,7 +145,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'MyFocus <noreply@my-focus.jp>',
+        from: 'My Focus <noreply@my-focus.jp>',
         to: email,
         subject: `【納品完了】${content?.title} が届きました！`,
         html: `
@@ -164,7 +164,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
               今すぐダウンロード
             </a>
 
-            <p style="margin-top: 32px; font-size: 12px; color: #aaa;">このメールは MyFocus から自動送信されています。</p>
+            <p style="margin-top: 32px; font-size: 12px; color: #aaa;">このメールは My Focus から自動送信されています。</p>
           </div>
         `,
       }),

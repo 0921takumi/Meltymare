@@ -2,7 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import Header from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Clock, Download } from 'lucide-react'
+import { Clock, Download, BookOpen } from 'lucide-react'
+import { userTotalSupport } from '@/lib/rankings'
+import { getProgress } from '@/lib/tiers'
 
 export default async function MyPage() {
   const supabase = await createClient()
@@ -29,6 +31,9 @@ export default async function MyPage() {
   const totalCount = purchases?.length ?? 0
   const deliveredCount = purchases?.filter(p => p.delivery_status === 'delivered').length ?? 0
   const pendingCount = totalCount - deliveredCount
+
+  const support = await userTotalSupport(user.id)
+  const tier = getProgress(support.total)
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
@@ -59,6 +64,39 @@ export default async function MyPage() {
                 <a href="/mypage/profile" style={{ fontSize: 12, color: 'var(--mm-primary)', fontWeight: 600 }}>プロフィール編集</a>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* ティア & 累計支援額 */}
+        <div className="mm-card" style={{ padding: '18px 20px', marginBottom: 22, background: `linear-gradient(135deg, ${tier.current.bg} 0%, white 80%)` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 36, lineHeight: 1 }}>{tier.current.emoji}</div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: tier.current.color, letterSpacing: '0.08em' }}>YOUR TIER</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: tier.current.color }}>{tier.current.label}</span>
+              </div>
+              <p style={{ fontSize: 20, fontWeight: 700, color: 'var(--mm-text)' }}>累計 ¥{support.total.toLocaleString()}</p>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>{support.creators}名のクリエイターに{support.count}件応援中</p>
+            </div>
+          </div>
+          {tier.next && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ height: 6, background: 'rgba(0,0,0,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${tier.percent}%`, background: tier.current.color, transition: 'width 0.3s' }} />
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 6 }}>
+                次のティア {tier.next.emoji} {tier.next.label} まで あと ¥{tier.remainYen.toLocaleString()}
+              </p>
+            </div>
+          )}
+          <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Link href="/mypage/collection" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'white', border: '1px solid var(--mm-border)', borderRadius: 18, fontSize: 12, fontWeight: 700, color: '#a855f7', textDecoration: 'none' }}>
+              <BookOpen size={13} />コレクション帳
+            </Link>
+            <Link href="/rankings" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'white', border: '1px solid var(--mm-border)', borderRadius: 18, fontSize: 12, fontWeight: 700, color: '#f59e0b', textDecoration: 'none' }}>
+              🏆 ランキング
+            </Link>
           </div>
         </div>
 

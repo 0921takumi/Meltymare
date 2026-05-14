@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Header from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Edit, Eye, EyeOff, ClipboardList, MessageSquare, Tag } from 'lucide-react'
+import { Plus, Edit, Eye, EyeOff, ClipboardList, MessageSquare, Tag, ShieldCheck, ShieldAlert, Clock } from 'lucide-react'
 
 export default async function CreatorDashboard() {
   const supabase = await createClient()
@@ -50,6 +50,31 @@ export default async function CreatorDashboard() {
       <Header user={profile} />
 
       <div className="mm-page-pad" style={{ maxWidth: 1000, margin: '0 auto' }}>
+
+        {/* 本人確認バナー */}
+        {(() => {
+          const s = (profile as any)?.identity_status ?? 'unsubmitted'
+          if (s === 'approved') return null
+          const config: Record<string, { bg: string; border: string; iconColor: string; Icon: any; title: string; desc: string; cta: string }> = {
+            unsubmitted: { bg: '#fef2f2', border: '#fecaca', iconColor: '#dc2626', Icon: ShieldAlert, title: '本人確認が未提出です', desc: 'コンテンツを公開販売するには本人確認（年齢確認）が必要です。', cta: '本人確認を行う →' },
+            pending:     { bg: '#fff7ed', border: '#fed7aa', iconColor: '#d97706', Icon: Clock,       title: '本人確認 審査中', desc: '運営で確認中です。通常2〜3営業日以内に結果をお知らせします。', cta: '申請内容を確認 →' },
+            rejected:    { bg: '#fef2f2', border: '#fecaca', iconColor: '#dc2626', Icon: ShieldAlert, title: '本人確認が却下されました', desc: '書類に不備がありました。再提出をお願いします。', cta: '再提出する →' },
+          }
+          const c = config[s] ?? config.unsubmitted
+          const CIcon = c.Icon
+          return (
+            <Link href="/creator/verification" style={{ textDecoration: 'none' }}>
+              <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 10, padding: '14px 18px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
+                <CIcon size={22} color={c.iconColor} />
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: c.iconColor }}>{c.title}</p>
+                  <p style={{ fontSize: 12, color: 'var(--mm-text-sub)', marginTop: 2 }}>{c.desc}</p>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: c.iconColor }}>{c.cta}</span>
+              </div>
+            </Link>
+          )
+        })()}
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>管理ダッシュボード</h1>

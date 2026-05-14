@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -9,84 +10,200 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  const [agreed, setAgreed] = useState(false)
+  const [age18, setAge18] = useState(false)
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!agreed || !age18) { setError('利用規約と18歳以上の確認に同意してください'); return }
     setLoading(true)
     setError('')
+
+    // 招待コード検証 (招待制ON時)
+    const verifyRes = await fetch('/api/invite/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: inviteCode }),
+    })
+    const verify = await verifyRes.json()
+    if (!verify.ok) {
+      setError(verify.error ?? '登録できません')
+      setLoading(false)
+      return
+    }
+
     const supabase = createClient()
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { display_name: displayName } }
+      options: { data: { display_name: displayName, signup_invite_code: inviteCode || null } }
     })
     if (error) {
       setError(error.message)
       setLoading(false)
     } else {
+      // 招待コード使用記録
+      if (verify.invite_code_id && data.user?.id) {
+        await fetch('/api/invite/redeem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invite_code_id: verify.invite_code_id, user_id: data.user.id }),
+        })
+      }
       setDone(true)
     }
   }
 
+  // ─── 確認メール送信後の done 画面 ───────────────────────
   if (done) return (
-    <div style={{ minHeight: '100vh', background: 'var(--mm-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div className="mm-card" style={{ padding: 40, textAlign: 'center', maxWidth: 400, width: '100%' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>📩</div>
-        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>確認メールを送りました</h2>
-        <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.7 }}>
-          {email} に確認メールを送りました。<br />リンクをクリックして登録を完了してください。
+    <div style={{ minHeight: '100vh', background: 'var(--mm-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative', overflow: 'hidden' }}>
+      <div className="mm-grain" aria-hidden />
+      <span className="mm-viewfinder-corner tl" aria-hidden />
+      <span className="mm-viewfinder-corner tr" aria-hidden />
+      <span className="mm-viewfinder-corner bl" aria-hidden />
+      <span className="mm-viewfinder-corner br" aria-hidden />
+      <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 16, padding: '48px 32px', textAlign: 'center', maxWidth: 440, width: '100%', position: 'relative', zIndex: 1, boxShadow: '0 4px 24px -8px rgba(31,26,21,0.08)' }}>
+        <div style={{ fontSize: 56, marginBottom: 20 }}>📩</div>
+        <h2 className="font-serif-display" style={{ fontSize: 28, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-ink)', marginBottom: 12 }}>
+          Check your inbox.
+        </h2>
+        <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.8 }}>
+          <strong style={{ color: 'var(--mm-ink)' }}>{email}</strong> 宛に確認メールを送りました。<br />
+          メール内のリンクをクリックして登録を完了してください。
         </p>
-        <Link href="/auth/login" style={{ display: 'inline-block', marginTop: 24, color: 'var(--mm-primary)', fontWeight: 600, fontSize: 14 }}>
-          ログインページへ
+        <Link href="/auth/login" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          marginTop: 28, color: 'var(--mm-ink)', fontWeight: 600, fontSize: 13,
+          textDecoration: 'none', borderBottom: '1px solid var(--mm-ink)', paddingBottom: 2,
+        }}>
+          ログインページへ <span style={{ color: 'var(--mm-primary)' }}>→</span>
         </Link>
       </div>
     </div>
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--mm-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ width: '100%', maxWidth: 400 }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <Link href="/" style={{ textDecoration: 'none' }}>
-            <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 600, color: 'var(--mm-primary)' }}>MyFocus</span>
+    <div style={{ minHeight: '100vh', background: 'var(--mm-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative', overflow: 'hidden' }}>
+      <div className="mm-grain" aria-hidden />
+      <span className="mm-viewfinder-corner tl" aria-hidden />
+      <span className="mm-viewfinder-corner tr" aria-hidden />
+      <span className="mm-viewfinder-corner bl" aria-hidden />
+      <span className="mm-viewfinder-corner br" aria-hidden />
+
+      <div style={{ width: '100%', maxWidth: 440, position: 'relative', zIndex: 1, padding: '40px 0' }}>
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          <Link href="/" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: 16 }}>
+            <Image src="/logo.svg" alt="My Focus" width={60} height={56} priority unoptimized style={{ height: 56, width: 'auto' }} />
           </Link>
-          <p style={{ fontSize: 13, color: 'var(--mm-text-muted)', marginTop: 8 }}>新規登録</p>
-        </div>
-        <div className="mm-card" style={{ padding: 32 }}>
-          <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--mm-text-sub)' }}>ニックネーム</label>
-              <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} required
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-                placeholder="あなたの名前" />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--mm-text-sub)' }}>メールアドレス</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-                placeholder="mail@example.com" />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--mm-text-sub)' }}>パスワード</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-                placeholder="8文字以上" />
-            </div>
-            {error && <p style={{ fontSize: 13, color: '#dc2626', background: '#fef2f2', padding: '10px 14px', borderRadius: 8 }}>{error}</p>}
-            <button type="submit" disabled={loading}
-              style={{ background: 'var(--mm-primary)', color: 'white', padding: 12, borderRadius: 8, fontWeight: 700, fontSize: 15, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
-              {loading ? '登録中...' : '無料登録'}
-            </button>
-          </form>
-          <p style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--mm-text-muted)' }}>
-            すでにアカウントをお持ちの方は{' '}
-            <Link href="/auth/login" style={{ color: 'var(--mm-primary)', fontWeight: 600 }}>ログイン</Link>
+          <p className="font-serif-display" style={{
+            fontSize: 28, fontWeight: 500, fontStyle: 'italic',
+            color: 'var(--mm-ink)', letterSpacing: '0.01em', lineHeight: 1.2,
+          }}>Join the issue.</p>
+          <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 6, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 600 }}>
+            Create your account
           </p>
         </div>
+
+        <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 14, padding: '32px 28px', boxShadow: '0 4px 24px -8px rgba(31,26,21,0.08)' }}>
+          <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div>
+              <label style={authLabelStyle}>ニックネーム</label>
+              <input type="text" autoComplete="nickname" value={displayName} onChange={e => setDisplayName(e.target.value)} required
+                className="mm-auth-input" placeholder="あなたの名前" />
+            </div>
+            <div>
+              <label style={authLabelStyle}>Email</label>
+              <input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required
+                className="mm-auth-input" placeholder="you@example.com" />
+            </div>
+            <div>
+              <label style={authLabelStyle}>Password</label>
+              <input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
+                className="mm-auth-input" placeholder="8文字以上" />
+            </div>
+            <div>
+              <label style={authLabelStyle}>
+                Invite code <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', fontWeight: 500, textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>（β期間中は必須）</span>
+              </label>
+              <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                className="mm-auth-input"
+                style={{ fontFamily: 'monospace', letterSpacing: '0.12em' }}
+                placeholder="MYF-XXXXXX" />
+            </div>
+
+            {/* 同意チェック */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 0 4px', borderTop: '1px solid var(--mm-border)', marginTop: 4 }}>
+              <label style={checkLabelStyle}>
+                <input type="checkbox" checked={age18} onChange={e => setAge18(e.target.checked)} style={{ marginTop: 2, accentColor: 'var(--mm-primary)' }} />
+                <span>私は<strong style={{ color: 'var(--mm-ink)' }}>18歳以上</strong>であり、虚偽がないことを確認しました</span>
+              </label>
+              <label style={checkLabelStyle}>
+                <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ marginTop: 2, accentColor: 'var(--mm-primary)' }} />
+                <span>
+                  <Link href="/terms" target="_blank" style={authLinkStyle}>利用規約</Link>・
+                  <Link href="/privacy" target="_blank" style={authLinkStyle}>プライバシーポリシー</Link>・
+                  <Link href="/guidelines" target="_blank" style={authLinkStyle}>コンテンツガイドライン</Link>に同意します
+                </span>
+              </label>
+            </div>
+
+            {error && (
+              <p style={{ fontSize: 13, color: '#dc2626', background: '#fef2f2', padding: '10px 14px', borderRadius: 8, lineHeight: 1.5 }}>
+                {error}
+              </p>
+            )}
+
+            <button type="submit" disabled={loading}
+              style={{
+                background: 'var(--mm-ink)', color: 'white',
+                padding: '14px', borderRadius: 999,
+                fontWeight: 600, fontSize: 14, letterSpacing: '0.04em',
+                border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
+                marginTop: 4,
+                transition: 'opacity 0.2s',
+              }}>
+              {loading ? 'Creating...' : '無料登録（30秒）→'}
+            </button>
+          </form>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 18px' }}>
+            <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
+            <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 600 }}>or</span>
+            <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
+          </div>
+
+          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--mm-text-sub)' }}>
+            すでにアカウントをお持ちの方は{' '}
+            <Link href="/auth/login" style={{ color: 'var(--mm-ink)', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 1 }}>
+              ログイン <span style={{ color: 'var(--mm-primary)' }}>→</span>
+            </Link>
+          </p>
+        </div>
+
+        <p style={{ textAlign: 'center', marginTop: 24, fontSize: 11, color: 'var(--mm-text-muted)', letterSpacing: '0.1em' }}>
+          ✦ Issue 01 — 2026 Spring
+        </p>
       </div>
     </div>
   )
+}
+
+const authLabelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 8,
+  color: 'var(--mm-text-sub)', letterSpacing: '0.16em', textTransform: 'uppercase',
+}
+
+const checkLabelStyle: React.CSSProperties = {
+  display: 'flex', gap: 10, fontSize: 12, color: 'var(--mm-text-sub)',
+  cursor: 'pointer', lineHeight: 1.5, alignItems: 'flex-start',
+}
+
+const authLinkStyle: React.CSSProperties = {
+  color: 'var(--mm-ink)', fontWeight: 600,
+  borderBottom: '1px solid var(--mm-border)', paddingBottom: 1,
 }

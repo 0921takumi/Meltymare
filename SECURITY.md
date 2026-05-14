@@ -1,4 +1,4 @@
-# MyFocus セキュリティ設計メモ
+# My Focus セキュリティ設計メモ
 
 本番リリース前に実施した対策と、**手動で行う必要がある Supabase/Stripe コンソール設定**の一覧。
 
@@ -94,11 +94,89 @@ v4 で行う主なこと:
 
 ---
 
+## 🔴 公開前に必ず実行する手動ステップ（順番に）
+
+### Step 1: Supabase SQL migration v9 実行
+SQL Editor で `supabase_migration_v9_identity_hardening.sql` を実行。これでやること:
+- identity_documents バケットの RLS 強化（本人 + admin のみ閲覧可）
+- 退会/却下書類の自動削除関数 `cleanup_rejected_identity_docs()`
+- identity_status / review_status 変更時の自動監査ログ trigger
+- 監査ログ書き込みヘルパ関数 `audit_log()`
+
+### Step 2: Supabase Dashboard 手動設定
+1. **MFA の強制**: Auth → Settings → "Enable MFA" を ON。**少なくとも admin アカウントは TOTP 必須化**。
+2. **Leaked password protection**: Auth → Settings → "Leaked password protection" を ON（HaveIBeenPwned連携）。
+3. **PITR（Point-in-Time Recovery）有効化**: Pro プランで利用可。Database → Backups → PITR を ON。月数百円。
+4. **pg_cron 拡張**: Database → Extensions → `pg_cron` を有効化（書類クリーンアップを日次実行する場合）。
+   有効化後、以下を SQL Editor で実行:
+   ```sql
+   select cron.schedule('cleanup-identity', '0 3 * * *', 'select public.cleanup_rejected_identity_docs()');
+   ```
+
+### Step 3: Upstash Redis セットアップ（レート制限の本番対応）
+1. https://upstash.com で無料アカウント作成
+2. New Database → Type: Redis → Region: Tokyo (ap-northeast-1) → Free tier OK
+3. 作成後 "REST API" タブから以下を取得:
+   - `UPSTASH_REDIS_REST_URL` （`https://xxxx.upstash.io`）
+   - `UPSTASH_REDIS_REST_TOKEN`
+4. Vercel の環境変数に追加（本番）
+
+### Step 4: AWS Rekognition セットアップ（AI 審査）
+1. AWS Console → IAM → 新規ユーザー `myfocus-rekognition` 作成
+2. ポリシー `AmazonRekognitionReadOnlyAccess` をアタッチ
+3. アクセスキーを発行（CLI 用）
+4. Vercel の環境変数に追加:
+   - `AWS_REGION=ap-northeast-1`
+   - `AWS_ACCESS_KEY_ID=AKIA...`
+   - `AWS_SECRET_ACCESS_KEY=...`
+   - （optional）`AWS_REKOGNITION_THRESHOLD=80`（既定値、必要なら調整）
+5. Free tier: 月5,000 枚まで無料。超過は $0.001/枚。
+
+### Step 5: 環境変数の最終確認（Vercel Production）
+必須:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` （server only）
+- `STRIPE_SECRET_KEY` （sk_live_...）
+- `STRIPE_WEBHOOK_SECRET`
+- `NEXT_PUBLIC_APP_URL=https://my-focus.jp`
+- `RESEND_API_KEY`
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+- `AWS_REGION`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+---
+
+## 実装済み（コード側）追加
+
+### レート制限の本番化
+- `lib/rate-limit.ts` を **Upstash Redis** 対応に書き換え
+- 環境変数未設定時はインメモリにフォールバック（dev 用、本番では必ず Upstash 設定）
+- フェイルオープン設計（Redis 障害時はリクエスト通す → サービス停止を避ける）
+
+### AI コンテンツモデレーション
+- `lib/moderation.ts`: AWS Rekognition `DetectModerationLabels` ラッパ
+- `/api/moderate`: クリエイター本人のみ実行可、`audit_logs` に記録
+- `app/creator/upload/page.tsx`: 投稿時に自動で `/api/moderate` を呼ぶ
+- 判定ロジック:
+  - Hard reject: Explicit Nudity, Violence, Drugs, Self-Injury, Hate Symbols 等
+  - Soft flag (人力レビュー): Revealing Clothes, Swimwear, Alcohol, Smoking 等
+  - 動画は当面 `pending` 固定（人力レビュー必須）→ Phase 2 で非同期ジョブ実装
+
+### 監査ログ
+- `lib/audit.ts`: サーバー側で `audit_logs` に記録するヘルパ
+- `audit_logs` テーブルへの書き込みを `/api/banner` に実装（admin 操作）
+- DB 側でも `profiles.identity_status` / `contents.review_status` 変更時に自動で監査ログを記録する trigger を追加
+
+---
+
 ## 未対応 / 今後の検討事項
 
-- **コンテンツモデレーション**: `contents.review_status` フィールドはあるが自動化未実装。最初は手動審査 → 自動化検討
+- **CSP を nonce 化**: 現状 `'unsafe-inline'` 許可。将来的に Script タグ nonce 対応で XSS 耐性を強化
+- **動画モデレーションの非同期ジョブ**: Rekognition `StartContentModeration` + SNS/SQS で結果受信
 - **年齢認証**: プラットフォームの性質次第で要検討（利用規約に依存）
 - **不正購入検知**: Stripe Radar + 独自ルール（短時間での大量購入等）
-- **CSP を nonce 化**: 現状 `'unsafe-inline'` 許可。将来的に Script タグ nonce 対応で XSS 耐性を強化
-- **監査ログの書き込み実装**: `audit_logs` テーブルは用意したが、各 admin API からの書き込みは未実装
-- **バックアップ**: Supabase の Point-in-Time Recovery 有効化（有料プラン）
+- **EXIF 情報の自動削除**: クリエイター投稿時に位置情報を除去（自宅特定リスク対策）
+- **退会/データ削除フロー**: GDPR/個人情報保護法対応

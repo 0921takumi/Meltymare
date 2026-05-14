@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -27,47 +28,84 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--mm-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ width: '100%', maxWidth: 400 }}>
+    <div style={{ minHeight: '100vh', background: 'var(--mm-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative', overflow: 'hidden' }}>
+      {/* グレイン質感 */}
+      <div className="mm-grain" aria-hidden />
 
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <Link href="/" style={{ textDecoration: 'none' }}>
-            <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 600, color: 'var(--mm-primary)' }}>MyFocus</span>
+      {/* カメラのファインダー枠（4隅、Heroと統一） */}
+      <span className="mm-viewfinder-corner tl" aria-hidden />
+      <span className="mm-viewfinder-corner tr" aria-hidden />
+      <span className="mm-viewfinder-corner bl" aria-hidden />
+      <span className="mm-viewfinder-corner br" aria-hidden />
+
+      <div style={{ width: '100%', maxWidth: 420, position: 'relative', zIndex: 1 }}>
+
+        {/* Logo + eyebrow */}
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          <Link href="/" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: 16 }}>
+            <Image src="/logo.svg" alt="My Focus" width={60} height={56} priority unoptimized style={{ height: 56, width: 'auto' }} />
           </Link>
-          <p style={{ fontSize: 13, color: 'var(--mm-text-muted)', marginTop: 8 }}>ログイン</p>
+          <p className="font-serif-display" style={{
+            fontSize: 28, fontWeight: 500, fontStyle: 'italic',
+            color: 'var(--mm-ink)', letterSpacing: '0.01em', lineHeight: 1.2,
+          }}>Welcome back.</p>
+          <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 6, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 600 }}>
+            Sign in to My Focus
+          </p>
         </div>
 
-        <div className="mm-card" style={{ padding: 32 }}>
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 14, padding: '32px 28px', boxShadow: '0 4px 24px -8px rgba(31,26,21,0.08)' }}>
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--mm-text-sub)' }}>メールアドレス</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-                placeholder="mail@example.com" />
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 8, color: 'var(--mm-text-sub)', letterSpacing: '0.16em', textTransform: 'uppercase' }}>Email</label>
+              <input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required
+                className="mm-auth-input"
+                placeholder="you@example.com" />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--mm-text-sub)' }}>パスワード</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 8, color: 'var(--mm-text-sub)', letterSpacing: '0.16em', textTransform: 'uppercase' }}>Password</label>
+              <input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required
+                className="mm-auth-input"
                 placeholder="••••••••" />
             </div>
 
             {error && (
-              <p style={{ fontSize: 13, color: '#dc2626', background: '#fef2f2', padding: '10px 14px', borderRadius: 8 }}>{error}</p>
+              <p style={{ fontSize: 13, color: '#dc2626', background: '#fef2f2', padding: '10px 14px', borderRadius: 8, lineHeight: 1.5 }}>
+                {error}
+              </p>
             )}
 
             <button type="submit" disabled={loading}
-              style={{ background: 'var(--mm-primary)', color: 'white', padding: '12px', borderRadius: 8, fontWeight: 700, fontSize: 15, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
-              {loading ? 'ログイン中...' : 'ログイン'}
+              style={{
+                background: 'var(--mm-ink)', color: 'white',
+                padding: '14px', borderRadius: 999,
+                fontWeight: 600, fontSize: 14, letterSpacing: '0.04em',
+                border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
+                marginTop: 6,
+                transition: 'opacity 0.2s',
+              }}>
+              {loading ? 'Signing in...' : 'ログイン →'}
             </button>
           </form>
 
-          <p style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--mm-text-muted)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 18px' }}>
+            <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
+            <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 600 }}>or</span>
+            <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
+          </div>
+
+          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--mm-text-sub)' }}>
             アカウントがない方は{' '}
-            <Link href="/auth/signup" style={{ color: 'var(--mm-primary)', fontWeight: 600 }}>新規登録</Link>
+            <Link href="/auth/signup" style={{ color: 'var(--mm-ink)', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 1 }}>
+              新規登録 <span style={{ color: 'var(--mm-primary)' }}>→</span>
+            </Link>
           </p>
         </div>
+
+        <p style={{ textAlign: 'center', marginTop: 24, fontSize: 11, color: 'var(--mm-text-muted)', letterSpacing: '0.1em' }}>
+          ✦ Issue 01 — 2026 Spring
+        </p>
       </div>
     </div>
   )

@@ -26,6 +26,7 @@ function UploadForm() {
   const [tagInput, setTagInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [recentUploads, setRecentUploads] = useState<number>(0)
 
   useEffect(() => {
     const init = async () => {
@@ -34,6 +35,15 @@ function UploadForm() {
       if (!user) { router.push('/auth/login'); return }
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       setProfile(data)
+
+      // 24時間以内のアップロード数取得
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const { count } = await supabase
+        .from('contents')
+        .select('id', { count: 'exact', head: true })
+        .eq('creator_id', user.id)
+        .gte('created_at', since)
+      setRecentUploads(count ?? 0)
 
       if (isEdit && editId) {
         const { data: content } = await supabase.from('contents').select('*').eq('id', editId).single()
@@ -67,14 +77,18 @@ function UploadForm() {
 
       // MIME/サイズ検証
       const { validateUpload } = await import('@/lib/sanitize')
+      // 画像の EXIF（GPS等）を除去（プライバシー対策）
+      const { stripExif } = await import('@/lib/strip-exif')
 
       if (contentFile) {
         const v = validateUpload(contentFile, contentType)
         if (!v.ok) throw new Error(v.error)
-        const ext = (contentFile.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        // 画像のみ EXIF 除去（動画はそのまま）
+        const safeFile = contentType === 'image' ? await stripExif(contentFile) : contentFile
+        const ext = (safeFile.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
         const path = `${user.id}/${Date.now()}.${ext || 'bin'}`
-        const { error: upErr } = await supabase.storage.from('contents').upload(path, contentFile, {
-          contentType: contentFile.type,
+        const { error: upErr } = await supabase.storage.from('contents').upload(path, safeFile, {
+          contentType: safeFile.type,
         })
         if (upErr) throw upErr
         fileUrl = path
@@ -83,10 +97,12 @@ function UploadForm() {
       if (thumbnailFile) {
         const v = validateUpload(thumbnailFile, 'image')
         if (!v.ok) throw new Error(v.error)
-        const ext = (thumbnailFile.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        // サムネイルも EXIF 除去
+        const safeThumb = await stripExif(thumbnailFile)
+        const ext = (safeThumb.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
         const path = `${user.id}/${Date.now()}_thumb.${ext || 'jpg'}`
-        const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, thumbnailFile, {
-          contentType: thumbnailFile.type,
+        const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, safeThumb, {
+          contentType: safeThumb.type,
         })
         if (upErr) throw upErr
         const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
@@ -109,9 +125,41 @@ function UploadForm() {
         const { error: updErr } = await supabase.from('contents').update(payload).eq('id', editId)
         if (updErr) throw updErr
       } else {
+        // 24時間以内のアップロード上限チェック
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        const { count } = await supabase
+          .from('contents')
+          .select('id', { count: 'exact', head: true })
+          .eq('creator_id', user.id)
+          .gte('created_at', since)
+        const UPLOAD_LIMIT = 5
+        if ((count ?? 0) >= UPLOAD_LIMIT) {
+          throw new Error(`24時間以内にアップロードできるのは ${UPLOAD_LIMIT} 件までです。新着フィードを多くのクリエイターに開放するためのルールです。`)
+        }
         payload.creator_id = user.id
-        const { error: insErr } = await supabase.from('contents').insert(payload)
+        // 新規投稿は AI 審査を通すため、is_published=false かつ review_status=pending で挿入。
+        // 審査結果が approved になり、かつ creator が公開フラグを ON にしたタイミングで公開される。
+        payload.review_status = 'pending'
+        payload.is_published = false
+        const { data: inserted, error: insErr } = await supabase
+          .from('contents')
+          .insert(payload)
+          .select('id')
+          .single()
         if (insErr) throw insErr
+
+        // AI 審査をトリガー（失敗しても投稿自体は成功。後で管理画面から再実行可）
+        if (inserted?.id) {
+          try {
+            await fetch('/api/moderate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content_id: inserted.id }),
+            })
+          } catch (modErr) {
+            console.warn('moderation trigger failed:', modErr)
+          }
+        }
       }
 
       router.push('/creator/dashboard')
@@ -135,7 +183,37 @@ function UploadForm() {
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
       <Header user={profile} />
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 24px' }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 28 }}>{isEdit ? 'コンテンツ編集' : 'コンテンツ追加'}</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>{isEdit ? 'コンテンツ編集' : 'コンテンツ追加'}</h1>
+
+        {!isEdit && (
+          <div style={{
+            marginBottom: 18, padding: '10px 14px',
+            background: recentUploads >= 5 ? '#fee2e2' : recentUploads >= 4 ? '#fef3c7' : '#dbeafe',
+            borderRadius: 8, fontSize: 12,
+            color: recentUploads >= 5 ? '#991b1b' : recentUploads >= 4 ? '#92400e' : '#1e40af',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
+          }}>
+            <span><strong>本日のアップロード: {recentUploads} / 5件</strong></span>
+            <span style={{ fontSize: 11, opacity: 0.8 }}>
+              {recentUploads >= 5
+                ? '本日の上限に達しています。明日以降に再度お試しください'
+                : '24時間以内に最大5件までアップロード可能（新着フィードを多くのクリエイターに開放するため）'}
+            </span>
+          </div>
+        )}
+
+        {!isEdit && (
+          <div style={{ marginBottom: 18, padding: '12px 14px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 12, color: '#92400e', lineHeight: 1.7 }}>
+            ⚠️ <strong>投稿前の確認:</strong>
+            <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
+              <li>18歳未満が含まれるコンテンツは絶対に投稿不可</li>
+              <li>露出を含む画像はモザイク処理が必須</li>
+              <li>他者の著作権・肖像権を侵害する内容は禁止</li>
+              <li>違反時はアカウント停止・法的措置の対象となります</li>
+            </ul>
+            <a href="/guidelines" style={{ display: 'inline-block', marginTop: 6, color: '#92400e', fontWeight: 700, textDecoration: 'underline' }}>コンテンツガイドライン全文を見る →</a>
+          </div>
+        )}
 
         <div className="mm-card" style={{ padding: 32 }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

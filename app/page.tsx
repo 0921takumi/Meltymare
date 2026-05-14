@@ -3,13 +3,16 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import ContentCard from '@/components/ui/ContentCard'
 import { createClient } from '@/lib/supabase/server'
-import { Lock, ImageIcon, VideoIcon, Star, Users, Package, TrendingUp } from 'lucide-react'
-
-const STATS = [
-  { icon: Users,      value: '1,240+', label: '会員数' },
-  { icon: Star,       value: '18',     label: '在籍クリエイター' },
-  { icon: Package,    value: '420+',   label: 'コンテンツ数' },
-  { icon: TrendingUp, value: '4.9',    label: '平均満足度' },
+/**
+ * ヒーローのポラロイド画像 URL。
+ * `null` の場合はグラデーション＋アイコンのフォールバック表示。
+ * 後で AI 生成画像を `/public/hero/polaroid-*.webp` として配置する想定。
+ * 画像は 4:5 縦長、暖色系がベスト。
+ */
+const HERO_POLAROIDS: { src: string | null; tint: string }[] = [
+  { src: null, tint: 'linear-gradient(135deg, rgba(245,212,190,0.0) 0%, rgba(211,107,36,0.35) 100%)' },  // card 1: warm
+  { src: null, tint: 'linear-gradient(160deg, rgba(220,237,243,0.0) 0%, rgba(37,142,172,0.4) 100%)' },   // card 2: cool
+  { src: null, tint: 'linear-gradient(135deg, rgba(252,233,216,0.0) 0%, rgba(211,107,36,0.3) 100%)' },   // card 3: peach
 ]
 
 const HOW_TO = [
@@ -89,65 +92,238 @@ export default async function HomePage() {
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
       <Header user={profile} />
 
-      {/* ━━━ HERO ━━━ */}
-      <section className="mm-hero" style={{
-        background: 'linear-gradient(135deg, #1a2f4a 0%, #2d6a9f 55%, #6aaad4 100%)',
-        textAlign: 'center', position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.04,
-          backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
-        <div style={{ position: 'relative', maxWidth: 640, margin: '0 auto' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center',
-            background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)',
-            borderRadius: 20, padding: '4px 14px', marginBottom: 24 }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)', letterSpacing: '0.08em', fontWeight: 600 }}>
-              ✦ 会員数1,240名突破
-            </span>
+      {/* ━━━ HERO (Editorial Magazine 風) ━━━
+       *
+       * 構成:
+       *   左カラム: ISSUE バッジ → 巨大ディスプレイタイトル → 日本語サブ → CTA → メタ情報
+       *   右カラム: 3枚のポラロイドが重なって浮いている。ホバーで前面に来る。
+       *
+       * オレンジは差し色（line / dot / eyebrow）に限定。ベースはクリーム＋ノイズ質感。
+       * `mm-viewfinder-corner` はロゴのカメラ枠と呼応。
+       */}
+      <section className="mm-hero" style={{ background: 'var(--mm-bg)' }}>
+        {/* グレイン質感（紙っぽさ） */}
+        <div className="mm-grain" aria-hidden />
+
+        {/* カメラのファインダー枠（4隅） */}
+        <span className="mm-viewfinder-corner tl" aria-hidden />
+        <span className="mm-viewfinder-corner tr" aria-hidden />
+        <span className="mm-viewfinder-corner bl" aria-hidden />
+        <span className="mm-viewfinder-corner br" aria-hidden />
+
+        <div className="mm-hero-grid">
+          {/* ── 左カラム: テキスト ───────────────────── */}
+          <div className="mm-fade-in" style={{ position: 'relative', zIndex: 2 }}>
+            <p className="mm-eyebrow" style={{ marginBottom: 28 }}>
+              ISSUE 01 — 2026 SPRING
+            </p>
+
+            <h1 className="mm-hero-title">
+              My&nbsp;Focus<span className="accent-dot" aria-hidden />
+            </h1>
+
+            <p className="font-jp-serif" style={{
+              fontSize: 'clamp(18px, 2.2vw, 22px)',
+              fontWeight: 600,
+              color: 'var(--mm-text)',
+              letterSpacing: '0.04em',
+              lineHeight: 1.7,
+              margin: '24px 0 16px',
+              maxWidth: 460,
+            }}>
+              推しと、もっと近く。<br />
+              手紙のような、写真のような<span style={{ color: 'var(--mm-primary)' }}>—— 一枚</span>。
+            </p>
+
+            <p style={{
+              fontSize: 14,
+              color: 'var(--mm-text-sub)',
+              lineHeight: 1.85,
+              maxWidth: 440,
+              marginBottom: 36,
+            }}>
+              コンセプトカフェ・クリエイターの限定写真と動画。<br />
+              メッセージを書き込んだ、あなただけの一枚をお届けします。
+            </p>
+
+            {/* CTA ペア */}
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Link href="/contents" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 10,
+                background: 'var(--mm-ink)', color: 'white',
+                padding: '16px 32px', borderRadius: 999,
+                fontWeight: 600, fontSize: 14, letterSpacing: '0.04em',
+                textDecoration: 'none',
+                boxShadow: '0 8px 24px -8px rgba(31,26,21,0.4)',
+                transition: 'transform .2s, box-shadow .2s',
+              }}>
+                コンテンツを見る
+                <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 18, lineHeight: 1 }}>→</span>
+              </Link>
+              <Link href="/auth/signup" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                color: 'var(--mm-text)',
+                padding: '14px 8px',
+                fontWeight: 600, fontSize: 13,
+                textDecoration: 'none',
+                borderBottom: '1px solid var(--mm-ink)',
+                letterSpacing: '0.04em',
+              }}>
+                無料で会員登録（30秒）
+              </Link>
+            </div>
+
+            {/* メタ行: 会員数 + レーティング */}
+            <div style={{
+              display: 'flex', gap: 32, alignItems: 'center',
+              marginTop: 48, paddingTop: 24,
+              borderTop: '1px solid var(--mm-border)',
+              flexWrap: 'wrap',
+            }}>
+              <div>
+                <div className="font-serif-display" style={{
+                  fontSize: 28, fontWeight: 600, color: 'var(--mm-ink)', lineHeight: 1,
+                }}>1,240<span style={{ fontSize: 16, color: 'var(--mm-primary)', marginLeft: 2 }}>+</span></div>
+                <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--mm-text-muted)', marginTop: 6, textTransform: 'uppercase' }}>会員数 / Members</div>
+              </div>
+              <div style={{ width: 1, height: 32, background: 'var(--mm-border)' }} />
+              <div>
+                <div className="font-serif-display" style={{
+                  fontSize: 28, fontWeight: 600, color: 'var(--mm-ink)', lineHeight: 1,
+                }}>★ 4.9</div>
+                <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--mm-text-muted)', marginTop: 6, textTransform: 'uppercase' }}>平均満足度 / Rating</div>
+              </div>
+              <div style={{ width: 1, height: 32, background: 'var(--mm-border)' }} />
+              <div>
+                <div className="font-serif-display" style={{
+                  fontSize: 28, fontWeight: 600, color: 'var(--mm-ink)', lineHeight: 1,
+                }}>420<span style={{ fontSize: 16, color: 'var(--mm-primary)', marginLeft: 2 }}>+</span></div>
+                <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--mm-text-muted)', marginTop: 6, textTransform: 'uppercase' }}>コンテンツ / Items</div>
+              </div>
+            </div>
           </div>
-          <h1 className="mm-hero" style={{ fontFamily: 'Cormorant Garamond, serif', fontWeight: 600,
-            color: 'white', letterSpacing: '0.1em', marginBottom: 16, lineHeight: 1.1, padding: 0 }}>MyFocus</h1>
-          <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.88)', marginBottom: 8, lineHeight: 1.8, fontWeight: 500 }}>
-            クリエイターの限定写真・動画を購入できるプラットフォーム
-          </p>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 44, letterSpacing: '0.03em' }}>
-            メッセージを書き込んだ特別な一枚 ― あなただけへ届ける
-          </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link href="/contents" style={{ background: 'white', color: 'var(--mm-primary)',
-              padding: '15px 36px', borderRadius: 10, fontWeight: 700, fontSize: 15,
-              textDecoration: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>コンテンツを見る</Link>
-            <Link href="/auth/signup" style={{ background: 'rgba(255,255,255,0.12)', color: 'white',
-              padding: '15px 36px', borderRadius: 10, fontWeight: 600, fontSize: 15,
-              textDecoration: 'none', border: '1px solid rgba(255,255,255,0.35)' }}>無料登録（30秒）</Link>
+
+          {/* ── 右カラム: ポラロイド・スタック ───────────────────── */}
+          <div className="mm-hero-polaroids">
+            {/* polaroid 1: 写真コンテンツ風（後ろ） */}
+            <div className="mm-polaroid mm-polaroid-1" style={{ zIndex: 1 }}>
+              <div className="mm-polaroid-photo" style={{
+                background: HERO_POLAROIDS[0].src ? '#f5d4be' : 'linear-gradient(135deg, #f5d4be 0%, #d36b24 60%, #b85a1c 100%)',
+              }}>
+                {HERO_POLAROIDS[0].src && (
+                  <img src={HERO_POLAROIDS[0].src} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                )}
+                {/* ブランドカラー オーバーレイ */}
+                {HERO_POLAROIDS[0].src && (
+                  <div style={{ position: 'absolute', inset: 0, background: HERO_POLAROIDS[0].tint }} />
+                )}
+                {!HERO_POLAROIDS[0].src && (
+                  <svg width="40%" height="40%" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.4">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                )}
+                {/* EXCLUSIVE バッジ */}
+                <span style={{
+                  position: 'absolute', top: 10, right: 10, zIndex: 2,
+                  background: 'rgba(255,255,255,0.95)', color: 'var(--mm-primary)',
+                  fontSize: 9, fontWeight: 700, padding: '3px 8px', borderRadius: 999,
+                  letterSpacing: '0.08em',
+                }}>★ EXCLUSIVE</span>
+              </div>
+              <div className="mm-polaroid-caption">あいさんから</div>
+            </div>
+
+            {/* polaroid 2: メッセージ風（中央） */}
+            <div className="mm-polaroid mm-polaroid-2" style={{ zIndex: 3 }}>
+              <div className="mm-polaroid-photo" style={{
+                background: 'linear-gradient(160deg, #dcedf3 0%, #258eac 70%, #1a6c85 100%)',
+              }}>
+                <div style={{
+                  textAlign: 'center', color: 'white',
+                  padding: '0 14px',
+                }}>
+                  <div className="font-script" style={{
+                    fontSize: 28, fontWeight: 600, lineHeight: 1.2, marginBottom: 8,
+                    textShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                  }}>Dear you,</div>
+                  <div className="font-script" style={{
+                    fontSize: 14, lineHeight: 1.6, opacity: 0.95,
+                    textShadow: '0 1px 4px rgba(0,0,0,0.15)',
+                  }}>いつも応援<br/>ありがとう ♡</div>
+                </div>
+              </div>
+              <div className="mm-polaroid-caption">手書きメッセージ付き</div>
+            </div>
+
+            {/* polaroid 3: 動画コンテンツ風（前） */}
+            <div className="mm-polaroid mm-polaroid-3" style={{ zIndex: 2 }}>
+              <div className="mm-polaroid-photo" style={{
+                background: HERO_POLAROIDS[2].src ? '#fce9d8' : 'linear-gradient(135deg, #fce9d8 0%, #f5b88a 50%, #d36b24 100%)',
+              }}>
+                {HERO_POLAROIDS[2].src && (
+                  <img src={HERO_POLAROIDS[2].src} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                )}
+                {HERO_POLAROIDS[2].src && (
+                  <div style={{ position: 'absolute', inset: 0, background: HERO_POLAROIDS[2].tint }} />
+                )}
+                {/* Play button（常に表示） */}
+                <div style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.95)', zIndex: 2,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.18)', position: 'relative',
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--mm-primary)">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </div>
+                <span style={{
+                  position: 'absolute', bottom: 10, left: 10, zIndex: 2,
+                  background: 'rgba(31,26,21,0.85)', color: 'white',
+                  fontSize: 9, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
+                  letterSpacing: '0.08em',
+                }}>VIDEO · 02:14</span>
+              </div>
+              <div className="mm-polaroid-caption">特別な動画メッセージ</div>
+            </div>
+
+            {/* デコレーション: 手書き矢印 */}
+            <svg
+              aria-hidden
+              style={{
+                position: 'absolute',
+                top: '50%', left: '50%',
+                transform: 'translate(-50%, -50%) rotate(-8deg)',
+                width: '70%', height: '70%',
+                pointerEvents: 'none',
+                opacity: 0.06,
+              }}
+              viewBox="0 0 200 200" fill="none" stroke="var(--mm-ink)" strokeWidth="1"
+            >
+              <circle cx="100" cy="100" r="80" strokeDasharray="3 6" />
+            </svg>
           </div>
         </div>
       </section>
 
-      {/* ━━━ STATS ━━━ */}
-      <section style={{ background: 'white', borderBottom: '1px solid var(--mm-border)' }}>
-        <div className="mm-stats-grid" style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px' }}>
-          {STATS.map(({ icon: Icon, value, label }) => (
-            <div key={label} style={{ padding: '20px 16px', textAlign: 'center', borderRight: '1px solid var(--mm-border)' }}>
-              <Icon size={18} color="var(--mm-primary)" style={{ marginBottom: 6, display: 'inline-block' }} />
-              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--mm-primary)', lineHeight: 1 }}>{value}</div>
-              <div style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 4 }}>{label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* STATS セクションは Hero に統合済 — 削除 */}
 
       {/* ━━━ 特集バナー ━━━ */}
       {banners && banners.length > 0 && (
-        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 16px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em' }}>✦ FEATURED</p>
+        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 16px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ width: 24, height: 1, background: 'var(--mm-primary)' }} />
+              FEATURED
+            </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: banners.length === 1 ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
             {(banners as any[]).map((b: any) => {
               const href = b.link_url ?? (b.content_id ? `/contents/${b.content_id}` : b.creator?.username ? `/creator/${b.creator.username}` : '#')
               return (
                 <Link key={b.id} href={href} style={{ textDecoration: 'none' }}>
-                  <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', background: 'linear-gradient(135deg, #2d6a9f, #7c3aed)', minHeight: 120, display: 'flex', alignItems: 'flex-end', padding: 20, boxShadow: '0 4px 20px rgba(45,106,159,0.3)' }}>
+                  <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', background: 'linear-gradient(135deg, #2a221b 0%, #4a3a2f 100%)', minHeight: 120, display: 'flex', alignItems: 'flex-end', padding: 20, boxShadow: '0 4px 20px rgba(31,26,21,0.18)' }}>
                     {b.content?.thumbnail_url && (
                       <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${b.content.thumbnail_url})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.25 }} />
                     )}
@@ -172,40 +348,88 @@ export default async function HomePage() {
         </section>
       )}
 
+      {/* ━━━ Coming Soon （クリエイターもコンテンツもない時のフォールバック） ━━━ */}
+      {(!creators || creators.length === 0) && (!contents || contents.length === 0) && (
+        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '88px 16px 0' }}>
+          <div style={{
+            position: 'relative',
+            background: 'white',
+            border: '1px solid var(--mm-border)',
+            borderRadius: 16,
+            padding: 'clamp(48px, 8vw, 80px) 24px',
+            textAlign: 'center',
+            overflow: 'hidden',
+          }}>
+            {/* 装飾: コーナー枠 */}
+            <span style={{ position: 'absolute', top: 16, left: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', top: 16, right: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, left: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, right: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.32em', textTransform: 'uppercase', marginBottom: 18 }}>
+              ✦ Coming Soon
+            </p>
+            <h2 className="font-serif-display" style={{
+              fontSize: 'clamp(36px, 6vw, 60px)', fontWeight: 500, fontStyle: 'italic',
+              color: 'var(--mm-ink)', letterSpacing: '0.01em', lineHeight: 1.1, marginBottom: 18,
+            }}>
+              Issue 01, in the making.
+            </h2>
+            <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.85, maxWidth: 480, margin: '0 auto 32px' }}>
+              現在クリエイターの皆さんと一緒に、最初の特集を準備中です。<br />
+              先行公開のお知らせはニュースレターでお届けします。
+            </p>
+            <Link href="/auth/signup" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              background: 'var(--mm-ink)', color: 'white',
+              padding: '14px 30px', borderRadius: 999,
+              fontSize: 13, fontWeight: 600, letterSpacing: '0.04em',
+              textDecoration: 'none',
+            }}>
+              先行公開を通知 <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 18, lineHeight: 1 }}>→</span>
+            </Link>
+          </div>
+        </section>
+      )}
+
       {/* ━━━ 人気クリエイター ━━━ */}
       {creators && creators.length > 0 && (
-        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 16px 0' }}>
+        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 16px 0' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 6 }}>CREATOR</p>
-              <h2 style={{ fontSize: 22, fontWeight: 700 }}>人気のクリエイター</h2>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ width: 24, height: 1, background: 'var(--mm-primary)' }} />
+                CREATOR
+              </p>
+              <h2 className="font-serif-display" style={{ fontSize: 30, fontWeight: 500, color: 'var(--mm-ink)', letterSpacing: '0.01em' }}>人気のクリエイター</h2>
             </div>
-            <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-primary)', textDecoration: 'none', fontWeight: 600 }}>全員を見る →</Link>
+            <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-text)', textDecoration: 'none', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 2 }}>
+              全員を見る <span style={{ color: 'var(--mm-primary)' }}>→</span>
+            </Link>
           </div>
           <div className="mm-cast-grid">
             {creators.map((creator, i) => {
               const color = CREATOR_COLORS[i % CREATOR_COLORS.length]
               const count = creatorContentCounts[creator.id] ?? 0
               return (
-                <Link key={creator.id} href={`/creator/${creator.username}`} style={{ textDecoration: 'none' }}>
-                  <div className="mm-card" style={{ padding: '20px 16px', textAlign: 'center', cursor: 'pointer' }}>
-                    <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
-                      <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden',
-                        background: color.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 22, fontWeight: 700, color: color.text, margin: '0 auto',
-                        border: '3px solid white', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
-                        {creator.avatar_url
-                          ? <img src={creator.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : creator.display_name[0]}
-                      </div>
-                      {i === 0 && (
-                        <span style={{ position: 'absolute', top: -4, right: -8, background: '#f59e0b', color: 'white',
-                          fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>人気No.1</span>
-                      )}
-                    </div>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--mm-text)', marginBottom: 2 }}>{creator.display_name}</p>
-                    <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 8 }}>@{creator.username}</p>
-                    <p style={{ fontSize: 12, color: 'var(--mm-primary)', fontWeight: 600 }}>📦 {count}件</p>
+                <Link key={creator.id} href={`/creator/${creator.username}`} className="mm-creator-card">
+                  <div className="mm-creator-card-photo" style={{ background: color.bg }}>
+                    {creator.avatar_url
+                      ? <img src={creator.avatar_url} alt={creator.display_name} />
+                      : <span className="font-serif-display" style={{ fontSize: 56, fontWeight: 500, fontStyle: 'italic', color: color.text }}>{creator.display_name[0]}</span>}
+                    {i === 0 && (
+                      <span className="mm-creator-card-rank">
+                        <span style={{ color: 'var(--mm-primary)' }}>★</span> No.1
+                      </span>
+                    )}
+                  </div>
+                  <div className="mm-creator-card-body">
+                    <p className="mm-creator-card-name">{creator.display_name}</p>
+                    <p className="mm-creator-card-handle">@{creator.username}</p>
+                    <p className="mm-creator-card-count">
+                      <span className="font-serif-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--mm-ink)' }}>{count}</span>
+                      <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.18em', textTransform: 'uppercase', marginLeft: 4 }}>items</span>
+                    </p>
                   </div>
                 </Link>
               )
@@ -216,13 +440,18 @@ export default async function HomePage() {
 
       {/* ━━━ 新着コンテンツ ━━━ */}
       {contents && contents.length > 0 && (
-        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 16px 0' }}>
+        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 16px 0' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 6 }}>CONTENTS</p>
-              <h2 style={{ fontSize: 22, fontWeight: 700 }}>新着コンテンツ</h2>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ width: 24, height: 1, background: 'var(--mm-primary)' }} />
+                CONTENTS
+              </p>
+              <h2 className="font-serif-display" style={{ fontSize: 30, fontWeight: 500, color: 'var(--mm-ink)', letterSpacing: '0.01em' }}>新着コンテンツ</h2>
             </div>
-            <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-primary)', textDecoration: 'none', fontWeight: 600 }}>もっと見る →</Link>
+            <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-text)', textDecoration: 'none', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 2 }}>
+              もっと見る <span style={{ color: 'var(--mm-primary)' }}>→</span>
+            </Link>
           </div>
           <div className="mm-content-grid">
             {contents.map((content: any) => (
@@ -237,28 +466,33 @@ export default async function HomePage() {
       )}
 
       {/* ━━━ HOW TO ━━━ */}
-      <section style={{ maxWidth: 900, margin: '64px auto 0', padding: '0 24px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 8 }}>HOW TO</p>
-          <h2 style={{ fontSize: 22, fontWeight: 700 }}>ご利用の流れ</h2>
+      <section className="mm-reveal" style={{ maxWidth: 900, margin: '88px auto 0', padding: '0 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', marginBottom: 14, display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ width: 24, height: 1, background: 'var(--mm-primary)' }} />
+            HOW TO
+            <span style={{ width: 24, height: 1, background: 'var(--mm-primary)' }} />
+          </p>
+          <h2 className="font-serif-display" style={{ fontSize: 34, fontWeight: 500, color: 'var(--mm-ink)', letterSpacing: '0.01em', fontStyle: 'italic' }}>ご利用の流れ</h2>
         </div>
         <div className="mm-howto-grid">
           {HOW_TO.map((step, i) => (
-            <div key={i} className="mm-card" style={{ padding: '28px 24px', textAlign: 'center', position: 'relative' }}>
-              <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 40, fontWeight: 600,
-                color: 'var(--mm-primary-light)', position: 'absolute', top: 12, right: 16, lineHeight: 1 }}>{step.step}</span>
-              <div style={{ fontSize: 36, marginBottom: 14 }}>{step.icon}</div>
-              <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>{step.title}</h3>
-              <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', lineHeight: 1.7 }}>{step.desc}</p>
+            <div key={i} className="mm-card" style={{ padding: '32px 24px', textAlign: 'center', position: 'relative', background: 'white' }}>
+              <span className="font-serif-display" style={{ fontSize: 56, fontWeight: 500, fontStyle: 'italic',
+                color: 'var(--mm-primary)', opacity: 0.18,
+                position: 'absolute', top: 8, right: 18, lineHeight: 1 }}>{step.step}</span>
+              <div style={{ fontSize: 38, marginBottom: 16 }}>{step.icon}</div>
+              <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10, color: 'var(--mm-ink)' }}>{step.title}</h3>
+              <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', lineHeight: 1.75 }}>{step.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* ━━━ 安心ポイント ━━━ */}
-      <section style={{ maxWidth: 900, margin: '60px auto 0', padding: '0 24px' }}>
-        <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 16, padding: '36px 32px' }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, textAlign: 'center', marginBottom: 28 }}>🔒 安心・安全のプラットフォーム</h2>
+      <section className="mm-reveal" style={{ maxWidth: 900, margin: '72px auto 0', padding: '0 24px' }}>
+        <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 16, padding: '40px 32px' }}>
+          <h2 className="font-serif-display" style={{ fontSize: 22, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-ink)', textAlign: 'center', marginBottom: 32 }}>安心・安全のプラットフォーム</h2>
           <div className="mm-trust-grid">
             {[
               { icon: '🛡️', text: 'Stripe認定の安全決済' },
@@ -275,22 +509,47 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ━━━ BOTTOM CTA ━━━ */}
-      <section style={{ maxWidth: 900, margin: '60px auto', padding: '0 24px' }}>
-        <div style={{ background: 'linear-gradient(135deg, #1a2f4a 0%, #2d6a9f 100%)',
-          borderRadius: 20, padding: '56px 24px', textAlign: 'center' }}>
-          <h2 style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 34, fontWeight: 600,
-            color: 'white', marginBottom: 12, letterSpacing: '0.05em' }}>今すぐ始める</h2>
-          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.65)', marginBottom: 32 }}>
-            無料登録するだけ。購入しなくてもコンテンツ一覧は見られます。
+      {/* ━━━ BOTTOM CTA (ダークウォーム + オレンジ差し色) ━━━ */}
+      <section className="mm-reveal" style={{ maxWidth: 1100, margin: '80px auto 0', padding: '0 16px' }}>
+        <div style={{
+          background: 'var(--mm-dark)',
+          borderRadius: 20,
+          padding: '72px 32px',
+          textAlign: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          <div className="mm-grain" aria-hidden style={{ opacity: 0.2 }} />
+          {/* 装飾: 横ライン（オレンジ） */}
+          <span style={{
+            display: 'inline-block', width: 56, height: 1,
+            background: 'var(--mm-primary)', marginBottom: 24,
+          }} />
+          <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.32em', textTransform: 'uppercase', marginBottom: 16 }}>
+            Get Started
           </p>
-          <Link href="/auth/signup" style={{ display: 'inline-block', background: 'white', color: 'var(--mm-primary)',
-            padding: '16px 48px', borderRadius: 10, fontWeight: 700, fontSize: 16,
-            textDecoration: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.25)' }}>
+          <h2 className="font-serif-display" style={{
+            fontSize: 'clamp(36px, 5vw, 56px)',
+            fontWeight: 500, fontStyle: 'italic',
+            color: 'white', marginBottom: 16, letterSpacing: '0.01em', lineHeight: 1.1,
+          }}>今すぐ、はじめる。</h2>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 36, maxWidth: 480, margin: '0 auto 36px' }}>
+            無料登録するだけ。30秒で完了。<br/>購入しなくてもコンテンツ一覧は自由に閲覧できます。
+          </p>
+          <Link href="/auth/signup" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 10,
+            background: 'var(--mm-primary)', color: 'white',
+            padding: '18px 44px', borderRadius: 999, fontWeight: 600, fontSize: 15,
+            textDecoration: 'none', letterSpacing: '0.04em',
+            boxShadow: '0 12px 32px -8px rgba(211, 107, 36, 0.55)',
+          }}>
             無料で会員登録
+            <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 20, lineHeight: 1 }}>→</span>
           </Link>
         </div>
       </section>
+      {/* セクション下マージン */}
+      <div style={{ height: 80 }} />
 
       <Footer />
     </div>

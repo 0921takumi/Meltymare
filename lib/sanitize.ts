@@ -47,7 +47,9 @@ export function sanitizeUrl(input: unknown): string | null {
 export const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const
 export const ALLOWED_VIDEO_MIME = ['video/mp4', 'video/quicktime', 'video/webm'] as const
 export const MAX_IMAGE_SIZE = 10 * 1024 * 1024
-export const MAX_VIDEO_SIZE = 200 * 1024 * 1024
+// Supabase Free プランのファイルサイズ上限が 50MB のためそれに合わせる。
+// Pro プランにアップグレードしたら 500MB まで拡張可能。
+export const MAX_VIDEO_SIZE = 50 * 1024 * 1024
 
 export function validateUpload(
   file: { type: string; size: number },

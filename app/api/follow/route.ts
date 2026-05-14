@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const rl = rateLimit({ key: `follow:${user.id}`, limit: 60, windowSec: 60 })
+  const rl = await rateLimit({ key: `follow:${user.id}`, limit: 60, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   const { creator_id } = await req.json()
@@ -33,7 +33,7 @@ export async function DELETE(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const rl = rateLimit({ key: `follow:${user.id}`, limit: 60, windowSec: 60 })
+  const rl = await rateLimit({ key: `follow:${user.id}`, limit: 60, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   const { creator_id } = await req.json()

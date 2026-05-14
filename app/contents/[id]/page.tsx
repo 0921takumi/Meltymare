@@ -3,6 +3,7 @@ import Header from '@/components/layout/Header'
 import PurchaseButton from './PurchaseButton'
 import ContentCard from '@/components/ui/ContentCard'
 import ReviewSection from './ReviewSection'
+import Comments, { type CommentItem } from '@/components/Comments'
 import { notFound } from 'next/navigation'
 import { ImageIcon, VideoIcon, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
@@ -23,7 +24,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     title: content.title,
     description: desc,
     openGraph: {
-      title: `${content.title} | MyFocus`,
+      title: `${content.title} | My Focus`,
       description: desc,
       images: content.thumbnail_url ? [{ url: content.thumbnail_url }] : [],
     },
@@ -101,6 +102,34 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     .select('*, user:profiles(display_name)')
     .eq('content_id', id)
     .order('created_at', { ascending: false })
+
+  // コメント取得 + いいね集計
+  const { data: commentsData } = await supabase
+    .from('content_comments')
+    .select('id, body, created_at, user_id, user:profiles!content_comments_user_id_fkey(id, display_name, avatar_url, username)')
+    .eq('content_id', id)
+    .eq('is_hidden', false)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  const commentIds = (commentsData ?? []).map(c => c.id)
+  const likesByComment = new Map<string, number>()
+  const likedByMe = new Set<string>()
+  if (commentIds.length > 0) {
+    const { data: likes } = await supabase.from('comment_likes').select('comment_id, user_id').in('comment_id', commentIds)
+    for (const l of likes ?? []) {
+      likesByComment.set(l.comment_id, (likesByComment.get(l.comment_id) ?? 0) + 1)
+      if (user?.id && l.user_id === user.id) likedByMe.add(l.comment_id)
+    }
+  }
+  const comments: CommentItem[] = (commentsData ?? []).map(c => ({
+    id: c.id,
+    body: c.body,
+    created_at: c.created_at,
+    user: (c.user as unknown as CommentItem['user']) ?? null,
+    likes: likesByComment.get(c.id) ?? 0,
+    liked_by_me: likedByMe.has(c.id),
+  }))
 
   let myReview: any = null
   if (user) {
@@ -237,6 +266,11 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
           existingRating={myReview?.rating}
           existingComment={myReview?.comment ?? ''}
         />
+
+        {/* コメント */}
+        <div style={{ marginTop: 40 }}>
+          <Comments contentId={id} comments={comments} currentUserId={user?.id ?? null} />
+        </div>
 
         {/* おすすめクリエイター */}
         {recCreators && recCreators.length > 0 && (

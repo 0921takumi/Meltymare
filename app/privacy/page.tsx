@@ -31,7 +31,7 @@ const SECTIONS = [
   },
   {
     title: '7. お問い合わせ',
-    content: '個人情報の取り扱いに関するお問い合わせは、下記までご連絡ください。株式会社91&Co. 〒114-0001 東京都北区神谷2-21-7 / info@my-focus.jp'
+    content: '個人情報の取り扱いに関するお問い合わせは、下記までご連絡ください。株式会社91&Co.（代表者: 島瀬直人） 〒114-0001 東京都北区神谷2-21-7 / my-focus@my-focus.jp'
   },
 ]
 
@@ -48,7 +48,7 @@ export default function PrivacyPage() {
 
         <div className="mm-card" style={{ padding: '32px 40px' }}>
           <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.8, marginBottom: 32 }}>
-            MyFocus（以下「当サービス」）は、ユーザーの個人情報の取り扱いについて、以下のとおりプライバシーポリシーを定めます。
+            My Focus（以下「当サービス」）は、ユーザーの個人情報の取り扱いについて、以下のとおりプライバシーポリシーを定めます。
           </p>
 
           {SECTIONS.map((s, i) => (

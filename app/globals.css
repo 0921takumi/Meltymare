@@ -1,17 +1,65 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Caveat:wght@500;600&family=Shippori+Mincho:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --mm-bg: #f0f4f8;
+  /* ─── My Focus ブランドパレット ─────────────────
+   * Primary (Orange) / Accent (Teal) はロゴから抽出。
+   * `/public/logo.svg` と完全一致させること。
+   * オレンジは "差し色" 専用。ベースは温白＋暖色グレー。
+   */
+  --mm-bg: #f6f1ea;            /* ベースは少し濃いめのクリーム（紙っぽさ） */
+  --mm-bg-soft: #faf7f3;       /* セクション切替用の明るいクリーム */
   --mm-surface: #ffffff;
-  --mm-primary: #2d6a9f;
-  --mm-primary-light: #d6e8f7;
-  --mm-accent: #8ab4d4;
-  --mm-text: #1a2a3a;
-  --mm-text-sub: #4a6680;
-  --mm-text-muted: #8aa0b4;
-  --mm-border: #d0dde8;
+  --mm-ink: #1a1410;           /* 本文以上の見出し用ダーク（深い茶墨） */
+  --mm-dark: #2a221b;          /* ダーク帯（フッター/CTA帯）の温チャコール */
+  --mm-primary: #d36b24;       /* ロゴオレンジ — アクセント専用 */
+  --mm-primary-hover: #b85a1c; /* ホバー時の濃いオレンジ */
+  --mm-primary-light: #fce9d8; /* バッジ/Hover背景 */
+  --mm-accent: #258eac;        /* ロゴティール */
+  --mm-accent-light: #dcedf3;  /* アクセント背景 */
+  --mm-text: #1f1a15;          /* 本文（ニュートラル寄り暖色） */
+  --mm-text-sub: #5c5048;
+  --mm-text-muted: #9e938a;
+  --mm-border: #e6dccb;        /* 紙の罫線色 */
 }
+
+/* ─── ノイズ／グレイン質感（hero などに重ねる） ─────────────────
+ * SVG turbulence を data URI で。pointer-events: none で操作を遮らない。
+ */
+.mm-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5  0 0 0 0 0.4  0 0 0 0 0.3  0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 200px 200px;
+}
+
+/* ─── ヒーロー専用ユーティリティ ─────────────────── */
+.font-serif-display { font-family: 'Cormorant Garamond', 'Shippori Mincho', serif; }
+.font-jp-serif { font-family: 'Shippori Mincho', 'Cormorant Garamond', serif; }
+.font-script { font-family: 'Caveat', 'Cormorant Garamond', serif; }
+
+/* polaroid アニメーション（ふわり浮かぶ）— デスクトップのみ
+ * `top` だけ動かす設計。transform は各breakpointのpolaroid位置/回転に任せる。
+ */
+@keyframes mm-bob-1 { 0%, 100% { top: 6%; } 50% { top: 4%; } }
+@keyframes mm-bob-2 { 0%, 100% { top: 24%; } 50% { top: 22%; } }
+@keyframes mm-bob-3 { 0%, 100% { bottom: 4%; } 50% { bottom: 6%; } }
+
+@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
+  .mm-polaroid-1 { animation: mm-bob-1 7s ease-in-out infinite; }
+  .mm-polaroid-2 { animation: mm-bob-2 8s ease-in-out infinite; }
+  .mm-polaroid-3 { animation: mm-bob-3 9s ease-in-out infinite; }
+}
+
+@keyframes mm-fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.mm-fade-in { animation: mm-fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 body {
   background-color: var(--mm-bg);
@@ -26,6 +74,207 @@ body {
   border: 1px solid var(--mm-border);
   border-radius: 12px;
   overflow: hidden;
+}
+
+/* ─── ContentCard (エディトリアル) ─────────────────── */
+.mm-content-card {
+  display: block;
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s;
+  cursor: pointer;
+}
+.mm-content-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 36px -16px rgba(31, 26, 21, 0.22);
+  border-color: var(--mm-text-muted);
+}
+.mm-content-card-thumb {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: var(--mm-primary-light);
+}
+.mm-content-card-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  filter: saturate(0.95);
+}
+.mm-content-card:hover .mm-content-card-img {
+  transform: scale(1.04);
+  filter: saturate(1.05);
+}
+.mm-content-card-body {
+  padding: 14px 14px 16px;
+}
+.mm-content-card-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mm-text-sub);
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mm-content-card-eyebrow-line {
+  width: 16px;
+  height: 1px;
+  background: var(--mm-primary);
+  flex-shrink: 0;
+}
+.mm-content-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mm-ink);
+  margin-bottom: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  min-height: 2.8em;
+}
+.mm-content-card-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--mm-border);
+}
+.mm-content-card-price {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--mm-ink);
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+/* ─── CreatorCard (フォトカード風) ─────────────────── */
+.mm-creator-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: white;
+  padding: 8px 8px 18px;
+  border: 1px solid var(--mm-border);
+  border-radius: 10px;
+  box-shadow: 0 1px 0 rgba(31, 26, 21, 0.04);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+.mm-creator-card:hover {
+  transform: translateY(-3px) rotate(-0.5deg);
+  box-shadow: 0 14px 28px -12px rgba(31, 26, 21, 0.2);
+}
+.mm-creator-card-photo {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.mm-creator-card-photo img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mm-creator-card:hover .mm-creator-card-photo img {
+  transform: scale(1.06);
+}
+.mm-creator-card-rank {
+  position: absolute;
+  top: 8px; left: 8px;
+  background: rgba(255,255,255,0.95);
+  color: var(--mm-ink);
+  font-size: 10px; font-weight: 700;
+  padding: 3px 9px; border-radius: 999px;
+  letter-spacing: 0.08em;
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; gap: 4px;
+}
+.mm-creator-card-body {
+  padding: 0 6px;
+  text-align: center;
+}
+.mm-creator-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mm-ink);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mm-creator-card-handle {
+  font-size: 11px;
+  color: var(--mm-text-muted);
+  margin-bottom: 10px;
+}
+.mm-creator-card-count {
+  display: inline-flex;
+  align-items: baseline;
+  padding-top: 8px;
+  border-top: 1px solid var(--mm-border);
+}
+
+/* ─── HOW TO カードのホバー・装飾 ─────────────────── */
+.mm-howto-grid .mm-card {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+.mm-howto-grid .mm-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  height: 2px; width: 0;
+  background: var(--mm-primary);
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mm-howto-grid .mm-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 36px -16px rgba(31, 26, 21, 0.18);
+}
+.mm-howto-grid .mm-card:hover::before {
+  width: 100%;
+}
+
+/* ─── スクロール In アニメーション ─────────────────── */
+@keyframes mm-reveal {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* CSS-only な scroll-trigger（@supports で動的に有効化） */
+@supports (animation-timeline: view()) {
+  .mm-reveal {
+    animation: mm-reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 30%;
+  }
+}
+/* フォールバック: 単純な fade-up を1回だけ */
+@supports not (animation-timeline: view()) {
+  .mm-reveal {
+    opacity: 1;
+  }
 }
 
 /* ─── レスポンシブグリッド ─────────────────── */
@@ -112,6 +361,31 @@ body {
   .mm-search-desktop { display: block; }
 }
 
+/* カテゴリピル: スクロールバー非表示 */
+.mm-category-pills::-webkit-scrollbar { display: none; }
+.mm-category-pills { -ms-overflow-style: none; }
+
+/* モバイル下部固定ナビ */
+.mm-bottom-nav {
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 58px;
+  background: white;
+  border-top: 1px solid var(--mm-border);
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
+  z-index: 40;
+}
+@media (min-width: 640px) {
+  .mm-bottom-nav { display: none; }
+}
+/* モバイル時のみ下に余白（ボトムナビ分） */
+@media (max-width: 639px) {
+  body { padding-bottom: 58px; }
+}
+
 /* ─── クリエイターダッシュボード ─────────────────── */
 .mm-creator-stats {
   display: grid;
@@ -160,19 +434,192 @@ body {
   .mm-creator-profile-header { flex-direction: row; gap: 28px; align-items: flex-start; }
 }
 
-/* ─── ヒーローセクション ─────────────────── */
+/* ─── ヒーローセクション（エディトリアル誌面風） ─────────────────── */
 .mm-hero {
-  padding: 48px 20px 56px;
+  padding: 56px 20px 72px;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
 }
 @media (min-width: 640px) {
-  .mm-hero { padding: 72px 24px 80px; }
+  .mm-hero { padding: 88px 32px 104px; }
+}
+@media (min-width: 1024px) {
+  .mm-hero { padding: 104px 48px 120px; }
 }
 
-.mm-hero h1 {
-  font-size: 40px;
+/* ヒーロー2カラム（左=テキスト、右=ポラロイド群） */
+.mm-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  max-width: 1180px;
+  margin: 0 auto;
+  align-items: center;
+  position: relative;
 }
-@media (min-width: 640px) {
-  .mm-hero h1 { font-size: 58px; }
+@media (min-width: 900px) {
+  .mm-hero-grid {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    gap: 64px;
+  }
+}
+
+/* モバイルではポラロイドエリアを小さくして上に配置 */
+.mm-hero-polaroids {
+  position: relative;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  order: -1;  /* テキストの前に表示 */
+}
+@media (min-width: 600px) {
+  .mm-hero-polaroids { min-height: 400px; order: 0; }
+}
+@media (min-width: 900px) {
+  .mm-hero-polaroids { min-height: clamp(420px, 50vw, 560px); order: 0; }
+}
+
+/* 巨大ディスプレイタイトル */
+.mm-hero-title {
+  font-family: 'Cormorant Garamond', 'Shippori Mincho', serif;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--mm-ink);
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+  font-size: clamp(64px, 12vw, 144px);
+  margin: 16px 0 8px;
+}
+.mm-hero-title .accent-dot {
+  display: inline-block;
+  width: 0.18em;
+  height: 0.18em;
+  border-radius: 50%;
+  background: var(--mm-primary);
+  vertical-align: 0.18em;
+  margin-left: 0.06em;
+}
+
+/* "ISSUE 01" の eyebrow */
+.mm-eyebrow {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--mm-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.mm-eyebrow::before {
+  content: '';
+  width: 36px;
+  height: 1px;
+  background: var(--mm-primary);
+  display: inline-block;
+}
+
+/* ポラロイドカード */
+.mm-polaroid {
+  background: white;
+  padding: 12px 12px 44px;
+  box-shadow: 0 2px 4px rgba(31, 26, 21, 0.04),
+              0 18px 36px -12px rgba(31, 26, 21, 0.22),
+              0 1px 0 rgba(31, 26, 21, 0.04) inset;
+  position: absolute;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (min-width: 600px) {
+  .mm-polaroid { padding: 14px 14px 56px; }
+}
+
+/* ─── ポラロイド ポジショニング（モバイル → デスクトップ） ──────────── */
+/* モバイル: 3枚を扇状に中央に重ねる。中央の polaroid 2 を最前面に */
+.mm-polaroid-1 {
+  width: 140px;
+  top: 0; left: 50%;
+  transform: translateX(-100%) rotate(-8deg);
+}
+.mm-polaroid-2 {
+  width: 156px;
+  top: 18px; left: 50%;
+  transform: translateX(-50%) rotate(2deg);
+}
+.mm-polaroid-3 {
+  width: 134px;
+  top: 36px; left: 50%;
+  transform: translateX(0) rotate(6deg);
+}
+
+/* 600px〜: ちょっと広げる */
+@media (min-width: 600px) {
+  .mm-polaroid-1 { width: 180px; top: 4%; left: 6%; transform: rotate(-7deg); }
+  .mm-polaroid-2 { width: 200px; top: 20%; right: 6%; left: auto; transform: rotate(4deg); }
+  .mm-polaroid-3 { width: 170px; bottom: 4%; left: 14%; top: auto; transform: rotate(-2deg); }
+}
+
+/* 900px〜: デスクトップフル展開 */
+@media (min-width: 900px) {
+  .mm-polaroid-1 { width: clamp(180px, 22vw, 230px); top: 6%; left: 8%; transform: rotate(-6deg); }
+  .mm-polaroid-2 { width: clamp(200px, 24vw, 250px); top: 24%; right: 4%; left: auto; transform: rotate(4deg); }
+  .mm-polaroid-3 { width: clamp(170px, 20vw, 210px); bottom: 4%; left: 4%; top: auto; transform: rotate(-2deg); }
+}
+.mm-polaroid-photo {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* フィルムグレイン・ヴィネット — フィルム写真っぽさ */
+.mm-polaroid-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.25) 100%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+  background-size: cover, 80px 80px;
+  mix-blend-mode: overlay;
+  opacity: 0.5;
+}
+.mm-polaroid-caption {
+  position: absolute;
+  bottom: 18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: 'Caveat', cursive;
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--mm-text);
+}
+.mm-polaroid:hover { transform: translateY(-6px) rotate(0) scale(1.03); z-index: 10; }
+
+/* カメラのファインダー枠（hero 装飾） */
+.mm-viewfinder-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--mm-accent);
+  opacity: 0.55;
+}
+.mm-viewfinder-corner.tl { top: 24px; left: 24px; border-right: none; border-bottom: none; }
+.mm-viewfinder-corner.tr { top: 24px; right: 24px; border-left: none; border-bottom: none; }
+.mm-viewfinder-corner.bl { bottom: 24px; left: 24px; border-right: none; border-top: none; }
+.mm-viewfinder-corner.br { bottom: 24px; right: 24px; border-left: none; border-top: none; }
+@media (min-width: 768px) {
+  .mm-viewfinder-corner { width: 40px; height: 40px; }
+  .mm-viewfinder-corner.tl, .mm-viewfinder-corner.tr { top: 32px; }
+  .mm-viewfinder-corner.bl, .mm-viewfinder-corner.br { bottom: 32px; }
+  .mm-viewfinder-corner.tl, .mm-viewfinder-corner.bl { left: 32px; }
+  .mm-viewfinder-corner.tr, .mm-viewfinder-corner.br { right: 32px; }
 }
 
 /* ─── モバイル追加調整 ─────────────────── */
@@ -220,3 +667,37 @@ img { user-select: none; -webkit-user-drag: none; }
 
 /* リンクのデフォルトカラー */
 a { color: inherit; }
+
+/* ─── 認証ページ用インプット（autofill青の上書き含む） ─────────────── */
+.mm-auth-input {
+  width: 100%;
+  padding: 13px 16px;
+  border: 1px solid var(--mm-border);
+  border-radius: 10px;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  background: white;
+  color: var(--mm-ink);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.mm-auth-input:focus {
+  border-color: var(--mm-ink);
+  box-shadow: 0 0 0 3px rgba(31, 26, 21, 0.08);
+}
+.mm-auth-input::placeholder {
+  color: var(--mm-text-muted);
+}
+
+/* Chrome / Safari の autofill 青背景を上書き
+ * background-color は直接効かないので box-shadow で上書きするテクニック
+ */
+.mm-auth-input:-webkit-autofill,
+.mm-auth-input:-webkit-autofill:hover,
+.mm-auth-input:-webkit-autofill:focus,
+.mm-auth-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px white inset !important;
+  -webkit-text-fill-color: var(--mm-ink) !important;
+  caret-color: var(--mm-ink);
+  transition: background-color 5000s ease-in-out 0s;  /* 遅延で実質無効化 */
+}

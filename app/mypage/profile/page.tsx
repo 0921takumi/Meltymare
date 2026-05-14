@@ -55,16 +55,19 @@ export default function ProfileEditPage() {
 
     try {
       const { validateUpload, sanitizeText, sanitizeOptional, sanitizeUrl } = await import('@/lib/sanitize')
+      const { stripExif } = await import('@/lib/strip-exif')
 
       let avatarUrl = profile?.avatar_url
       if (avatarFile) {
         const v = validateUpload(avatarFile, 'image')
         if (!v.ok) throw new Error(v.error)
-        const ext = (avatarFile.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        // アバター画像もEXIF除去（プライバシー対策）
+        const safeAvatar = await stripExif(avatarFile)
+        const ext = (safeAvatar.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
         const path = `avatars/${user.id}.${ext || 'jpg'}`
-        await supabase.storage.from('thumbnails').upload(path, avatarFile, {
+        await supabase.storage.from('thumbnails').upload(path, safeAvatar, {
           upsert: true,
-          contentType: avatarFile.type,
+          contentType: safeAvatar.type,
         })
         const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
         avatarUrl = urlData.publicUrl + `?t=${Date.now()}`

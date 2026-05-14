@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { sanitizeText, sanitizeOptional, sanitizeUrl } from '@/lib/sanitize'
+import { audit } from '@/lib/audit'
 
 const UUID_RE = /^[0-9a-f-]{36}$/i
 
@@ -26,6 +27,15 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  // 監査ログ
+  await audit(supabase, {
+    action: 'admin.banner_create',
+    targetType: 'banner',
+    targetId: data.id,
+    metadata: { title, creator_id, content_id },
+  })
+
   return NextResponse.json(data)
 }
 
@@ -55,6 +65,14 @@ export async function PATCH(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  await audit(supabase, {
+    action: 'admin.banner_update',
+    targetType: 'banner',
+    targetId: body.id,
+    metadata: { updates },
+  })
+
   return NextResponse.json(data)
 }
 
@@ -68,5 +86,12 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await supabase.from('featured_banners').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  await audit(supabase, {
+    action: 'admin.banner_delete',
+    targetType: 'banner',
+    targetId: id,
+  })
+
   return NextResponse.json({ success: true })
 }
