@@ -2,13 +2,14 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import {
-  User, LogIn, Menu, Search, X, Bell, ShoppingBag, Heart, Home,
+  User, LogIn, Menu, Search, X, ShoppingBag, Heart, Home,
   Compass, Sparkles, Camera, Video, Cake, MessageCircle, Shirt,
   Trophy, Crown, Settings, LogOut, BookOpenCheck, ShieldCheck, PlusSquare,
   Radio, Gavel, Gem,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import NotificationBell from '@/components/NotificationBell'
 
 interface HeaderProps {
   user?: { display_name?: string; username?: string; role?: string; avatar_url?: string | null; identity_status?: string } | null
@@ -105,10 +106,7 @@ export default function Header({ user }: HeaderProps) {
             {user ? (
               <>
                 {/* 通知ベル */}
-                <Link href="/mypage/notifications" aria-label="通知" style={{ padding: 8, borderRadius: 8, display: 'inline-flex', position: 'relative', color: 'var(--mm-text-sub)' }}>
-                  <Bell size={20} />
-                  <span style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: '50%', background: '#dc2626', border: '2px solid white' }} />
-                </Link>
+                <NotificationBell />
 
                 {/* アバター + ドロップダウン */}
                 <div ref={avatarRef} style={{ position: 'relative' }}>

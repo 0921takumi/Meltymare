@@ -66,6 +66,34 @@ export async function POST(req: NextRequest) {
 
 // ─── checkout.session.completed ハンドラ ─────────────────
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const metadata = session.metadata ?? {}
+
+  // ── チップ決済の場合 ──
+  // チップは purchases ではなく tips テーブルで管理。metadata.tip === '1' で判別。
+  if (metadata.tip === '1') {
+    const { creator_id, user_id, tip_amount } = metadata
+    if (creator_id && user_id) {
+      await supabase
+        .from('tips')
+        .update({ status: 'completed' })
+        .eq('creator_id', creator_id)
+        .eq('user_id', user_id)
+        .eq('status', 'pending')
+
+      // クリエイターに通知
+      const { data: sender } = await supabase.from('profiles').select('display_name').eq('id', user_id).single()
+      await supabase.from('notifications').insert({
+        user_id: creator_id,
+        type: 'tip',
+        title: 'チップを受け取りました 🎁',
+        body: `${sender?.display_name ?? 'ファン'} さんから ¥${Number(tip_amount ?? 0).toLocaleString()} のチップ`,
+        link: '/creator/dashboard',
+      })
+    }
+    return
+  }
+
+  // ── 通常のコンテンツ購入 ──
   const paymentIntentId = typeof session.payment_intent === 'string'
     ? session.payment_intent
     : session.payment_intent?.id
@@ -133,6 +161,30 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   // 購入完了メール
   await sendPurchaseEmail(purchase.user_id, purchase.content_id, purchase.id)
+
+  // アプリ内通知（購入者 + クリエイター）
+  const { data: content } = await supabase
+    .from('contents')
+    .select('title, creator_id')
+    .eq('id', purchase.content_id)
+    .single()
+  if (content) {
+    await supabase.from('notifications').insert({
+      user_id: purchase.user_id,
+      type: 'purchase',
+      title: 'ご購入ありがとうございます',
+      body: `${content.title} の購入が完了しました`,
+      link: '/mypage',
+    })
+    const { data: buyer } = await supabase.from('profiles').select('display_name').eq('id', purchase.user_id).single()
+    await supabase.from('notifications').insert({
+      user_id: content.creator_id,
+      type: 'purchase',
+      title: '新しい購入がありました',
+      body: `${buyer?.display_name ?? 'ファン'} さんが ${content.title} を購入しました`,
+      link: '/creator/orders',
+    })
+  }
 }
 
 // ─── charge.refunded ハンドラ ────────────────────────────
@@ -178,6 +230,8 @@ const BRAND = {
   textSub: '#5c5048',
   textMuted: '#9e938a',
 }
+
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'My Focus <noreply@my-focus.jp>'
 
 /** My Focus ブランドのメール HTML テンプレ。本文と CTA を埋め込む */
 function brandedEmail(opts: {
@@ -276,7 +330,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'My Focus <noreply@my-focus.jp>',
+        from: FROM_EMAIL,
         to: email,
         subject: `【ご購入ありがとうございます】${content.title}`,
         html,
@@ -325,7 +379,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'My Focus <noreply@my-focus.jp>',
+        from: FROM_EMAIL,
         to: email,
         subject: `【納品完了】${content?.title} が届きました ✦`,
         html,

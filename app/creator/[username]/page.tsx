@@ -6,6 +6,7 @@ import { ExternalLink } from 'lucide-react'
 import FollowButton from './FollowButton'
 import TopFans from './TopFans'
 import SubscribeButton from './SubscribeButton'
+import TipButton from '@/components/TipButton'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { topFans, userRankForCreator } from '@/lib/rankings'
@@ -204,18 +205,23 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
                 )}
               </div>
 
-              {/* 販売リクエストボタン */}
-              {user && user.id !== creator.id && (
-                <Link href={`/requests/new?creator_id=${creator.id}`}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    padding: '11px 22px',
-                    background: 'var(--mm-ink)', color: 'white',
-                    borderRadius: 999, fontSize: 13, fontWeight: 600,
-                    letterSpacing: '0.04em', textDecoration: 'none',
-                  }}>
-                  ✉️ カスタムリクエストを送る <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 16 }}>→</span>
-                </Link>
+              {/* アクションボタン群（チップ + カスタムリクエスト） */}
+              {(!user || user.id !== creator.id) && (
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <TipButton creatorId={creator.id} creatorName={creator.display_name} isLoggedIn={!!user} />
+                  {user && (
+                    <Link href={`/requests/new?creator_id=${creator.id}`}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                        padding: '11px 22px',
+                        background: 'var(--mm-ink)', color: 'white',
+                        borderRadius: 999, fontSize: 13, fontWeight: 600,
+                        letterSpacing: '0.04em', textDecoration: 'none',
+                      }}>
+                      ✉️ カスタムリクエスト <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 16 }}>→</span>
+                    </Link>
+                  )}
+                </div>
               )}
             </div>
 

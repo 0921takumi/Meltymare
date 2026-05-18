@@ -1,7 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
 import { sanitizeText, sanitizeOptional } from '@/lib/sanitize'
+
+function adminClient() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 const UUID_RE = /^[0-9a-f-]{36}$/i
 const VALID_STATUS = ['pending', 'accepted', 'rejected', 'completed']
@@ -36,6 +44,17 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  // クリエイターへ通知
+  const { data: sender } = await supabase.from('profiles').select('display_name').eq('id', user.id).single()
+  await adminClient().from('notifications').insert({
+    user_id: body.creator_id,
+    type: 'request',
+    title: '新しいリクエスト',
+    body: `${sender?.display_name ?? 'ファン'} さんからリクエストが届きました`,
+    link: '/creator/requests',
+  })
+
   return NextResponse.json(data)
 }
 
@@ -65,9 +84,27 @@ export async function PATCH(req: NextRequest) {
     .from('requests')
     .update({ status: body.status, creator_reply, updated_at: new Date().toISOString() })
     .eq('id', body.id)
-    .select()
+    .select('*, user_id')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  // リクエスト送信者へ通知
+  const STATUS_LABEL: Record<string, string> = {
+    accepted: '承諾されました',
+    rejected: '見送られました',
+    completed: '完了しました',
+  }
+  const label = STATUS_LABEL[body.status]
+  if (label && data?.user_id) {
+    await adminClient().from('notifications').insert({
+      user_id: data.user_id,
+      type: 'request',
+      title: `リクエストが${label}`,
+      body: creator_reply ?? undefined,
+      link: '/requests',
+    })
+  }
+
   return NextResponse.json(data)
 }

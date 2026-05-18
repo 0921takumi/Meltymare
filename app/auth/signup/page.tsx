@@ -2,11 +2,22 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
+
+function passwordStrength(pw: string): { label: string; color: string; score: number } {
+  let score = 0
+  if (pw.length >= 8) score++
+  if (pw.length >= 12) score++
+  if (/[A-Z]/.test(pw)) score++
+  if (/[0-9]/.test(pw)) score++
+  if (/[^A-Za-z0-9]/.test(pw)) score++
+  if (score <= 1) return { label: '弱い', color: '#ef4444', score: 1 }
+  if (score <= 3) return { label: '普通', color: '#f59e0b', score: 3 }
+  return { label: '強い', color: '#10b981', score: 5 }
+}
 
 export default function SignupPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -17,11 +28,14 @@ export default function SignupPage() {
   const [agreed, setAgreed] = useState(false)
   const [age18, setAge18] = useState(false)
 
+  const strength = passwordStrength(password)
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!agreed || !age18) { setError('利用規約と18歳以上の確認に同意してください'); return }
-    setLoading(true)
     setError('')
+    if (!agreed || !age18) { setError('利用規約と18歳以上の確認に同意してください'); return }
+    if (password.length < 8) { setError('パスワードは8文字以上で入力してください'); return }
+    setLoading(true)
 
     // 招待コード検証 (招待制ON時)
     const verifyRes = await fetch('/api/invite/verify', {
@@ -40,7 +54,10 @@ export default function SignupPage() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { display_name: displayName, signup_invite_code: inviteCode || null } }
+      options: {
+        data: { display_name: displayName, signup_invite_code: inviteCode || null },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     })
     if (error) {
       setError(error.message)
@@ -112,7 +129,7 @@ export default function SignupPage() {
           <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div>
               <label style={authLabelStyle}>ニックネーム</label>
-              <input type="text" autoComplete="nickname" value={displayName} onChange={e => setDisplayName(e.target.value)} required
+              <input type="text" autoComplete="nickname" value={displayName} onChange={e => setDisplayName(e.target.value)} required maxLength={30}
                 className="mm-auth-input" placeholder="あなたの名前" />
             </div>
             <div>
@@ -124,6 +141,16 @@ export default function SignupPage() {
               <label style={authLabelStyle}>Password</label>
               <input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
                 className="mm-auth-input" placeholder="8文字以上" />
+              {password && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= strength.score ? strength.color : '#e5e7eb' }} />
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 11, color: strength.color, fontWeight: 600 }}>強度: {strength.label}</p>
+                </div>
+              )}
             </div>
             <div>
               <label style={authLabelStyle}>
@@ -177,7 +204,9 @@ export default function SignupPage() {
             <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
           </div>
 
-          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--mm-text-sub)' }}>
+          <GoogleLoginButton />
+
+          <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13, color: 'var(--mm-text-sub)' }}>
             すでにアカウントをお持ちの方は{' '}
             <Link href="/auth/login" style={{ color: 'var(--mm-ink)', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 1 }}>
               ログイン <span style={{ color: 'var(--mm-primary)' }}>→</span>
