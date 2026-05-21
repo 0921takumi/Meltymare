@@ -120,12 +120,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `購入記録の作成に失敗しました: ${freeErr.message}` }, { status: 500 })
       }
 
-      // クーポン使用回数更新
+      // クーポン使用回数更新（admin: coupons更新はRLS制限。RPCで原子的にインクリメント）
       if (appliedCouponId) {
-        await supabase.from('coupons').update({ used_count: supabase.rpc('increment', { x: 1 }) }).eq('id', appliedCouponId)
+        const { error: cpErr } = await admin.rpc('increment_coupon_used', { coupon_id: appliedCouponId })
+        if (cpErr) console.warn('[purchase] free increment_coupon_used failed:', cpErr.message)
       }
-      // sold_count 更新
-      await supabase.from('contents').update({ sold_count: content.sold_count + 1 }).eq('id', contentId)
+      // sold_count 更新（admin: contents更新はcreator/admin限定のため）
+      const { error: scErr } = await admin.rpc('increment_sold_count', { content_id: contentId })
+      if (scErr) console.warn('[purchase] free increment_sold_count failed:', scErr.message)
 
       return NextResponse.json({ checkoutUrl: `${appUrl}/purchase/success` })
     }
