@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { rateLimit } from '@/lib/rate-limit'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+// purchases の書き込み（insert/update）は RLS 上 Service Role に限定されているため、
+// サーバー側で認可済みの purchase レコード操作には admin クライアントを使う。
+const admin = createAdminClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+)
 
 export async function POST(req: NextRequest) {
   try {
@@ -91,7 +99,9 @@ export async function POST(req: NextRequest) {
 
     // 無料（割引100% かつ チップなし）の場合は直接完了
     if (finalPrice === 0) {
-      await supabase.from('purchases').insert({
+      // upsert: 過去に pending 行があっても (user_id, content_id) で更新（重複制約回避）
+      // 書き込みは admin（Service Role）。RLS で purchases の update が制限されているため。
+      const { error: freeErr } = await admin.from('purchases').upsert({
         user_id: user.id,
         content_id: contentId,
         amount: 0,
@@ -104,7 +114,11 @@ export async function POST(req: NextRequest) {
         stripe_payment_intent_id: `free_${Date.now()}`,
         status: 'completed',
         delivery_status: 'pending',
-      }).select().single()
+      }, { onConflict: 'user_id,content_id' })
+      if (freeErr) {
+        console.error('[purchase] free upsert failed:', freeErr)
+        return NextResponse.json({ error: `購入記録の作成に失敗しました: ${freeErr.message}` }, { status: 500 })
+      }
 
       // クーポン使用回数更新
       if (appliedCouponId) {
@@ -159,7 +173,12 @@ export async function POST(req: NextRequest) {
 
     const session = await stripe.checkout.sessions.create(sessionParams)
 
-    await supabase.from('purchases').insert({
+    // purchase レコードを作成。**エラーを握りつぶさない**：
+    //   ここで失敗すると「決済はできたが購入記録がない」という最悪状態になるため、
+    //   失敗したら 500 を返して決済導線に進ませない。
+    //   upsert: (user_id, content_id) のユニーク制約があるため、過去の pending 行を
+    //   新しいセッション情報で更新する（リトライ・再購入導線に対応）。
+    const { error: insertErr } = await admin.from('purchases').upsert({
       user_id: user.id,
       content_id: contentId,
       amount: finalPrice,
@@ -171,7 +190,11 @@ export async function POST(req: NextRequest) {
       coupon_id: appliedCouponId,
       stripe_payment_intent_id: session.payment_intent as string ?? session.id,
       status: 'pending',
-    })
+    }, { onConflict: 'user_id,content_id' })
+    if (insertErr) {
+      console.error('[purchase] upsert failed:', insertErr)
+      return NextResponse.json({ error: `購入記録の作成に失敗しました: ${insertErr.message}` }, { status: 500 })
+    }
 
     return NextResponse.json({ sessionId: session.id, checkoutUrl: session.url })
   } catch (e: unknown) {

@@ -94,27 +94,28 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   // ── 通常のコンテンツ購入 ──
+  const sessionId = session.id
   const paymentIntentId = typeof session.payment_intent === 'string'
     ? session.payment_intent
     : session.payment_intent?.id
 
-  if (!paymentIntentId) {
-    console.warn('[webhook] no payment_intent in session', session.id)
-    return
-  }
-
-  // ⭐️ 重要: メタデータではなく payment_intent_id で逆引き。
-  //   /api/purchase で purchase 作成時に session.payment_intent を保存している。
-  //   この方式なら攻撃者が偽メタデータ仕込んだセッションを Stripe で作っても、
-  //   こちらの DB に対応する purchase レコードがないので何も起きない。
+  // ⭐️ 逆引きキー: /api/purchase は作成時に `session.payment_intent ?? session.id` を
+  //   stripe_payment_intent_id に保存している。Checkout 作成時点では payment_intent が
+  //   未確定（null）なことが多く、その場合は session.id（cs_...）が保存される。
+  //   よって webhook 側は **session.id と payment_intent の両方** で照合する。
+  //   メタデータは信用しない（偽イベント対策）。Stripe 署名検証済みなので
+  //   こちらの DB に対応レコードがある時だけ処理が走る。
+  const orFilter = paymentIntentId
+    ? `stripe_payment_intent_id.eq.${sessionId},stripe_payment_intent_id.eq.${paymentIntentId}`
+    : `stripe_payment_intent_id.eq.${sessionId}`
   const { data: purchase, error: lookupErr } = await supabase
     .from('purchases')
     .select('id, user_id, content_id, coupon_id, status, amount')
-    .eq('stripe_payment_intent_id', paymentIntentId)
-    .single()
+    .or(orFilter)
+    .maybeSingle()
 
   if (lookupErr || !purchase) {
-    console.warn('[webhook] no purchase for payment_intent:', paymentIntentId)
+    console.warn('[webhook] no purchase for session:', sessionId, 'pi:', paymentIntentId)
     return
   }
 
@@ -124,10 +125,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return
   }
 
-  // status を pending → completed
+  // status を pending → completed。
+  // 同時に stripe_payment_intent_id を実際の payment_intent に更新しておく
+  // （charge.refunded ハンドラが payment_intent で逆引きするため）。
   const { error: updErr } = await supabase
     .from('purchases')
-    .update({ status: 'completed' })
+    .update({
+      status: 'completed',
+      ...(paymentIntentId ? { stripe_payment_intent_id: paymentIntentId } : {}),
+    })
     .eq('id', purchase.id)
     .eq('status', 'pending')  // 楽観ロック: 他のwebhookと競合した場合は失敗させる
 
