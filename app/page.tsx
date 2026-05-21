@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import ContentCard from '@/components/ui/ContentCard'
@@ -112,38 +113,53 @@ export default async function HomePage() {
         <span className="mm-viewfinder-corner br" aria-hidden />
 
         <div className="mm-hero-grid">
-          {/* ── 左カラム: テキスト ───────────────────── */}
+          {/* ── 左カラム: ロゴ主役 + コピー ───────────────────── */}
           <div className="mm-fade-in" style={{ position: 'relative', zIndex: 2 }}>
-            <p className="mm-eyebrow" style={{ marginBottom: 28 }}>
+            <p className="mm-eyebrow" style={{ marginBottom: 24 }}>
               ISSUE 01 — 2026 SPRING
             </p>
 
-            <h1 className="mm-hero-title">
-              My&nbsp;Focus<span className="accent-dot" aria-hidden />
+            {/* ロゴをヒーローの顔に。サイズはレスポンシブ。 */}
+            <Image
+              src="/logo.svg"
+              alt="My Focus"
+              width={300}
+              height={278}
+              priority
+              unoptimized
+              style={{
+                width: 'clamp(180px, 24vw, 280px)',
+                height: 'auto',
+                display: 'block',
+                marginBottom: 28,
+              }}
+            />
+
+            {/* h1 は SEO/a11y のためにバリュープロップを担う */}
+            <h1 className="font-jp-serif" style={{
+              fontSize: 'clamp(26px, 3.4vw, 38px)',
+              fontWeight: 600,
+              color: 'var(--mm-ink)',
+              letterSpacing: '0.02em',
+              lineHeight: 1.45,
+              margin: '0 0 12px',
+              maxWidth: 480,
+            }}>
+              推しと、もっと近く。
             </h1>
 
             <p className="font-jp-serif" style={{
-              fontSize: 'clamp(18px, 2.2vw, 22px)',
-              fontWeight: 600,
-              color: 'var(--mm-text)',
+              fontSize: 'clamp(15px, 1.5vw, 17px)',
+              fontWeight: 500,
+              color: 'var(--mm-text-sub)',
               letterSpacing: '0.04em',
-              lineHeight: 1.7,
-              margin: '24px 0 16px',
+              lineHeight: 1.85,
+              margin: '0 0 22px',
               maxWidth: 460,
             }}>
-              推しと、もっと近く。<br />
-              手紙のような、写真のような<span style={{ color: 'var(--mm-primary)' }}>—— 一枚</span>。
-            </p>
-
-            <p style={{
-              fontSize: 14,
-              color: 'var(--mm-text-sub)',
-              lineHeight: 1.85,
-              maxWidth: 440,
-              marginBottom: 36,
-            }}>
-              コンセプトカフェ・クリエイターの限定写真と動画。<br />
-              メッセージを書き込んだ、あなただけの一枚をお届けします。
+              手紙のような、写真のような<span style={{ color: 'var(--mm-primary)' }}> — 一枚</span>。<br />
+              コンセプトカフェ・クリエイターの限定写真と動画を、
+              あなただけにお届けします。
             </p>
 
             {/* CTA ペア */}
