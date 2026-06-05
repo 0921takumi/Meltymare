@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import ContentCard from '@/components/ui/ContentCard'
 import Link from 'next/link'
@@ -12,7 +13,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const { data: { user } } = await supabase.auth.getUser()
   let profile = null
   if (user) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    const { data } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
     profile = data
   }
 

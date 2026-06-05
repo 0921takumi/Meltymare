@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { Cake, Gift } from 'lucide-react'
@@ -15,6 +17,11 @@ interface CreatorRow {
   bio: string | null
   birthdate: string | null
   birthday_public: boolean
+}
+
+// クライアント（カード）へ渡す形。生年月日の「年」は含めない（月日のみ）。
+type BirthdayCardData = Omit<CreatorRow, 'birthdate' | 'birthday_public'> & {
+  info: ReturnType<typeof birthdayInfo>
 }
 
 function birthdayInfo(birthdate: string): { month: number; day: number; daysUntil: number; isToday: boolean; ageNext: number } {
@@ -34,9 +41,13 @@ function birthdayInfo(birthdate: string): { month: number; day: number; daysUnti
 export default async function BirthdaysPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = user ? await supabase.from('profiles').select('*').eq('id', user.id).single() : { data: null }
+  const { data: profile } = user ? await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single() : { data: null }
 
-  const { data: creatorsData } = await supabase
+  // v22: birthdate / birthday_public（PII）は anon/authenticated では読めない。
+  // 公開に同意した（birthday_public=true）クリエイターのみ service_role で取得する。
+  // 同意フラグ自体が「月日を公開してよい」という根拠。
+  const admin = createAdminClient()
+  const { data: creatorsData } = await admin
     .from('profiles')
     .select('id, username, display_name, avatar_url, bio, birthdate, birthday_public')
     .eq('role', 'creator')
@@ -50,15 +61,18 @@ export default async function BirthdaysPage() {
   const thisMonth = now.getMonth() + 1
   const nextMonth = thisMonth === 12 ? 1 : thisMonth + 1
 
-  const today: (CreatorRow & { info: ReturnType<typeof birthdayInfo> })[] = []
-  const thisMonthList: (CreatorRow & { info: ReturnType<typeof birthdayInfo> })[] = []
-  const nextMonthList: (CreatorRow & { info: ReturnType<typeof birthdayInfo> })[] = []
-  const upcoming: (CreatorRow & { info: ReturnType<typeof birthdayInfo> })[] = []
+  // v22: 生年月日の「年」をクライアントへ送らない（誕生月日のみ公開）。
+  // birthdate を info（月日・残日数）に変換したら raw birthdate は破棄する。
+  const today: BirthdayCardData[] = []
+  const thisMonthList: BirthdayCardData[] = []
+  const nextMonthList: BirthdayCardData[] = []
+  const upcoming: BirthdayCardData[] = []
 
   for (const c of creators) {
     if (!c.birthdate) continue
     const info = birthdayInfo(c.birthdate)
-    const item = { ...c, info }
+    const { birthdate: _birthdate, birthday_public: _bp, ...rest } = c
+    const item: BirthdayCardData = { ...rest, info }
     if (info.isToday) today.push(item)
     else if (info.month === thisMonth) thisMonthList.push(item)
     else if (info.month === nextMonth) nextMonthList.push(item)
@@ -162,7 +176,7 @@ export default async function BirthdaysPage() {
   )
 }
 
-function BirthdayCard({ creator, highlight, compact }: { creator: CreatorRow & { info: ReturnType<typeof birthdayInfo> }; highlight?: boolean; compact?: boolean }) {
+function BirthdayCard({ creator, highlight, compact }: { creator: BirthdayCardData; highlight?: boolean; compact?: boolean }) {
   return (
     <Link href={`/creator/${creator.username}`} className="mm-card" style={{
       padding: compact ? 12 : 16,

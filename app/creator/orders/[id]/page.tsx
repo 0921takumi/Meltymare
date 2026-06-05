@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import { Upload, CheckCircle, ArrowLeft } from 'lucide-react'
 
@@ -25,13 +26,15 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      const { data: prof } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
       if (prof?.role !== 'creator') { router.push('/contents'); return }
       setProfile(prof)
 
+      // v22: 購入者の email（PII）は authenticated では読めない。display_name は
+      // NOT NULL のため購入者表示には十分。email の埋め込みは行わない。
       const { data: p } = await supabase
         .from('purchases')
-        .select('*, content:contents(id, title, thumbnail_url, price, creator_id), buyer:profiles!purchases_user_id_fkey(id, display_name, email)')
+        .select('*, content:contents(id, title, thumbnail_url, price, creator_id), buyer:profiles!purchases_user_id_fkey(id, display_name)')
         .eq('id', purchaseId)
         .eq('status', 'completed')
         .single()
@@ -126,7 +129,7 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
             <div>
               <p style={{ fontSize: 15, fontWeight: 700 }}>{content?.title}</p>
               <p style={{ fontSize: 13, color: 'var(--mm-text-muted)', marginTop: 2 }}>
-                購入者: {buyer?.display_name ?? buyer?.email}
+                購入者: {buyer?.display_name}
               </p>
               <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2 }}>
                 購入日: {new Date(purchase.created_at).toLocaleDateString('ja-JP')}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(req: Request) {
   const supabase = await createClient()
@@ -16,7 +17,10 @@ export async function POST(req: Request) {
   }
 
   // クリエイター存在確認 + 受付フラグ
-  const { data: creator } = await supabase
+  // v22: accepts_birthday_messages / birthdate（PII）は anon/authenticated では読めない。
+  // 受付可否の判定のみに使うため service_role で最小限を取得する（値は返さない）。
+  const admin = createAdminClient()
+  const { data: creator } = await admin
     .from('profiles')
     .select('id, role, accepts_birthday_messages, birthdate')
     .eq('id', creatorId)

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { ShieldCheck, AlertTriangle, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import ReviewPanel from './ReviewPanel'
@@ -20,8 +21,11 @@ export default async function AdminVerificationsPage({
 }) {
   const { filter = 'pending' } = await searchParams
   const supabase = await createClient()
+  // v22: 本人確認書類URL / 生年月日 / 却下理由（PII）は service_role で読む。
+  // 認可は app/admin/layout.tsx が admin に限定済み。
+  const admin = createAdminClient()
 
-  let query = supabase
+  let query = admin
     .from('profiles')
     .select('id, display_name, username, avatar_url, role, identity_status, identity_document_url, identity_selfie_url, identity_submitted_at, identity_reviewed_at, identity_rejection_reason, birthdate, created_at')
     .order('identity_submitted_at', { ascending: true, nullsFirst: false })

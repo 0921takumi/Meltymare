@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { Gem, Users, TrendingUp } from 'lucide-react'
 
@@ -28,12 +29,15 @@ interface SubRow {
 
 export default async function AdminSubscriptionsPage() {
   const supabase = await createClient()
+  // v22: 加入者の email（PII）を埋め込むクエリは service_role で読む。
+  // 認可は app/admin/layout.tsx が admin に限定済み。
+  const admin = createAdminClient()
 
   const [{ data: plansData }, { data: subsData }, { data: allSubs }] = await Promise.all([
     supabase.from('subscription_plans')
       .select('*, creator:profiles!subscription_plans_creator_id_fkey(id, display_name, username, avatar_url)')
       .order('member_count', { ascending: false }).limit(50),
-    supabase.from('subscriptions')
+    admin.from('subscriptions')
       .select('id, status, started_at, current_period_end, user:profiles!subscriptions_user_id_fkey(display_name, email, avatar_url), creator:profiles!subscriptions_creator_id_fkey(display_name, username), plan:subscription_plans(name, monthly_price)')
       .eq('status', 'active')
       .order('started_at', { ascending: false }).limit(30),

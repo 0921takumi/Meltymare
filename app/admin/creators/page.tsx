@@ -1,10 +1,12 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import FeeRateEditor from './FeeRateEditor'
 
 export default async function AdminCreatorsPage() {
-  const supabase = await createClient()
+  // v22: 振込先の銀行口座（PII）を含むため service_role で読む。
+  // 認可は app/admin/layout.tsx が admin に限定済み。
+  const admin = createAdminClient()
 
-  const { data: creators } = await supabase
+  const { data: creators } = await admin
     .from('profiles')
     .select('*, contents(id, sold_count, price)')
     .eq('role', 'creator')

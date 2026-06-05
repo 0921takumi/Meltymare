@@ -1,12 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import PayoutStatusChanger from './PayoutStatusChanger'
 import { FINANCE } from '@/lib/config'
 
 export default async function AdminPayoutsPage() {
   const supabase = await createClient()
+  // v22: 振込先の銀行口座（PII）は service_role で読む。
+  // 認可は app/admin/layout.tsx が admin に限定済み。
+  const admin = createAdminClient()
 
   // クリエイターごとの振込予定額を計算
-  const { data: creators } = await supabase
+  const { data: creators } = await admin
     .from('profiles')
     .select('id, display_name, username, fee_rate, bank_name, bank_branch, bank_account_number, bank_account_holder')
     .eq('role', 'creator')

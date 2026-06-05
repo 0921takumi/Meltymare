@@ -1,9 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export default async function AdminSalesPage() {
-  const supabase = await createClient()
+  // v22: 購入者の email（PII）を含むため service_role で読む。
+  // 認可は app/admin/layout.tsx が admin に限定済み。
+  const admin = createAdminClient()
 
-  const { data: purchases } = await supabase
+  const { data: purchases } = await admin
     .from('purchases')
     .select('*, content:contents(title, price, creator:profiles(display_name, fee_rate)), user:profiles(display_name, email)')
     .eq('status', 'completed')
