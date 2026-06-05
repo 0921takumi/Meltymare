@@ -25,13 +25,18 @@ export async function POST(req: NextRequest) {
     // 所有権チェック: クリエイターが納品したコンテンツに紐づく purchase のみ
     const { data: purchase } = await supabase
       .from('purchases')
-      .select('id, user_id, content:contents(title, creator_id)')
+      .select('id, user_id, delivery_status, delivered_file_url, content:contents(title, creator_id)')
       .eq('id', purchase_id)
       .single()
     const content = purchase?.content as { title?: string; creator_id?: string } | null
     const creatorId = content?.creator_id
     if (!purchase || creatorId !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // 実際に納品済みであることを必須化（「メール届くがDLできない」の信用毀損防止）
+    if (purchase.delivery_status !== 'delivered' || !purchase.delivered_file_url) {
+      return NextResponse.json({ error: 'まだ納品されていません' }, { status: 400 })
     }
 
     await sendDeliveryEmail(purchase_id)

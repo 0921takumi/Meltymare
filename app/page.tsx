@@ -157,7 +157,7 @@ export default async function HomePage() {
               margin: '0 0 22px',
               maxWidth: 460,
             }}>
-              手紙のような、写真のような<span style={{ color: 'var(--mm-primary)' }}> — 一枚</span>。<br />
+              手紙のような、写真のような<span style={{ color: 'var(--mm-primary)' }}>一枚</span>。<br />
               コンセプトカフェ・クリエイターの限定写真と動画を、
               あなただけにお届けします。
             </p>
@@ -189,34 +189,10 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            {/* メタ行: 会員数 + レーティング */}
-            <div style={{
-              display: 'flex', gap: 32, alignItems: 'center',
-              marginTop: 48, paddingTop: 24,
-              borderTop: '1px solid var(--mm-border)',
-              flexWrap: 'wrap',
-            }}>
-              <div>
-                <div className="font-serif-display" style={{
-                  fontSize: 28, fontWeight: 600, color: 'var(--mm-ink)', lineHeight: 1,
-                }}>1,240<span style={{ fontSize: 16, color: 'var(--mm-primary)', marginLeft: 2 }}>+</span></div>
-                <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--mm-text-muted)', marginTop: 6, textTransform: 'uppercase' }}>会員数 / Members</div>
-              </div>
-              <div style={{ width: 1, height: 32, background: 'var(--mm-border)' }} />
-              <div>
-                <div className="font-serif-display" style={{
-                  fontSize: 28, fontWeight: 600, color: 'var(--mm-ink)', lineHeight: 1,
-                }}>★ 4.9</div>
-                <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--mm-text-muted)', marginTop: 6, textTransform: 'uppercase' }}>平均満足度 / Rating</div>
-              </div>
-              <div style={{ width: 1, height: 32, background: 'var(--mm-border)' }} />
-              <div>
-                <div className="font-serif-display" style={{
-                  fontSize: 28, fontWeight: 600, color: 'var(--mm-ink)', lineHeight: 1,
-                }}>420<span style={{ fontSize: 16, color: 'var(--mm-primary)', marginLeft: 2 }}>+</span></div>
-                <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--mm-text-muted)', marginTop: 6, textTransform: 'uppercase' }}>コンテンツ / Items</div>
-              </div>
-            </div>
+            {/* メタ行: 会員数 / レーティング / コンテンツ数の実数値表示
+                ※ ローンチ直後は実数が小さくサービス信用を損ねるため、当面非表示にする。
+                   会員数1000人 or コンテンツ100件 突破時に DB 実数を SSR で取得して復活させる。
+                   過去に存在していた "1,240+ / ★4.9 / 420+" は虚偽表示のため削除済み。 */}
           </div>
 
           {/* ── 右カラム: ポラロイド・スタック ───────────────────── */}
@@ -511,10 +487,10 @@ export default async function HomePage() {
           <h2 className="font-serif-display" style={{ fontSize: 22, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-ink)', textAlign: 'center', marginBottom: 32 }}>安心・安全のプラットフォーム</h2>
           <div className="mm-trust-grid">
             {[
-              { icon: '🛡️', text: 'Stripe認定の安全決済' },
+              { icon: '🛡️', text: 'Stripeによる安全な決済' },
               { icon: '🙈', text: '閲覧履歴は完全非公開' },
               { icon: '✍️', text: '手書きメッセージ付き納品' },
-              { icon: '💬', text: '24時間サポート対応' },
+              { icon: '💬', text: '通常2営業日以内の返信' },
             ].map((item, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ fontSize: 24 }}>{item.icon}</span>

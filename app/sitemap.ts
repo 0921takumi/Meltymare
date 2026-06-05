@@ -1,7 +1,8 @@
 import type { MetadataRoute } from 'next'
 import { createClient as createServerClient } from '@supabase/supabase-js'
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
+// 環境変数に末尾改行/空白が混入していてもURLを破壊しないよう trim する
+const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp').trim()
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPaths: MetadataRoute.Sitemap = [

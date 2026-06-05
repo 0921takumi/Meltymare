@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { FEATURES } from '@/lib/config'
 
 // Next.js 16: middleware → proxy に改称。
 // 役割:
@@ -7,12 +8,44 @@ import { NextResponse, type NextRequest } from 'next/server'
 //  2) 保護ルートの認可（/admin, /creator, /mypage）
 //  3) セキュリティヘッダの付与
 
-const PROTECTED_PREFIXES = ['/admin', '/creator', '/mypage', '/purchase/success']
+const PROTECTED_PREFIXES = ['/admin', '/mypage', '/purchase/success']
 const ADMIN_PREFIXES = ['/admin']
-const CREATOR_PREFIXES = ['/creator']
+// 注意: '/creator' で前方一致すると公開ページ（/creators 一覧・/creator/[username]
+// プロフィール）まで巻き込んでしまう。保護対象はクリエイター専用ダッシュボードのみを明示列挙する。
+const CREATOR_PREFIXES = [
+  '/creator/dashboard', '/creator/upload', '/creator/orders', '/creator/coupons',
+  '/creator/plans', '/creator/stories', '/creator/live', '/creator/requests',
+  '/creator/verification', '/creator/blocks', '/creator/polls',
+]
+
+// 機能フラグで停止中の機能のルート。アクセスされたらトップへリダイレクトする。
+const DISABLED_PREFIXES: string[] = [
+  ...(FEATURES.stories ? [] : ['/stories', '/creator/stories']),
+  ...(FEATURES.live ? [] : ['/live', '/creator/live']),
+  ...(FEATURES.auctions ? [] : ['/auctions']),
+  // サブスクは Stripe Subscription 未統合のため Phase 2 送り
+  ...(FEATURES.subscriptions ? [] : ['/mypage/subscriptions', '/creator/plans']),
+]
+
+// 旧ルート → 新ルートへの恒久リダイレクト（リクエスト機能 → アンケート機能）
+const REDIRECT_MAP: Record<string, string> = {
+  '/requests': '/polls',
+  '/requests/new': '/polls',
+  '/creator/requests': '/creator/polls',
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // 停止中の機能（ストーリーズ／ライブ等）は認可チェックの前にトップへ退避
+  if (DISABLED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // 旧リクエスト系ルートはアンケートへ恒久リダイレクト
+  if (REDIRECT_MAP[pathname]) {
+    return NextResponse.redirect(new URL(REDIRECT_MAP[pathname], request.url))
+  }
 
   let response = NextResponse.next({ request })
 
@@ -35,17 +68,18 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const needsAuth = PROTECTED_PREFIXES.some(p => pathname.startsWith(p))
+  // ロールチェック対象（DB 参照を最小化するため、必要な時だけ）
+  const needsAdmin = ADMIN_PREFIXES.some(p => pathname.startsWith(p))
+  const needsCreator = CREATOR_PREFIXES.some(p => pathname.startsWith(p))
+
+  // 認証が要るのは: 保護プレフィックス + クリエイター専用ダッシュボード
+  const needsAuth = needsCreator || PROTECTED_PREFIXES.some(p => pathname.startsWith(p))
   if (needsAuth && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     url.searchParams.set('next', pathname)
     return NextResponse.redirect(url)
   }
-
-  // ロールチェック（DB 参照を最小化するため、必要な時だけ）
-  const needsAdmin = ADMIN_PREFIXES.some(p => pathname.startsWith(p))
-  const needsCreator = CREATOR_PREFIXES.some(p => pathname.startsWith(p))
 
   if ((needsAdmin || needsCreator) && user) {
     const { data: profile } = await supabase

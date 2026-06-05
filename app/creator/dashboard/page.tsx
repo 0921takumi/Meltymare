@@ -25,12 +25,12 @@ export default async function CreatorDashboard() {
 
   const pendingCount = completedPurchases?.filter(p => (p as any).delivery_status === 'pending').length ?? 0
 
-  // リクエスト pending 件数
-  const { count: pendingRequestCount } = await supabase
-    .from('requests')
+  // 公開中アンケート件数（polls 未作成時は null → 0 表示）
+  const { count: openPollCount } = await supabase
+    .from('polls')
     .select('id', { count: 'exact', head: true })
     .eq('creator_id', user.id)
-    .eq('status', 'pending')
+    .eq('status', 'open')
 
   // コンテンツ売上（商品代金のみ、チップ除く） / チップ売上 / 販売件数
   const contentSales = completedPurchases?.reduce((sum, p) => sum + ((p as any).content_price ?? p.amount ?? 0), 0) ?? 0
@@ -82,8 +82,8 @@ export default async function CreatorDashboard() {
             <Link href="/creator/orders" style={{ display: 'flex', alignItems: 'center', gap: 6, background: pendingCount > 0 ? '#d97706' : 'white', color: pendingCount > 0 ? 'white' : 'var(--mm-primary)', border: `1px solid ${pendingCount > 0 ? '#d97706' : 'var(--mm-primary)'}`, padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
               <ClipboardList size={15} /> 注文管理{pendingCount > 0 ? ` (未納品 ${pendingCount}件)` : ''}
             </Link>
-            <Link href="/creator/requests" style={{ display: 'flex', alignItems: 'center', gap: 6, background: (pendingRequestCount ?? 0) > 0 ? '#7c3aed' : 'white', color: (pendingRequestCount ?? 0) > 0 ? 'white' : 'var(--mm-text-sub)', border: `1px solid ${(pendingRequestCount ?? 0) > 0 ? '#7c3aed' : 'var(--mm-border)'}`, padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
-              <MessageSquare size={15} /> リクエスト{(pendingRequestCount ?? 0) > 0 ? ` (${pendingRequestCount}件)` : ''}
+            <Link href="/creator/polls" style={{ display: 'flex', alignItems: 'center', gap: 6, background: (openPollCount ?? 0) > 0 ? '#7c3aed' : 'white', color: (openPollCount ?? 0) > 0 ? 'white' : 'var(--mm-text-sub)', border: `1px solid ${(openPollCount ?? 0) > 0 ? '#7c3aed' : 'var(--mm-border)'}`, padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+              <MessageSquare size={15} /> アンケート{(openPollCount ?? 0) > 0 ? ` (${openPollCount}件)` : ''}
             </Link>
             <Link href="/creator/coupons" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', color: 'var(--mm-text-sub)', border: '1px solid var(--mm-border)', padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
               <Tag size={15} /> クーポン

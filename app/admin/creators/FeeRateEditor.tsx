@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 
 export default function FeeRateEditor({ creatorId, currentRate }: { creatorId: string; currentRate: number }) {
   const [rate, setRate] = useState(currentRate)
@@ -9,10 +8,19 @@ export default function FeeRateEditor({ creatorId, currentRate }: { creatorId: s
 
   const save = async () => {
     setSaving(true)
-    const supabase = createClient()
-    await supabase.from('profiles').update({ fee_rate: rate }).eq('id', creatorId)
+    // profiles は本人限定 RLS のため、管理者の他人更新は admin 経由の API で行う
+    const res = await fetch('/api/admin-fee-rate', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creator_id: creatorId, fee_rate: rate }),
+    })
     setSaving(false)
-    setEditing(false)
+    if (res.ok) {
+      setEditing(false)
+    } else {
+      setRate(currentRate)
+      alert('手数料率の更新に失敗しました')
+    }
   }
 
   if (!editing) {

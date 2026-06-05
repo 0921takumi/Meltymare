@@ -5,11 +5,16 @@ import {
   User, LogIn, Menu, Search, X, ShoppingBag, Heart, Home,
   Compass, Sparkles, Camera, Video, Cake, MessageCircle, Shirt,
   Trophy, Crown, Settings, LogOut, BookOpenCheck, ShieldCheck, PlusSquare,
-  Radio, Gavel, Gem,
+  Radio, BarChart3, Gem, Ban,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import NotificationBell from '@/components/NotificationBell'
+import { FEATURES } from '@/lib/config'
+
+// 機能フラグで無効化されたカテゴリを除外
+const isCategoryEnabled = (key: string) =>
+  (key !== 'stories' || FEATURES.stories) && (key !== 'live' || FEATURES.live)
 
 interface HeaderProps {
   user?: { display_name?: string; username?: string; role?: string; avatar_url?: string | null; identity_status?: string } | null
@@ -20,7 +25,7 @@ const CATEGORIES: { key: string; label: string; icon: React.ComponentType<{ size
   { key: 'discover',  label: '探す',      icon: Compass,       href: '/contents' },
   { key: 'stories',   label: 'ストーリー', icon: Sparkles,      href: '/stories',              tint: '#a855f7' },
   { key: 'live',      label: 'ライブ',    icon: Radio,         href: '/live',                 tint: '#dc2626' },
-  { key: 'auctions',  label: 'リクエスト', icon: Gavel,         href: '/auctions',             tint: '#7c3aed' },
+  { key: 'polls',     label: 'アンケート', icon: BarChart3,     href: '/polls',                tint: '#7c3aed' },
   { key: 'birthday',  label: 'バースデー', icon: Cake,          href: '/birthdays',            tint: '#db2777' },
   { key: 'ranking',   label: 'ランキング', icon: Trophy,        href: '/rankings',             tint: '#d97706' },
   { key: 'cheki',     label: 'チェキ',    icon: Camera,        href: '/contents?tag=チェキ' },
@@ -141,16 +146,18 @@ export default function Header({ user }: HeaderProps) {
                       <DropdownItem href="/mypage/collection" icon={BookOpenCheck} label="コレクション" sub="購入した推しの記録" onClick={() => setAvatarMenuOpen(false)} />
                       <DropdownItem href="/mypage/follows" icon={Heart} label="フォロー中" onClick={() => setAvatarMenuOpen(false)} />
                       <DropdownItem href="/mypage/oshikatsu" icon={Sparkles} label="推し活記録" sub="支出・推し期間" onClick={() => setAvatarMenuOpen(false)} />
-                      <DropdownItem href="/mypage/subscriptions" icon={Gem} label="サブスク" sub="加入中プラン" onClick={() => setAvatarMenuOpen(false)} />
+                      {FEATURES.subscriptions && <DropdownItem href="/mypage/subscriptions" icon={Gem} label="サブスク" sub="加入中プラン" onClick={() => setAvatarMenuOpen(false)} />}
                       <DropdownItem href="/mypage/profile" icon={Settings} label="プロフィール設定" onClick={() => setAvatarMenuOpen(false)} />
                       {user.role === 'creator' && (
                         <>
                           <div style={{ borderTop: '1px solid var(--mm-border)' }} />
                           <DropdownItem href="/creator/dashboard" icon={User} label="クリエイター管理" highlight onClick={() => setAvatarMenuOpen(false)} />
                           <DropdownItem href="/creator/upload" icon={PlusSquare} label="コンテンツを追加" onClick={() => setAvatarMenuOpen(false)} />
-                          <DropdownItem href="/creator/stories" icon={Sparkles} label="ストーリー" sub="24h投稿" onClick={() => setAvatarMenuOpen(false)} />
-                          <DropdownItem href="/creator/live" icon={Radio} label="ライブ配信" sub="配信予約・管理" onClick={() => setAvatarMenuOpen(false)} />
-                          <DropdownItem href="/creator/plans" icon={Gem} label="サブスクプラン" sub="月額メンバーシップ" onClick={() => setAvatarMenuOpen(false)} />
+                          {FEATURES.stories && <DropdownItem href="/creator/stories" icon={Sparkles} label="ストーリー" sub="24h投稿" onClick={() => setAvatarMenuOpen(false)} />}
+                          {FEATURES.live && <DropdownItem href="/creator/live" icon={Radio} label="ライブ配信" sub="配信予約・管理" onClick={() => setAvatarMenuOpen(false)} />}
+                          {FEATURES.subscriptions && <DropdownItem href="/creator/plans" icon={Gem} label="サブスクプラン" sub="月額メンバーシップ" onClick={() => setAvatarMenuOpen(false)} />}
+                          <DropdownItem href="/creator/polls" icon={BarChart3} label="アンケート" sub="ファンに質問して投票" onClick={() => setAvatarMenuOpen(false)} />
+                          <DropdownItem href="/creator/blocks" icon={Ban} label="ブロック管理" sub="購入者をブロック" onClick={() => setAvatarMenuOpen(false)} />
                           {user.identity_status !== 'approved' && (
                             <DropdownItem href="/creator/verification" icon={ShieldCheck} label="本人確認" warn onClick={() => setAvatarMenuOpen(false)} />
                           )}
@@ -194,7 +201,7 @@ export default function Header({ user }: HeaderProps) {
         <div style={{ borderTop: '1px solid var(--mm-border)', background: 'white' }}>
           <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 16px' }}>
             <div className="mm-category-pills" style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '8px 0', scrollbarWidth: 'none' }}>
-              {CATEGORIES.map(c => {
+              {CATEGORIES.filter(c => isCategoryEnabled(c.key)).map(c => {
                 const Icon = c.icon
                 const tint = c.tint ?? 'var(--mm-primary)'
                 return (

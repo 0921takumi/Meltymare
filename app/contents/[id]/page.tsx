@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     .select('title, description, thumbnail_url, price, creator:profiles(display_name)')
     .eq('id', id)
     .single()
-  if (!content) return { title: 'コンテンツが見つかりません' }
+  if (!content) return { title: 'コンテンツが見つかりません', robots: { index: false, follow: false } }
   const creator = content.creator as any
   const desc = content.description ?? `${creator?.display_name ?? ''} の限定コンテンツ ¥${content.price.toLocaleString()}`
   return {

@@ -63,7 +63,7 @@ export default function GuidelinesPage() {
           <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.9 }}>
             <li>クリエイター本人（またはクリエイター監督下）が制作したオリジナルコンテンツ</li>
             <li>購入者一人ひとりに向けたパーソナライズされた写真・動画・メッセージ</li>
-            <li>ライブ配信・ストーリー・サブスク特典など継続的なファン体験</li>
+            <li>アンケート・限定コンテンツなどファンとの継続的な接点</li>
             <li>コスプレ・チェキ・バースデーなど企画性のあるシリーズ</li>
           </ul>
         </Section>

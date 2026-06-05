@@ -180,3 +180,138 @@ SQL Editor で `supabase_migration_v9_identity_hardening.sql` を実行。これ
 - **不正購入検知**: Stripe Radar + 独自ルール（短時間での大量購入等）
 - **EXIF 情報の自動削除**: クリエイター投稿時に位置情報を除去（自宅特定リスク対策）
 - **退会/データ削除フロー**: GDPR/個人情報保護法対応
+
+---
+
+## 🚨 公開前必須ブロッカー（2026-05-29 追加）
+
+### Blocker 1: `/api/subscribe` の Stripe Subscription 未実装
+**現状**: `app/api/subscribe/route.ts` は DB に `status='active'` を直接 insert しており、
+Stripe Subscription Checkout を経由していない。**有料プランでも無料で active になる**。
+
+**対応**:
+1. `subscription_plans.monthly_price > 0` のプランは Stripe Subscription Checkout に飛ばす
+2. webhook (`customer.subscription.created` / `invoice.paid`) で `status='active'` に遷移
+3. `customer.subscription.deleted` で `status='cancelled'` に遷移
+4. 既存の `/api/purchase` + `/api/webhook` の Checkout 同期パターンを踏襲
+
+**現状コードには `🚨 SECURITY BLOCKER` コメントを目立つ位置に追加済み**。
+
+---
+
+## セキュリティ監査 2026-05-29 — 適用済みの修正
+
+### `/api/webhook`
+- tip 完了の一意特定キーを `stripe_payment_intent_id` に変更（連続 tip での誤更新を防止）
+- tip 通知金額を `metadata` ではなく Stripe イベント (`session.amount_total`) 由来に変更
+- `charge.refunded` を `completed → refunded` のみ許可（並列 webhook の順序逆転対策）
+- 返金時のユーザー通知を追加
+- メール本文の `display_name` / `title` を `escapeHtml` で二重防御
+- tip 完了時に `audit_logs` を記録
+- `increment_coupon_used` の戻り値（v15 CAS 化後の boolean）を受け、上限超過時は `coupon.max_uses_overrun` 監査ログを残す
+
+### `/api/purchase`
+- クーポンの `creator_id` 整合性チェック追加（クリエイター個別クーポンが他クリエイターのコンテンツに使えない）
+- 無料 purchase の `stripe_payment_intent_id` を `free_{userId}_{contentId}_{timestamp}` に変更（衝突回避）
+- `review_status='approved'` のみ購入可能に変更（pending/rejected はブロック）
+- CAS 化後の `increment_coupon_used` 戻り値ハンドリング
+
+### `/api/subscribe`
+- レート制限追加（10req/分）
+- plan_id / subscription id の UUID 形式検証
+- `member_count` を `increment_member_count` / `decrement_member_count` RPC で atomic 化
+- DELETE 時の楽観ロック `.eq('status', 'active')` + 冪等性（cancelled 再 cancel は no-op）
+- DELETE 時の `audit_logs` 記録
+
+### `/api/admin-user`
+- `requireAdmin` ヘルパに統一
+- id の UUID 形式検証
+- `suspended_reason` を `sanitizeText` 通過
+- **role 変更を API 経由では `user` ↔ `creator` のみに制限**（admin 昇格・降格は SQL 経由のみ）
+- 対象が既に `admin` の場合の降格を API で拒否
+
+### `lib/sanitize.ts`
+- `escapeHtml()` を新規追加（React 非依存の HTML 文字列組み立て箇所用）
+
+### Supabase Migration（**SQL Editor で実行必須**）
+- `supabase_migration_v15_coupon_cas.sql`: `increment_coupon_used` を CAS 化（max_uses 超過防止）
+- `supabase_migration_v16_member_count.sql`: `increment_member_count` / `decrement_member_count` を追加
+
+### 仕様判断（実装方針確定）
+- **クーポンのユーザー別使用回数制限**: 実装しない（要件外。必要時に `coupon_redemptions` テーブル新設）
+- **`review_status='flagged'/pending/rejected` の購入可否**: ブロックする（`approved` のみ許可）
+- **`admin` ロールの API 経由付与**: 不可（SECURITY.md 既存方針通り、SQL 直接運用に統一）
+
+### 既知だが本リリースで残置する積み残し
+- v9 `cleanup_rejected_identity_docs` の `returning 1 into deleted_count` は最後の行の `1` しか取れない → 削除件数カウントは別途 `get diagnostics rows_affected = row_count;` で取り直す
+- `increment_sold_count` のリトライ機構
+- 購入完了メール送信失敗時の死信キュー
+- Stripe SDK `apiVersion` の明示指定
+- console ログでの `stripe_session_id` / `payment_intent_id` のマスキング
+
+---
+
+## 🚨 公開前必須ブロッカー（2026-05-30 Round 2 追加）
+
+### ~~Blocker 2: `/api/live-chat` のスーパーチャット課金未統合~~ → 解消
+**経緯**: 監査では未統合と認定したが、ライブ配信機能自体が廃止予定であった。
+**対応**: `/api/live-chat`, `/api/admin-live`, `/api/live-stream` を `410 Gone` 化（`/api/auction` と同パターン）。スーパーチャット問題はライブ機能廃止に伴って消滅。
+
+---
+
+## セキュリティ監査 2026-05-30 Round 2 — 適用済みの修正
+
+### `/api/admin-live` / `/api/admin-story` / `/api/admin-comment`
+- `requireAdmin` ヘルパに統一（lib/auth.ts）
+- id / report_id / comment_id の UUID 検証
+- 許可 action のホワイトリスト化（admin-live: `force_stop`、admin-comment: `hide` / `resolve` / `dismiss`）
+- `reason` を `sanitizeText` 通過
+
+### `/api/comment`
+- レート制限追加（POST: 30req/分、DELETE: 30req/分）
+- content_id / parent_id / id の UUID 検証
+- `sanitizeText` で本文サニタイズ
+- parent_id が同じ content_id 配下のコメントであることを検証（コメントツリー逸脱防止）
+- 購入対象を `review_status='approved'` に制限
+
+### `/api/comment-like`
+- レート制限追加（60req/分）
+- comment_id の UUID 検証
+
+### `/api/live-chat` / `/api/admin-live` / `/api/live-stream`
+- **ライブ配信機能は廃止**（`FEATURES.live=false`）
+- 監査途中で気づき、`/api/auction` と同じ **`410 Gone`** stub に置き換え
+- 一時的に「BLOCKER として残す」修正が走ったが取り消し済み
+
+### `/api/story` (DELETE)
+- id の UUID 検証
+
+### `/api/invite` (POST / PATCH / DELETE)
+- `requireAdmin` 統一
+- 招待コード生成を `Math.random` から **`crypto.randomInt`（CSPRNG）** に変更
+- id の UUID 検証
+- note を `sanitizeText` 通過
+- PATCH / DELETE にも `admin_actions` 監査ログ追加
+
+### `/api/invite/verify`
+- IP ベースのレート制限追加（5req/分）→ brute force 防止
+- 招待コード形式バリデーション（`MYF-[A-Z2-9]{6}`）を DB クエリ前に実施
+- 「無効/期限切れ/上限到達/無効化」を区別せず単一エラーメッセージに統一（情報漏洩防止）
+
+### `/api/invite/redeem`
+- **認証必須化**（旧実装は認証なしで任意 user_id で redemption 作成可能だった）
+- レート制限追加（5req/分）
+- invite_code_id の UUID 検証
+- DB 側 `redeem_invite_code` RPC（v17）で atomic に redemption + used_count CAS
+
+### `/api/account/delete`
+- **二重認証必須化**（パスワード再入力で乗っ取り時の即時削除を防止）
+- レート制限追加（5req/分）
+- 削除前に `audit_logs` 記録
+- 削除範囲を拡大: tips / content_comments / comment_likes / live_chat_messages / stories / poll_votes / subscriptions / identity_documents バケットの本人フォルダ
+- purchases / contents は会計・購入者保護のため残存（既存方針通り）
+
+### Supabase Migration（**SQL Editor で実行必須**）
+- `supabase_migration_v17_invite_atomic.sql`:
+  - `redeem_invite_code(uuid)` RPC を追加（SECURITY DEFINER で auth.uid() を強制、max_uses CAS）
+  - `invite_redemptions` に `(invite_code_id, user_id)` のユニーク制約を追加

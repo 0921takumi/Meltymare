@@ -60,7 +60,7 @@ export default async function MyPage() {
                 <p style={{ fontSize: 11, color: '#d97706', fontWeight: 600, marginTop: 2 }}>納品待ち {pendingCount}件</p>
               )}
               <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <a href="/requests" style={{ fontSize: 12, color: '#7c3aed', fontWeight: 600 }}>リクエスト一覧</a>
+                <a href="/polls" style={{ fontSize: 12, color: '#7c3aed', fontWeight: 600 }}>アンケート</a>
                 <a href="/mypage/profile" style={{ fontSize: 12, color: 'var(--mm-primary)', fontWeight: 600 }}>プロフィール編集</a>
               </div>
             </div>

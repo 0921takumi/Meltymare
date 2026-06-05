@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   pending:    { label: '振込待ち',   color: '#d97706', bg: '#fef3c7' },
@@ -14,12 +13,19 @@ export default function PayoutStatusChanger({ payoutId, currentStatus }: { payou
   const [saving, setSaving] = useState(false)
 
   const onChange = async (next: string) => {
+    const prev = status
     setSaving(true)
-    const supabase = createClient()
-    const update: any = { status: next }
-    if (next === 'completed') update.paid_at = new Date().toISOString()
-    await supabase.from('payouts').update(update).eq('id', payoutId)
-    setStatus(next)
+    setStatus(next) // 楽観的更新
+    // payouts には UPDATE の RLS が無いため admin 経由の API で更新する
+    const res = await fetch('/api/admin-payout', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payout_id: payoutId, status: next }),
+    })
+    if (!res.ok) {
+      setStatus(prev) // 失敗時はロールバック
+      alert('出金ステータスの更新に失敗しました')
+    }
     setSaving(false)
   }
 

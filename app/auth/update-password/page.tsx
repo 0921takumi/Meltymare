@@ -77,7 +77,7 @@ export default function UpdatePasswordPage() {
       <div style={{ width: '100%', maxWidth: 400 }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <Link href="/" style={{ textDecoration: 'none' }}>
-            <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 600, color: 'var(--mm-primary)' }}>MyFocus</span>
+            <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, fontWeight: 600, color: 'var(--mm-primary)' }}>My Focus</span>
           </Link>
           <p style={{ fontSize: 13, color: 'var(--mm-text-muted)', marginTop: 8 }}>新しいパスワードを設定</p>
         </div>

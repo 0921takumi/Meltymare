@@ -27,6 +27,21 @@ export function sanitizeOptional(input: unknown, opts?: SanitizeOptions): string
   return s.length > 0 ? s : null
 }
 
+// HTMLエスケープ。
+// React の自動エスケープは JSX 内のみ。
+// メール本文（HTML文字列を直接組み立てる場合）や、その他 raw HTML に
+// ユーザー入力を埋め込む場合は、必ずこの関数を通すこと。
+export function escapeHtml(input: unknown): string {
+  if (input === null || input === undefined) return ''
+  const s = String(input)
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 // 極めて緩い URL バリデータ。スキーム制限でスクリプト URI などを弾く。
 const ALLOWED_SCHEMES = new Set(['http:', 'https:'])
 

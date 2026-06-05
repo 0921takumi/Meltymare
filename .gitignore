@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# 秘密キー貼り付けメモ（絶対にコミットしない）
+_*ここに貼る*.txt
+_SECRETS_*.txt
+
 # vercel
 .vercel
 

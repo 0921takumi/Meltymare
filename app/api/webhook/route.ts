@@ -13,12 +13,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createClient as createServerClient } from '@supabase/supabase-js'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { escapeHtml } from '@/lib/sanitize'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+// apiVersion を明示固定（SDK更新時の挙動変化で決済不整合になるのを防ぐ）
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-03-25.dahlia' })
 
 // Webhook 用 Service Role クライアント（RLSバイパス、サーバー内のみで使用）
-const supabase = createServerClient(
+// 命名: @supabase/ssr の createServerClient と紛らわしいので createServiceClient で別名 import している。
+const supabase = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
@@ -71,25 +74,89 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // ── チップ決済の場合 ──
   // チップは purchases ではなく tips テーブルで管理。metadata.tip === '1' で判別。
   if (metadata.tip === '1') {
-    const { creator_id, user_id, tip_amount } = metadata
-    if (creator_id && user_id) {
-      await supabase
-        .from('tips')
-        .update({ status: 'completed' })
-        .eq('creator_id', creator_id)
-        .eq('user_id', user_id)
-        .eq('status', 'pending')
+    // ⭐️ tips を一意特定するキーは stripe_payment_intent_id。
+    //   /api/tip は作成時に `session.payment_intent ?? session.id` を保存している
+    //   （Checkout 作成時点では payment_intent が未確定なことが多いため）。
+    //   purchases と同じく、session.id と payment_intent の両方で照合する。
+    //
+    //   旧実装は (creator_id, user_id, status=pending) でだけ絞っていたため、
+    //   同一ユーザーが同一クリエイターに連続でチップを送ると、無関係の pending tip
+    //   まで巻き込んで completed にしてしまう不具合があった。
+    const sessionId = session.id
+    const paymentIntentId = typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id
 
-      // クリエイターに通知
-      const { data: sender } = await supabase.from('profiles').select('display_name').eq('id', user_id).single()
-      await supabase.from('notifications').insert({
-        user_id: creator_id,
-        type: 'tip',
-        title: 'チップを受け取りました 🎁',
-        body: `${sender?.display_name ?? 'ファン'} さんから ¥${Number(tip_amount ?? 0).toLocaleString()} のチップ`,
-        link: '/creator/dashboard',
-      })
+    const orFilter = paymentIntentId
+      ? `stripe_payment_intent_id.eq.${sessionId},stripe_payment_intent_id.eq.${paymentIntentId}`
+      : `stripe_payment_intent_id.eq.${sessionId}`
+
+    const { data: tip, error: lookupErr } = await supabase
+      .from('tips')
+      .select('id, user_id, creator_id, amount, status')
+      .or(orFilter)
+      .maybeSingle()
+
+    if (lookupErr || !tip) {
+      console.warn('[webhook] no tip for session:', sessionId, 'pi:', paymentIntentId)
+      return
     }
+
+    // 冪等性: 既に完了済みなら何もしない（Stripe の重複送信対策）
+    if (tip.status === 'completed') {
+      console.log('[webhook] tip already completed, skipping:', tip.id)
+      return
+    }
+
+    // status を pending → completed。
+    // payment_intent_id も実値で上書きしておく（後続イベントの照合用）。
+    const { error: updErr } = await supabase
+      .from('tips')
+      .update({
+        status: 'completed',
+        ...(paymentIntentId ? { stripe_payment_intent_id: paymentIntentId } : {}),
+      })
+      .eq('id', tip.id)
+      .eq('status', 'pending')  // 楽観ロック
+
+    if (updErr) {
+      console.error('[webhook] update tip failed:', updErr)
+      return
+    }
+
+    // 金額は **Stripe イベントオブジェクト** から取る（署名検証済みのため改竄不可）。
+    // metadata.tip_amount を信用しない（冒頭の設計方針に従う）。
+    const tipAmount = session.amount_total ?? tip.amount ?? 0
+
+    // クリエイターに通知（display_name は HTML 不使用だが念のため）
+    const { data: sender } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', tip.user_id)
+      .single()
+
+    await supabase.from('notifications').insert({
+      user_id: tip.creator_id,
+      type: 'tip',
+      title: 'チップを受け取りました 🎁',
+      body: `${sender?.display_name ?? 'ファン'} さんから ¥${Number(tipAmount).toLocaleString()} のチップ`,
+      link: '/creator/dashboard',
+    })
+
+    // 監査ログ（purchase と同じ粒度で残す）
+    await supabase.from('audit_logs').insert({
+      actor_id: tip.user_id,
+      action: 'tip.completed',
+      target_type: 'tip',
+      target_id: tip.id,
+      metadata: {
+        creator_id: tip.creator_id,
+        amount: tipAmount,
+        stripe_session_id: session.id,
+        stripe_payment_intent_id: paymentIntentId,
+      },
+    })
+
     return
   }
 
@@ -145,10 +212,24 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // sold_count インクリメント
   await supabase.rpc('increment_sold_count', { content_id: purchase.content_id })
 
-  // クーポン使用回数インクリメント（RPC が無いプロジェクトでもエラーで止まらないように）
+  // クーポン使用回数インクリメント（v15 以降 CAS 化、戻り値 boolean）。
+  // false の場合は並列 webhook で他の購入が先に上限に到達した可能性。
+  // discountAmount は既に適用済み（webhook 着信時点で決済は完了）なので返金は行わず、
+  // 監査ログだけ残して上限超過を可視化する。
   if (purchase.coupon_id) {
-    const { error: cpErr } = await supabase.rpc('increment_coupon_used', { coupon_id: purchase.coupon_id })
-    if (cpErr) console.warn('[webhook] increment_coupon_used failed:', cpErr.message)
+    const { data: incOk, error: cpErr } = await supabase.rpc('increment_coupon_used', { coupon_id: purchase.coupon_id })
+    if (cpErr) {
+      console.warn('[webhook] increment_coupon_used failed:', cpErr.message)
+    } else if (incOk === false) {
+      console.warn('[webhook] coupon already at max_uses, no-op:', purchase.coupon_id)
+      await supabase.from('audit_logs').insert({
+        actor_id: purchase.user_id,
+        action: 'coupon.max_uses_overrun',
+        target_type: 'coupon',
+        target_id: purchase.coupon_id,
+        metadata: { purchase_id: purchase.id },
+      })
+    }
   }
 
   // 監査ログ
@@ -202,16 +283,33 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
 
   const { data: purchase } = await supabase
     .from('purchases')
-    .select('id, user_id, content_id')
+    .select('id, user_id, content_id, status')
     .eq('stripe_payment_intent_id', paymentIntentId)
-    .single()
+    .maybeSingle()
   if (!purchase) return
 
-  await supabase
+  // 状態遷移は completed → refunded のみ許可。
+  // 並列 webhook で順序逆転（refunded が先に到着 → 後から completed が上書き）した場合、
+  // または既に refunded 済みの purchase に対するリプレイの場合、いずれも no-op で安全に弾く。
+  const { data: updated, error: updErr } = await supabase
     .from('purchases')
     .update({ status: 'refunded' })
     .eq('id', purchase.id)
+    .eq('status', 'completed')  // 楽観ロック + ホワイトリスト
+    .select('id')
+    .maybeSingle()
 
+  if (updErr) {
+    console.error('[webhook] refund update failed:', updErr)
+    return
+  }
+  if (!updated) {
+    // 既に refunded、または completed でない（pending のまま等）。冪等として終了。
+    console.log('[webhook] refund skipped (not in completed state):', purchase.id, 'current:', purchase.status)
+    return
+  }
+
+  // 監査ログ
   await supabase.from('audit_logs').insert({
     actor_id: purchase.user_id,
     action: 'purchase.refunded',
@@ -222,6 +320,21 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       stripe_payment_intent_id: paymentIntentId,
       refund_amount: charge.amount_refunded,
     },
+  })
+
+  // 返金通知（旧実装には無かった。ユーザーが返金に気づけないと信用毀損につながるため追加）
+  const { data: content } = await supabase
+    .from('contents')
+    .select('title')
+    .eq('id', purchase.content_id)
+    .single()
+
+  await supabase.from('notifications').insert({
+    user_id: purchase.user_id,
+    type: 'refund',
+    title: 'ご返金が完了しました',
+    body: `${content?.title ?? 'コンテンツ'} のご購入を返金しました。Stripe からの返金処理は数営業日以内にご利用カードに反映されます。`,
+    link: '/mypage',
   })
 }
 
@@ -319,12 +432,15 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
     const creator = content.creator as { display_name?: string } | null
 
+    // ⚠️ HTMLメールはReactではないので {} の自動エスケープが効かない。
+    //   display_name / title は必ず escapeHtml を通すこと。
+    //   （プロフィール編集側でも sanitizeText しているが、ここでも二重防御）
     const html = brandedEmail({
       title: 'Thank you.',
-      greeting: `${user.display_name} さん、ご購入ありがとうございます。`,
+      greeting: `${escapeHtml(user.display_name)} さん、ご購入ありがとうございます。`,
       bodyText: 'クリエイターがあなただけのメッセージを書き込んで納品します。<br>マイページから納品状況をご確認いただけます。',
-      cardTitle: content.title,
-      cardSub: creator?.display_name ? `from ${creator.display_name}` : undefined,
+      cardTitle: escapeHtml(content.title),
+      cardSub: creator?.display_name ? `from ${escapeHtml(creator.display_name)}` : undefined,
       ctaText: 'マイページで確認',
       ctaUrl: `${appUrl}/mypage`,
     })
@@ -367,12 +483,13 @@ export async function sendDeliveryEmail(purchaseId: string) {
     const content = purchase.content as { title?: string; creator?: { display_name?: string } } | null
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
 
+    // ⚠️ HTMLメールはReactではないので {} の自動エスケープが効かない。escapeHtml 必須。
     const html = brandedEmail({
       title: 'Delivered.',
-      greeting: `${userProfile?.display_name ?? ''} さん、お待たせしました！`,
+      greeting: `${escapeHtml(userProfile?.display_name ?? '')} さん、お待たせしました！`,
       bodyText: 'クリエイターのメッセージ入りコンテンツが届きました。<br>マイページからダウンロードできます。',
-      cardTitle: content?.title ?? '',
-      cardSub: content?.creator?.display_name ? `from ${content.creator.display_name}` : undefined,
+      cardTitle: escapeHtml(content?.title ?? ''),
+      cardSub: content?.creator?.display_name ? `from ${escapeHtml(content.creator.display_name)}` : undefined,
       ctaText: '今すぐダウンロード',
       ctaUrl: `${appUrl}/mypage`,
       ctaColor: BRAND.primary,  // 納品メールはオレンジCTAで気分を上げる

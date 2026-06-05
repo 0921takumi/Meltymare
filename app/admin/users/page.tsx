@@ -31,7 +31,11 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
     .limit(200)
 
   if (role !== 'all') query = query.eq('role', role)
-  if (q) query = query.or(`display_name.ilike.%${q}%,email.ilike.%${q}%,username.ilike.%${q}%`)
+  if (q) {
+    // PostgREST フィルタ注入対策：構文上意味のある文字（%,():*"\）を除去し長さ制限する
+    const safeQ = q.replace(/[%,():*"\\]/g, '').trim().slice(0, 100)
+    if (safeQ) query = query.or(`display_name.ilike.%${safeQ}%,email.ilike.%${safeQ}%,username.ilike.%${safeQ}%`)
+  }
 
   const { data } = await query
   const users = (data ?? []) as UserRow[]

@@ -21,18 +21,21 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   let purchasedIds: string[] = []
 
   if (query) {
+    // ilike のワイルドカード（% _）はリテラルとして扱うため事前にエスケープする
+    // （未エスケープだと「全件一致でDoS的に重いクエリを撃たれる」可能性がある）
+    const safeQ = query.replace(/[\\%_]/g, (c) => '\\' + c).slice(0, 80)
     const [creatorsRes, contentsRes] = await Promise.all([
       supabase
         .from('profiles')
         .select('id, display_name, username, avatar_url, bio')
         .eq('role', 'creator')
-        .ilike('display_name', `%${query}%`)
+        .ilike('display_name', `%${safeQ}%`)
         .limit(6),
       supabase
         .from('contents')
         .select('*, creator:profiles(id, display_name, avatar_url)')
         .eq('is_published', true)
-        .ilike('title', `%${query}%`)
+        .ilike('title', `%${safeQ}%`)
         .order('created_at', { ascending: false })
         .limit(12),
     ])

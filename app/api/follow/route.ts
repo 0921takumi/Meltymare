@@ -21,11 +21,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '自分自身はフォローできません' }, { status: 400 })
   }
 
+  // 対象が実在し、creator/admin であることを検証
+  // （任意の role='user' を follow できてしまう問題への対応）
+  const { data: target } = await supabase
+    .from('profiles')
+    .select('id, role')
+    .eq('id', creator_id)
+    .single()
+  if (!target || (target.role !== 'creator' && target.role !== 'admin')) {
+    return NextResponse.json({ error: 'creator_not_found' }, { status: 404 })
+  }
+
   const { error } = await supabase
     .from('follows')
     .insert({ follower_id: user.id, creator_id })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (error) {
+    // ユニーク制約違反 = 既にフォロー済み
+    if (error.code === '23505') return NextResponse.json({ followed: true, already: true })
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
 
   // クリエイターへ通知
   const { data: follower } = await supabase.from('profiles').select('display_name, username').eq('id', user.id).single()

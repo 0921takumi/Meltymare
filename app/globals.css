@@ -1,6 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Caveat:wght@500;600&family=Shippori+Mincho:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
+/* ─── グローバルリセット（モバイル横はみ出し防止の基本） ───
+ * box-sizing をすべての要素に適用しないと、input/textarea が `width:100%` 設定でも
+ * padding+border 分だけ親をはみ出してしまい、ページ全体に横スクロールが発生する。
+ * これが contact フォーム等で右端クリップとして見えていた問題の根本原因。
+ */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* HTML/body 自体での横スクロール禁止。各セクションで意図的に横スクロールしたい場合は
+ * 個別の要素で `overflow-x: auto` を指定する（mm-category-pills 等は既にそう）。
+ */
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 :root {
   /* ─── My Focus ブランドパレット ─────────────────
    * Primary (Orange) / Accent (Teal) はロゴから抽出。
@@ -407,7 +424,7 @@ body {
 
 /* ─── モバイルパディング調整 ─────────────────── */
 .mm-page-pad {
-  padding: 24px 16px;
+  padding: 24px 20px;
 }
 @media (min-width: 640px) {
   .mm-page-pad { padding: 40px 24px; }

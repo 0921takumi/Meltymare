@@ -7,7 +7,7 @@
 export const COMPANY = {
   name: '株式会社91&Co.',
   representative: '島瀬直人',
-  postcode: '114-0001',
+  postcode: '115-0043',
   address: '東京都北区神谷2-21-7',
   email: 'my-focus@my-focus.jp',
   serviceDomain: 'my-focus.jp',
@@ -60,6 +60,25 @@ export const CONTENT_GUIDELINES = {
     '実在他者を本人の同意なく扱う性的コンテンツ',
   ],
 } as const
+
+// ─── 機能フラグ ──────────────────────────
+// 機能の表示/停止を一元管理。false にすると関連UI・ルートが全面的に無効化される。
+// （ナビ非表示・ルートはトップへリダイレクト・プロフィールの該当セクション非表示・ヘルプ項目除外）
+export const FEATURES: { stories: boolean; live: boolean; auctions: boolean; subscriptions: boolean } = {
+  /** ストーリーズ（24時間限定投稿） */
+  stories: false,
+  /** ライブ配信 */
+  live: false,
+  /** リクエストオークション（廃止。アンケート機能に置き換え） */
+  auctions: false,
+  /**
+   * 月額サブスクリプション機能
+   * 🚨 false: Stripe Subscription未統合のため Phase 2 送り。
+   *    本番リリース前に Stripe Subscription Checkout を組み込む必要あり。
+   *    現状は /api/subscribe が 503 を返し、関連UIも非表示にする。
+   */
+  subscriptions: false,
+}
 
 // ─── サービスモード ──────────────────────────
 export const SERVICE_MODE = {

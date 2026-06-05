@@ -89,7 +89,7 @@ export default function CreatorTermsPage() {
             <p style={{ marginBottom: 8 }}>【運営会社】</p>
             <p>株式会社91&amp;Co.</p>
             <p>代表者: 島瀬直人</p>
-            <p>〒114-0001 東京都北区神谷2-21-7</p>
+            <p>〒115-0043 東京都北区神谷2-21-7</p>
             <p>お問い合わせ: <a href="mailto:my-focus@my-focus.jp" style={{ color: 'var(--mm-primary)' }}>my-focus@my-focus.jp</a></p>
             <p style={{ marginTop: 12 }}>
               <Link href="/terms" style={{ color: 'var(--mm-primary)' }}>利用規約 →</Link>

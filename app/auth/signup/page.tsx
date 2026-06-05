@@ -86,7 +86,7 @@ export default function SignupPage() {
       <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 16, padding: '48px 32px', textAlign: 'center', maxWidth: 440, width: '100%', position: 'relative', zIndex: 1, boxShadow: '0 4px 24px -8px rgba(31,26,21,0.08)' }}>
         <div style={{ fontSize: 56, marginBottom: 20 }}>📩</div>
         <h2 className="font-serif-display" style={{ fontSize: 28, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-ink)', marginBottom: 12 }}>
-          Check your inbox.
+          メールを確認してください。
         </h2>
         <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.8 }}>
           <strong style={{ color: 'var(--mm-ink)' }}>{email}</strong> 宛に確認メールを送りました。<br />
@@ -119,7 +119,7 @@ export default function SignupPage() {
           <p className="font-serif-display" style={{
             fontSize: 28, fontWeight: 500, fontStyle: 'italic',
             color: 'var(--mm-ink)', letterSpacing: '0.01em', lineHeight: 1.2,
-          }}>Join the issue.</p>
+          }}>Start your story.</p>
           <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 6, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 600 }}>
             Create your account
           </p>
@@ -194,7 +194,7 @@ export default function SignupPage() {
                 marginTop: 4,
                 transition: 'opacity 0.2s',
               }}>
-              {loading ? 'Creating...' : '無料登録（30秒）→'}
+              {loading ? '登録中...' : '無料登録（30秒）→'}
             </button>
           </form>
 

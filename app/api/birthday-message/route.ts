@@ -1,18 +1,44 @@
+/**
+ * バースデーメッセージ送信
+ *
+ * セキュリティ設計:
+ *   - 認証必須 + レート制限
+ *   - creator_id の UUID 検証
+ *   - message を sanitizeText
+ *   - 自分宛送信ブロック
+ *   - 受付フラグ + 誕生日設定確認
+ *   - 1年1メッセージのユニーク制約（DB側）
+ */
+
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit } from '@/lib/rate-limit'
+import { sanitizeText } from '@/lib/sanitize'
+
+const UUID_RE = /^[0-9a-f-]{36}$/i
 
 export async function POST(req: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const rl = await rateLimit({ key: `birthday-msg:${user.id}`, limit: 10, windowSec: 60 })
+  if (!rl.ok) return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
+
   const body = await req.json().catch(() => ({}))
-  const creatorId: string | undefined = body.creator_id
-  const message: string | undefined = body.message
+  const creatorId: unknown = body.creator_id
   const isPublic: boolean = body.is_public !== false
 
-  if (!creatorId || !message || message.trim().length < 1 || message.length > 500) {
-    return NextResponse.json({ error: 'invalid_input' }, { status: 400 })
+  if (typeof creatorId !== 'string' || !UUID_RE.test(creatorId)) {
+    return NextResponse.json({ error: 'invalid_creator_id' }, { status: 400 })
+  }
+  if (creatorId === user.id) {
+    return NextResponse.json({ error: 'cannot_send_self' }, { status: 400 })
+  }
+
+  const message = sanitizeText(body.message, { maxLength: 500, allowNewlines: true })
+  if (message.length < 1) {
+    return NextResponse.json({ error: 'invalid_message' }, { status: 400 })
   }
 
   // クリエイター存在確認 + 受付フラグ
@@ -30,7 +56,7 @@ export async function POST(req: Request) {
   const { error } = await supabase.from('birthday_messages').insert({
     creator_id: creatorId,
     user_id: user.id,
-    message: message.trim(),
+    message,
     is_public: isPublic,
     year,
   })

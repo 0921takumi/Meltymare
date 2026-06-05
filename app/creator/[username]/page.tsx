@@ -10,6 +10,9 @@ import TipButton from '@/components/TipButton'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { topFans, userRankForCreator } from '@/lib/rankings'
+import { FEATURES } from '@/lib/config'
+import { getVoteCounts } from '@/lib/polls'
+import PollCard from '@/components/poll/PollCard'
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {
   const { username } = await params
@@ -20,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
     .eq('username', username)
     .eq('role', 'creator')
     .single()
-  if (!creator) return { title: 'クリエイターが見つかりません' }
+  if (!creator) return { title: 'クリエイターが見つかりません', robots: { index: false, follow: false } }
   const desc = creator.bio ?? `${creator.display_name} のクリエイターページ`
   return {
     title: creator.display_name,
@@ -131,6 +134,28 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
     .limit(3)
   const upcomingStreams = liveData ?? []
 
+  // アンケート（公開中）
+  const { data: pollsData } = await supabase
+    .from('polls')
+    .select('id, question, options, status, created_at')
+    .eq('creator_id', creator.id)
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(10)
+  const openPolls = pollsData ?? []
+  const pollOptionCounts: Record<string, number> = {}
+  for (const p of openPolls) pollOptionCounts[p.id] = Array.isArray(p.options) ? p.options.length : 0
+  const pollCounts = await getVoteCounts(pollOptionCounts)
+  const myPollVotes: Record<string, number> = {}
+  if (user && openPolls.length > 0) {
+    const { data: pv } = await supabase
+      .from('poll_votes')
+      .select('poll_id, option_index')
+      .eq('user_id', user.id)
+      .in('poll_id', openPolls.map((p) => p.id))
+    for (const v of pv ?? []) myPollVotes[v.poll_id] = v.option_index
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
       <Header user={myProfile} />
@@ -205,22 +230,10 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
                 )}
               </div>
 
-              {/* アクションボタン群（チップ + カスタムリクエスト） */}
+              {/* アクションボタン群（チップ） */}
               {(!user || user.id !== creator.id) && (
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <TipButton creatorId={creator.id} creatorName={creator.display_name} isLoggedIn={!!user} />
-                  {user && (
-                    <Link href={`/requests/new?creator_id=${creator.id}`}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 8,
-                        padding: '11px 22px',
-                        background: 'var(--mm-ink)', color: 'white',
-                        borderRadius: 999, fontSize: 13, fontWeight: 600,
-                        letterSpacing: '0.04em', textDecoration: 'none',
-                      }}>
-                      ✉️ カスタムリクエスト <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 16 }}>→</span>
-                    </Link>
-                  )}
                 </div>
               )}
             </div>
@@ -256,7 +269,7 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
         )}
 
         {/* ストーリー (24h) */}
-        {stories.length > 0 && (
+        {FEATURES.stories && stories.length > 0 && (
           <section style={{ marginBottom: 28 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>✨ ストーリー</span>
@@ -275,7 +288,7 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
         )}
 
         {/* 配信予定 / ライブ中 */}
-        {upcomingStreams.length > 0 && (
+        {FEATURES.live && upcomingStreams.length > 0 && (
           <section style={{ marginBottom: 28 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>📡 ライブ配信</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -294,8 +307,26 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
           </section>
         )}
 
-        {/* サブスクプラン */}
-        {plans.length > 0 && (
+        {/* アンケート */}
+        {openPolls.length > 0 && (
+          <section style={{ marginBottom: 28 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>📊 アンケート</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {openPolls.map((p) => (
+                <PollCard
+                  key={p.id}
+                  poll={{ id: p.id, question: p.question, options: (p.options ?? []) as string[], status: p.status === 'closed' ? 'closed' : 'open' }}
+                  counts={pollCounts[p.id] ?? []}
+                  userVotedIndex={myPollVotes[p.id] ?? null}
+                  isLoggedIn={!!user}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* サブスクプラン（機能フラグで停止中はUI非表示） */}
+        {FEATURES.subscriptions && plans.length > 0 && (
           <section style={{ marginBottom: 28 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>💎 メンバーシップ</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>

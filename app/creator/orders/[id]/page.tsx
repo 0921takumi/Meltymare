@@ -14,6 +14,8 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
+  const [blocking, setBlocking] = useState(false)
+  const [blocked, setBlocked] = useState(false)
 
   useEffect(() => {
     params.then(p => setPurchaseId(p.id))
@@ -66,15 +68,17 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
       })
       if (upErr) throw upErr
 
-      const { error: updErr } = await supabase
-        .from('purchases')
-        .update({
-          delivery_status: 'delivered',
-          delivered_file_url: path,
-          delivered_at: new Date().toISOString(),
-        })
-        .eq('id', purchaseId)
-      if (updErr) throw updErr
+      // 納品確定は admin 経由の API で行う（purchases に UPDATE の RLS が無く、
+      // クライアント直 update は 0 行更新でサイレント失敗するため）。
+      const deliverRes = await fetch('/api/deliver', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchase_id: purchaseId, file_path: path }),
+      })
+      if (!deliverRes.ok) {
+        const d = await deliverRes.json().catch(() => ({}))
+        throw new Error(d.error ?? '納品の確定に失敗しました')
+      }
 
       // 納品完了メール送信（バックグラウンド）
       fetch('/api/notify/delivery', {
@@ -88,6 +92,28 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
       setError(e.message ?? '納品に失敗しました')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleBlock = async () => {
+    const buyerId = purchase?.buyer?.id
+    if (!buyerId) return
+    const name = purchase?.buyer?.display_name ?? purchase?.buyer?.email ?? 'この購入者'
+    if (!window.confirm(`${name} をブロックしますか？\nブロックすると、この購入者はあなたのコンテンツを購入できなくなります。`)) return
+    setBlocking(true)
+    setError('')
+    try {
+      const res = await fetch('/api/creator-block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blocked_user_id: buyerId }),
+      })
+      if (res.ok) setBlocked(true)
+      else { const d = await res.json().catch(() => ({})); setError(d.error ?? 'ブロックに失敗しました') }
+    } catch {
+      setError('ブロックに失敗しました')
+    } finally {
+      setBlocking(false)
     }
   }
 
@@ -125,13 +151,33 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
             </div>
             <div>
               <p style={{ fontSize: 15, fontWeight: 700 }}>{content?.title}</p>
-              <p style={{ fontSize: 13, color: 'var(--mm-text-muted)', marginTop: 2 }}>
+              <p style={{ fontSize: 13, color: 'var(--mm-text-muted)', marginTop: 2, wordBreak: 'break-word' }}>
                 購入者: {buyer?.display_name ?? buyer?.email}
               </p>
               <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2 }}>
                 購入日: {new Date(purchase.created_at).toLocaleDateString('ja-JP')}
               </p>
             </div>
+          </div>
+
+          {/* 購入者ブロック */}
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--mm-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>
+              {blocked ? 'この購入者をブロックしました（今後購入できません）' : '迷惑な購入者はブロックできます'}
+            </span>
+            <button
+              onClick={handleBlock}
+              disabled={blocking || blocked}
+              style={{
+                padding: '7px 14px', fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
+                color: blocked ? 'var(--mm-text-muted)' : '#dc2626',
+                background: blocked ? 'var(--mm-bg)' : '#fef2f2',
+                border: `1px solid ${blocked ? 'var(--mm-border)' : '#fecaca'}`,
+                borderRadius: 8, cursor: blocking || blocked ? 'default' : 'pointer',
+              }}
+            >
+              {blocked ? 'ブロック済み' : blocking ? 'ブロック中...' : '購入者をブロック'}
+            </button>
           </div>
         </div>
 

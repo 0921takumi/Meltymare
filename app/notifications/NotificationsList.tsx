@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Check, Trash2, ShoppingBag, Package, Heart, Gift, MessageSquare, Info } from 'lucide-react'
+import { Check, Trash2, ShoppingBag, Package, Heart, Gift, MessageSquare, Info, RotateCcw } from 'lucide-react'
 
 type NotifItem = { id: string; type: string; title: string; body: string | null; link: string | null; read: boolean; created_at: string }
 
@@ -12,6 +12,7 @@ const TYPE_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   follow: Heart,
   tip: Gift,
   request: MessageSquare,
+  refund: RotateCcw,
   system: Info,
 }
 const TYPE_COLORS: Record<string, string> = {
@@ -20,6 +21,7 @@ const TYPE_COLORS: Record<string, string> = {
   follow: '#db2777',
   tip: '#d97706',
   request: '#7c3aed',
+  refund: '#dc2626',
   system: '#6b7280',
 }
 

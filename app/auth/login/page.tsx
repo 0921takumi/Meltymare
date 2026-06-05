@@ -88,7 +88,7 @@ function LoginForm() {
                 marginTop: 6,
                 transition: 'opacity 0.2s',
               }}>
-              {loading ? 'Signing in...' : 'ログイン →'}
+              {loading ? 'ログイン中...' : 'ログイン →'}
             </button>
 
             <div style={{ textAlign: 'right' }}>

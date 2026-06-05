@@ -32,6 +32,7 @@ export default function Footer() {
               <p style={{ fontSize: 11, fontWeight: 700, color: 'white', letterSpacing: '0.1em', marginBottom: 12 }}>サポート</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
+                  { href: '/help', label: 'ヘルプセンター' },
                   { href: '/contact', label: 'お問い合わせ' },
                   { href: '/guidelines', label: 'コンテンツガイドライン' },
                   { href: '/terms', label: '利用規約' },

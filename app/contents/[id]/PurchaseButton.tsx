@@ -69,7 +69,7 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
   if (isSoldOut) {
     return (
       <div style={{ textAlign: 'center', padding: '14px', background: 'var(--mm-bg)', border: '1px solid var(--mm-border)', borderRadius: 10, color: 'var(--mm-text-muted)', fontWeight: 600, fontSize: 14 }}>
-        SOLD OUT
+        完売しました
       </div>
     )
   }

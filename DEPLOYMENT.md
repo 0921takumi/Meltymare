@@ -109,20 +109,46 @@ ADMIN_NOTIFY_EMAIL               = info@my-focus.jp
 
 ## 6. ドメイン接続
 
-### Vercelにドメイン追加
-1. Vercel > Project > Settings > Domains
-2. `my-focus.jp` と `www.my-focus.jp` を追加
-3. 指示されるDNSレコード（A or CNAME）を確認
+### Vercel側（設定済み ✅ 2026-05-22）
+- `my-focus.jp` → プロジェクト `my-focus` に追加済み
+- `www.my-focus.jp` → 同上
+- `NEXT_PUBLIC_APP_URL` → `https://my-focus.jp` 設定済み
+- デプロイ済み（Aliased: https://my-focus.jp）
 
-### DNS設定（レジストラ側）
-| タイプ | ホスト | 値 |
-|--------|--------|-----|
-| A | `@` | `76.76.21.21`（Vercel指定） |
-| CNAME | `www` | `cname.vercel-dns.com` |
-| TXT | （SPF） | Resendで発行される値 |
-| CNAME | `resend._domainkey` | Resendで発行される値 |
+### お名前.com でのDNS設定（**ナオトさん作業**）
 
-反映まで最大24h。`dig my-focus.jp` で確認。
+**ログイン情報**（ナオトさんの管理アカウント）
+- https://www.onamae.com/
+- ドメイン: `my-focus.jp`
+
+**ドメインNavi > ネームサーバーの設定 > DNS設定/転送設定**
+
+| タイプ | ホスト名 | VALUE（値） | TTL |
+|--------|---------|-------------|-----|
+| A | `@`（空欄でもOK） | `76.76.21.21` | 3600 |
+| CNAME | `www` | `cname.vercel-dns.com` | 3600 |
+
+※ Resendのメール認証レコードは別途追加（後述）
+
+### DNS反映確認
+```bash
+# WindowsのPowerShellで確認（24h後）
+nslookup my-focus.jp
+# → 76.76.21.21 が返ってくればOK
+```
+
+### DNS伝播後の追加作業（THINGx側）
+1. `node scripts/update-webhook-url.mjs` を実行
+   - Stripe webhook を `my-focus-neon.vercel.app` → `my-focus.jp` に更新
+   - 実行前に `_stripe_secret_ここに貼る.txt` に `sk_live_...` を貼る
+2. Supabase Dashboard > Authentication > URL Configuration
+   - Site URL: `https://my-focus.jp`（変更が必要な場合）
+
+### メール認証DNS（Resend）
+| タイプ | ホスト名 | VALUE |
+|--------|---------|-------|
+| TXT | `@` | `v=spf1 include:amazonses.com ~all` |
+| CNAME | `resend._domainkey` | Resendダッシュボードで発行される値 |
 
 ---
 

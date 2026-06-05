@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
+// 環境変数に末尾改行/空白が混入していてもURLを破壊しないよう trim する
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp').trim()
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
