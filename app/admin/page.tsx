@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import {
   TrendingUp, Users, ShoppingBag, Wallet, Package, MessageSquare, AlertTriangle,
@@ -11,6 +12,9 @@ export const dynamic = 'force-dynamic'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
+  // v22: 他ユーザーの email（PII）を含むクエリは service_role で読む。
+  // 認可は app/admin/layout.tsx が admin に限定済み。
+  const admin = createAdminClient()
 
   const today = new Date()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
@@ -38,14 +42,14 @@ export default async function AdminDashboard() {
     { data: recentSignups },
     { data: pendingPayouts },
   ] = await Promise.all([
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'user'),
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'creator'),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'user'),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'creator'),
     supabase.from('purchases').select('amount, tip_amount, created_at').eq('status', 'completed'),
     supabase.from('purchases').select('amount, tip_amount').eq('status', 'completed').gte('created_at', startOfMonth),
     supabase.from('purchases').select('amount, tip_amount, created_at').eq('status', 'completed').gte('created_at', last30),
     supabase.from('contents').select('*', { count: 'exact', head: true }).eq('is_published', true),
     supabase.from('contents').select('*', { count: 'exact', head: true }).eq('is_published', false),
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('identity_status', 'pending'),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('identity_status', 'pending'),
     supabase.from('inquiries').select('*', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('inquiries').select('*', { count: 'exact', head: true }).eq('status', 'open').eq('priority', 'urgent'),
     supabase.from('comment_reports').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
@@ -53,10 +57,10 @@ export default async function AdminDashboard() {
     supabase.from('request_auctions').select('*', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('subscriptions').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('stories').select('*', { count: 'exact', head: true }).gt('expires_at', new Date().toISOString()),
-    supabase.from('purchases')
+    admin.from('purchases')
       .select('id, amount, created_at, content:contents(title, price), user:profiles!purchases_user_id_fkey(display_name, email, avatar_url)')
       .eq('status', 'completed').order('created_at', { ascending: false }).limit(8),
-    supabase.from('profiles').select('id, display_name, email, role, avatar_url, created_at').order('created_at', { ascending: false }).limit(5),
+    admin.from('profiles').select('id, display_name, email, role, avatar_url, created_at').order('created_at', { ascending: false }).limit(5),
     supabase.from('purchases').select('amount, tip_amount').eq('status', 'completed').is('payout_id', null),
   ])
 

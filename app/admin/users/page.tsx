@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { Search, AlertCircle } from 'lucide-react'
 import UserActions from './UserActions'
@@ -21,10 +22,13 @@ interface UserRow {
 export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<{ role?: string; q?: string }> }) {
   const sp = await searchParams
   const supabase = await createClient()
+  // v22: email / is_suspended / suspended_reason（PII）は service_role で読む。
+  // 認可は app/admin/layout.tsx が admin に限定済み。
+  const admin = createAdminClient()
   const role = sp.role ?? 'all'
   const q = sp.q ?? ''
 
-  let query = supabase
+  let query = admin
     .from('profiles')
     .select('id, email, username, display_name, avatar_url, role, identity_status, is_suspended, suspended_reason, created_at')
     .order('created_at', { ascending: false })

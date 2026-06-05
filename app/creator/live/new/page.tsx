@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
 import StreamForm from './StreamForm'
@@ -11,7 +12,7 @@ export default async function NewStreamPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login?next=/creator/live/new')
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
   if (profile?.role !== 'creator' && profile?.role !== 'admin') redirect('/')
 
   return (

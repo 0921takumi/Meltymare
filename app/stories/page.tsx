@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
@@ -21,7 +22,7 @@ interface StoryRow {
 export default async function StoriesPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = user ? await supabase.from('profiles').select('*').eq('id', user.id).single() : { data: null }
+  const { data: profile } = user ? await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single() : { data: null }
 
   const { data: storiesData } = await supabase
     .from('stories')

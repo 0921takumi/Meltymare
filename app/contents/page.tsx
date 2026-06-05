@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import ContentCard from '@/components/ui/ContentCard'
 import Header from '@/components/layout/Header'
 import ContentsFilter from './ContentsFilter'
@@ -18,7 +19,7 @@ export default async function ContentsPage({
   const { data: { user } } = await supabase.auth.getUser()
   let profile = null
   if (user) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    const { data } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
     profile = data
   }
 

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
 
@@ -18,7 +18,9 @@ interface Order {
 
 export default async function AdminOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; page?: string }> }) {
   const sp = await searchParams
-  const supabase = await createClient()
+  // v22: 購入者の email（PII）を埋め込むため service_role で読む。
+  // 認可は app/admin/layout.tsx が admin に限定済み。
+  const admin = createAdminClient()
 
   const status = sp.status ?? 'all'
   const q = sp.q ?? ''
@@ -26,7 +28,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
   const PER_PAGE = 50
   const offset = (page - 1) * PER_PAGE
 
-  let query = supabase
+  let query = admin
     .from('purchases')
     .select('id, amount, tip_amount, status, delivery_status, created_at, content:contents!inner(id, title, thumbnail_url, creator:profiles(id, display_name, username)), user:profiles!purchases_user_id_fkey(id, display_name, email, avatar_url)', { count: 'exact' })
     .order('created_at', { ascending: false })

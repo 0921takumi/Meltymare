@@ -4,6 +4,7 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import ContentCard from '@/components/ui/ContentCard'
 import { createClient } from '@/lib/supabase/server'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 /**
  * ヒーローのポラロイド画像 URL。
  * `null` の場合はグラデーション＋アイコンのフォールバック表示。
@@ -38,7 +39,7 @@ export default async function HomePage() {
   const { data: { user } } = await supabase.auth.getUser()
   let profile = null
   if (user) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    const { data } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
     profile = data
   }
 

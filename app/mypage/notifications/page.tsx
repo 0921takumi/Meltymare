@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -76,7 +77,7 @@ export default async function NotificationsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login?next=/mypage/notifications')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
   const isCreator = profile?.role === 'creator' || profile?.role === 'admin'
 
   const items: NotificationItem[] = []

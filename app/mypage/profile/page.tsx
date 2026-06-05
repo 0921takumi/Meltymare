@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -25,7 +26,7 @@ export default function ProfileEditPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      const { data } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
       if (data) {
         setProfile(data)
         setDisplayName(data.display_name ?? '')

@@ -33,7 +33,11 @@ export default function CreatorVerificationPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      // v22: birthdate / identity_* は PII のため anon/authenticated では読めない。
+      // 本人の全列は service_role 経由の /api/me で取得する。
+      const res = await fetch('/api/me', { cache: 'no-store' })
+      if (!res.ok) { router.push('/auth/login'); return }
+      const { profile: data } = await res.json()
       if (!data || (data.role !== 'creator' && data.role !== 'user')) { router.push('/'); return }
       setProfile(data)
       if (data.birthdate) setBirthdate(data.birthdate)
@@ -97,8 +101,9 @@ export default function CreatorVerificationPage() {
       }).eq('id', user.id)
       if (updErr) throw updErr
 
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      setProfile(data)
+      const res = await fetch('/api/me', { cache: 'no-store' })
+      const { profile: data } = res.ok ? await res.json() : { profile: null }
+      if (data) setProfile(data)
       setIdFile(null)
       setSelfieFile(null)
     } catch (err: any) {

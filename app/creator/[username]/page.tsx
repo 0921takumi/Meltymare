@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import ContentCard from '@/components/ui/ContentCard'
 import { notFound } from 'next/navigation'
@@ -44,13 +45,13 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
   const { data: { user } } = await supabase.auth.getUser()
   let myProfile = null
   if (user) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    const { data } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
     myProfile = data
   }
 
   const { data: creator } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_PUBLIC_SELECT)
     .eq('username', username)
     .eq('role', 'creator')
     .single()
