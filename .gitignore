@@ -45,3 +45,5 @@ _SECRETS_*.txt
 next-env.d.ts
 
 .vercel
+
+/.claude/worktrees/
