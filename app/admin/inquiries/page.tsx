@@ -21,7 +21,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
     <div className="admin-page">
       <h1 className="admin-h1">問い合わせ管理</h1>
       <p className="admin-h1-sub" style={{ marginBottom: 20 }}>
-        全 {counts?.length ?? 0} 件 · 未対応 {countBy('new')} · 対応中 {countBy('in_progress')} · 解決 {countBy('resolved')}
+        全 {counts?.length ?? 0} 件 · 未対応 {countBy('open')} · 対応中 {countBy('in_progress')} · 解決 {countBy('resolved')}
       </p>
       <InquiriesList messages={messages ?? []} currentStatus={status} />
     </div>

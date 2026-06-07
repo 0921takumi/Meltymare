@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       .from('contents')
       .select('id, creator_id, content_type, thumbnail_url, file_url, review_status, is_published')
       .eq('id', content_id)
-      .single()
+      .maybeSingle()
     if (cErr || !content) {
       return NextResponse.json({ error: 'Content not found' }, { status: 404 })
     }

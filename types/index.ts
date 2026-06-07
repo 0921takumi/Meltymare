@@ -1,5 +1,11 @@
 export type UserRole = 'user' | 'creator' | 'admin'
 
+/**
+ * PII（email / bank_* 等）を含む「完全な」プロフィール型。本人・管理者コンテキスト専用。
+ * ⚠️ 公開表示（他人のプロフィール）には使わず、lib/profile-fields の PublicProfile を使うこと。
+ *    v22 で profiles の PII 列は anon/authenticated から REVOKE 済みのため、公開クエリで
+ *    この型の PII フィールドを参照しても実行時に取得できない（PublicProfile を使うのが正）。
+ */
 export interface Profile {
   id: string
   email: string

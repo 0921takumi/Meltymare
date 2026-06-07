@@ -69,16 +69,16 @@ export default async function HomePage() {
     purchasedIds = purchases?.map(p => p.content_id) ?? []
   }
 
-  // クリエイターごとのコンテンツ数
+  // クリエイターごとのコンテンツ数（N+1 を避け、1クエリで集計）
   const creatorContentCounts: Record<string, number> = {}
-  if (creators && contents) {
-    for (const c of creators) {
-      const { count } = await supabase
-        .from('contents')
-        .select('id', { count: 'exact', head: true })
-        .eq('creator_id', c.id)
-        .eq('is_published', true)
-      creatorContentCounts[c.id] = count ?? 0
+  if (creators && creators.length > 0) {
+    const { data: countRows } = await supabase
+      .from('contents')
+      .select('creator_id')
+      .in('creator_id', creators.map(c => c.id))
+      .eq('is_published', true)
+    for (const row of countRows ?? []) {
+      creatorContentCounts[row.creator_id] = (creatorContentCounts[row.creator_id] ?? 0) + 1
     }
   }
 

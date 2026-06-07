@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     .from('polls')
     .select('id, status, options')
     .eq('id', pollId)
-    .single()
+    .maybeSingle()
   if (!poll) return NextResponse.json({ error: 'アンケートが見つかりません' }, { status: 404 })
   if (poll.status !== 'open') return NextResponse.json({ error: 'このアンケートは締め切られました' }, { status: 400 })
 

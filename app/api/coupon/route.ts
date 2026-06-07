@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     .select('*')
     .eq('code', code)
     .eq('is_active', true)
-    .single()
+    .maybeSingle()
 
   if (!coupon) return NextResponse.json({ error: '有効なクーポンが見つかりません' }, { status: 404 })
   if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {

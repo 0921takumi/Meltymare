@@ -46,9 +46,10 @@ export const PROFILE_PUBLIC_COLUMNS = [
 export const PROFILE_PUBLIC_SELECT =
   'id, username, display_name, avatar_url, bio, role, created_at, twitter_url, instagram_url, tiktok_url, fee_rate, identity_status' as const
 
-// PROFILE_PUBLIC_SELECT が PROFILE_PUBLIC_COLUMNS と一致していることの軽い担保。
-// 取り違え検知用。本番では評価しない（開発/テスト時のみ）。
-if (process.env.NODE_ENV !== 'production' && PROFILE_PUBLIC_SELECT !== PROFILE_PUBLIC_COLUMNS.join(', ')) {
+// PROFILE_PUBLIC_SELECT が PROFILE_PUBLIC_COLUMNS と一致していることの担保。
+// 取り違え＝PII列の混入リスクなので、本番含め常時評価する（不一致なら起動を止める fail-safe）。
+// 一致していれば no-op。文字列定数同士の比較なので実行コストは無視できる。
+if (PROFILE_PUBLIC_SELECT !== PROFILE_PUBLIC_COLUMNS.join(', ')) {
   throw new Error('PROFILE_PUBLIC_SELECT が PROFILE_PUBLIC_COLUMNS と一致していません')
 }
 

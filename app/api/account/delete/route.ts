@@ -23,7 +23,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
@@ -52,10 +52,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid_password' }, { status: 403 })
   }
 
-  const admin = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const admin = createAdminClient()
 
   // 削除前監査ログ（auth.users 削除後は actor_id が SET NULL になるため事前に記録）
   await admin.from('audit_logs').insert({

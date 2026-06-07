@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
+import { PROFILE_PUBLIC_SELECT, type PublicProfile } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import { Upload, ImageIcon, VideoIcon, X, Plus } from 'lucide-react'
 
@@ -14,7 +14,7 @@ function UploadForm() {
   const editId = searchParams.get('edit')
   const isEdit = !!editId
 
-  const [profile, setProfile] = useState<any>(null)
+  const [profile, setProfile] = useState<PublicProfile | null>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState('')

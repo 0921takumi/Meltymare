@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
 
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     .from('profiles')
     .select('id, role')
     .eq('id', creator_id)
-    .single()
+    .maybeSingle()
   if (!target || (target.role !== 'creator' && target.role !== 'admin')) {
     return NextResponse.json({ error: 'creator_not_found' }, { status: 404 })
   }
@@ -44,10 +44,7 @@ export async function POST(req: NextRequest) {
 
   // クリエイターへ通知
   const { data: follower } = await supabase.from('profiles').select('display_name, username').eq('id', user.id).single()
-  const admin = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const admin = createAdminClient()
   await admin.from('notifications').insert({
     user_id: creator_id,
     type: 'follow',

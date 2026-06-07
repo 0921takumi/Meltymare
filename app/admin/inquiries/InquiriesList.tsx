@@ -12,8 +12,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   creator: 'クリエイター',
   other: 'その他',
 }
+// DB(contact_messages.status)の CHECK は ('open','in_progress','resolved')。
+// 'open' を「未対応」として表示する（過去 'new' とズレて全件未対応に見える不整合を修正）。
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  new: { label: '未対応', color: '#dc2626', bg: '#fef2f2' },
+  open: { label: '未対応', color: '#dc2626', bg: '#fef2f2' },
   in_progress: { label: '対応中', color: '#d97706', bg: '#fffbeb' },
   resolved: { label: '解決', color: '#059669', bg: '#ecfdf5' },
 }
@@ -44,15 +46,24 @@ export default function InquiriesList({ messages, currentStatus }: { messages: I
   const updateStatus = async (id: string, newStatus: string) => {
     setSaving(true)
     const supabase = createClient()
-    await supabase.from('contact_messages').update({ status: newStatus, admin_note: adminNote }).eq('id', id)
+    const { error } = await supabase
+      .from('contact_messages')
+      .update({ status: newStatus, admin_note: adminNote })
+      .eq('id', id)
     setSaving(false)
+    if (error) {
+      // admin_note 列が無い(v21未適用)・RLS 等で 0 行更新になった場合に、
+      // 「保存できたように見えて実は未反映」のサイレント失敗を防ぐ。
+      window.alert(`更新に失敗しました: ${error.message}`)
+      return
+    }
     setSelected(null)
     router.refresh()
   }
 
   const tabs = [
     { key: 'all', label: 'すべて' },
-    { key: 'new', label: '未対応' },
+    { key: 'open', label: '未対応' },
     { key: 'in_progress', label: '対応中' },
     { key: 'resolved', label: '解決' },
   ]
@@ -87,7 +98,7 @@ export default function InquiriesList({ messages, currentStatus }: { messages: I
             </thead>
             <tbody>
               {messages.map(m => {
-                const s = STATUS_LABELS[m.status] ?? STATUS_LABELS.new
+                const s = STATUS_LABELS[m.status] ?? STATUS_LABELS.open
                 return (
                   <tr key={m.id} onClick={() => open(m)}
                     style={{ borderBottom: '1px solid var(--mm-border)', cursor: 'pointer' }}>
@@ -129,7 +140,7 @@ export default function InquiriesList({ messages, currentStatus }: { messages: I
             <textarea value={adminNote} onChange={e => setAdminNote(e.target.value)} rows={3}
               style={{ width: '100%', padding: 10, border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 13, marginBottom: 12, boxSizing: 'border-box', resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button onClick={() => updateStatus(selected.id, 'new')} disabled={saving}
+              <button onClick={() => updateStatus(selected.id, 'open')} disabled={saving}
                 style={{ padding: '8px 16px', border: '1px solid var(--mm-border)', borderRadius: 8, background: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>未対応に戻す</button>
               <button onClick={() => updateStatus(selected.id, 'in_progress')} disabled={saving}
                 style={{ padding: '8px 16px', border: 'none', borderRadius: 8, background: '#d97706', color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>対応中にする</button>

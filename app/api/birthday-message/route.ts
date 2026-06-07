@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     .from('profiles')
     .select('id, role, accepts_birthday_messages, birthdate')
     .eq('id', creatorId)
-    .single()
+    .maybeSingle()
 
   if (!creator || creator.role !== 'creator') return NextResponse.json({ error: 'creator_not_found' }, { status: 404 })
   if (!creator.accepts_birthday_messages) return NextResponse.json({ error: 'not_accepting' }, { status: 403 })

@@ -115,5 +115,7 @@ function setSecurityHeaders(res: NextResponse) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // api は各ルートが自前で createClient(認証)・requireX(認可) するため proxy を通さない
+  // （無駄な Supabase セッション往復を避ける）。認可の正は各 API・layout・page 側にある。
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }

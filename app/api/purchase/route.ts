@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 
 // apiVersion を明示固定（SDK更新時の挙動変化で決済不整合になるのを防ぐ）
@@ -9,10 +9,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-03
 
 // purchases の書き込み（insert/update）は RLS 上 Service Role に限定されているため、
 // サーバー側で認可済みの purchase レコード操作には admin クライアントを使う。
-const admin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-)
+const admin = createAdminClient()
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +18,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
 
     // レート制限: 1ユーザーあたり 10req/分
-    const rl = await rateLimit({ key: `purchase:${user.id}`, limit: 10, windowSec: 60 })
+    const rl = await rateLimit({ key: `purchase:${user.id}`, limit: 10, windowSec: 60, failClosed: true })
     if (!rl.ok) return NextResponse.json({ error: 'リクエストが多すぎます。しばらくしてから再試行してください' }, { status: 429 })
 
     const { contentId, couponCode, tipPercent: rawTipPercent } = await req.json()
@@ -81,15 +78,49 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'SOLD OUTです' }, { status: 400 })
     }
 
-    // 重複購入チェック
+    // 重複購入チェック（completed / refunded を弾く）。
+    // refunded を含めるのは、返金後の再購入が後段の upsert で過去の refunded 行を
+    // status:'pending' に巻き戻し、返金履歴（会計・係争の証跡）を破壊するのを防ぐため。
+    // 再購入が必要なケースは窓口対応とする（purchases が (user_id,content_id) ユニークで
+    // 履歴を1行しか保持できない設計のため、行の使い回しを止める）。
     const { data: existing } = await supabase
       .from('purchases')
-      .select('id')
+      .select('id, status')
       .eq('user_id', user.id)
       .eq('content_id', contentId)
-      .eq('status', 'completed')
-      .single()
-    if (existing) return NextResponse.json({ error: '既に購入済みです' }, { status: 400 })
+      .in('status', ['completed', 'refunded'])
+      .maybeSingle()
+    if (existing) {
+      if (existing.status === 'refunded') {
+        return NextResponse.json(
+          { error: 'このコンテンツは返金済みです。再度のご購入をご希望の場合はお問い合わせください' },
+          { status: 400 },
+        )
+      }
+      return NextResponse.json({ error: '既に購入済みです' }, { status: 400 })
+    }
+
+    // 二重 Checkout 抑止: 直近(5分以内)の pending 行があれば「処理中」を返す。
+    // purchase 行は (user_id, content_id) ユニークで1本しか持てないため、並列タブ/二重クリックで
+    // 2つ目の Checkout を作ると、後段の upsert が1つ目の stripe_payment_intent_id(session.id) を
+    // 上書きしてしまう。すると1つ目で決済完了した webhook が逆引き不能になり「課金済み・記録なし」が
+    // 発生する。in-flight の pending がある間は新規 Checkout を作らせないことで session.id 上書きを防ぐ。
+    const { data: pendingRow } = await admin
+      .from('purchases')
+      .select('id, created_at')
+      .eq('user_id', user.id)
+      .eq('content_id', contentId)
+      .eq('status', 'pending')
+      .maybeSingle()
+    if (pendingRow) {
+      const ageMs = Date.now() - new Date(pendingRow.created_at).getTime()
+      if (ageMs < 5 * 60 * 1000) {
+        return NextResponse.json(
+          { error: '購入処理中です。少し時間をおいてから再度お試しください' },
+          { status: 409 },
+        )
+      }
+    }
 
     // クーポン検証 & 割引計算
     let discountAmount = 0
@@ -131,6 +162,20 @@ export async function POST(req: NextRequest) {
 
     // 無料（割引100% かつ チップなし）の場合は直接完了
     if (finalPrice === 0) {
+      // ⭐️ 無料確定の前にクーポンの used_count を CAS でインクリメントする。
+      //   false（max_uses 到達）なら 100%off クーポンが無料取得の抜け道になるため購入を弾く。
+      //   webhook を経由しない無料経路では、ここが唯一の used_count 整合点。
+      if (appliedCouponId) {
+        const { data: incOk, error: cpErr } = await admin.rpc('increment_coupon_used', { coupon_id: appliedCouponId })
+        if (cpErr) {
+          console.error('[purchase] free increment_coupon_used failed:', cpErr.message)
+          return NextResponse.json({ error: 'クーポンの適用に失敗しました。時間をおいて再度お試しください' }, { status: 500 })
+        }
+        if (incOk === false) {
+          return NextResponse.json({ error: 'クーポンが使用上限に達しました' }, { status: 400 })
+        }
+      }
+
       // upsert: 過去に pending 行があっても (user_id, content_id) で更新（重複制約回避）
       // 書き込みは admin（Service Role）。RLS で purchases の update が制限されているため。
       const { error: freeErr } = await admin.from('purchases').upsert({
@@ -155,15 +200,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `購入記録の作成に失敗しました: ${freeErr.message}` }, { status: 500 })
       }
 
-      // クーポン使用回数更新（admin: coupons更新はRLS制限。CAS化された RPC で原子的にインクリメント）
-      // v15 以降、戻り値 boolean: false なら max_uses 到達等で増分されなかった。
-      // 既に discountAmount は適用済みなので、ここで失敗しても返金はしない（free=¥0なので影響軽微）が、
-      // ログには明示残す。
-      if (appliedCouponId) {
-        const { data: incOk, error: cpErr } = await admin.rpc('increment_coupon_used', { coupon_id: appliedCouponId })
-        if (cpErr) console.warn('[purchase] free increment_coupon_used failed:', cpErr.message)
-        else if (incOk === false) console.warn('[purchase] free coupon already at max_uses:', appliedCouponId)
-      }
       // sold_count 更新（admin: contents更新はcreator/admin限定のため）
       const { error: scErr } = await admin.rpc('increment_sold_count', { content_id: contentId })
       if (scErr) console.warn('[purchase] free increment_sold_count failed:', scErr.message)

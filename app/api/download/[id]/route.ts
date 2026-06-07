@@ -23,16 +23,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .eq('user_id', user.id)
     .eq('status', 'completed')
     .eq('delivery_status', 'delivered')
-    .single()
+    .maybeSingle()
 
   if (!purchase || !purchase.delivered_file_url) {
     return NextResponse.json({ error: 'Not found or not yet delivered' }, { status: 404 })
   }
 
-  // 有効期限を60秒に短縮（クリック直後にダウンロード完了する前提）
+  // 署名URLの有効期限。大容量動画でもDL開始前に失効しないよう 300 秒（5分）を確保。
   const { data: urlData } = await supabase.storage
     .from('deliveries')
-    .createSignedUrl(purchase.delivered_file_url, 60, { download: true })
+    .createSignedUrl(purchase.delivered_file_url, 300, { download: true })
 
   if (!urlData?.signedUrl) {
     return NextResponse.json({ error: 'Failed to generate download URL' }, { status: 500 })

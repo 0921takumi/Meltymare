@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     .eq('user_id', user.id)
     .eq('content_id', content_id)
     .eq('status', 'completed')
-    .single()
+    .maybeSingle()
   if (!purchase) return NextResponse.json({ error: '購入済みコンテンツにのみレビューできます' }, { status: 403 })
 
   const { data, error } = await supabase

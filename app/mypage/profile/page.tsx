@@ -2,14 +2,14 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
+import { PROFILE_PUBLIC_SELECT, type PublicProfile } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 export default function ProfileEditPage() {
   const router = useRouter()
-  const [profile, setProfile] = useState<any>(null)
+  const [profile, setProfile] = useState<PublicProfile | null>(null)
   const [displayName, setDisplayName] = useState('')
   const [bio, setBio] = useState('')
   const [twitterUrl, setTwitterUrl] = useState('')
@@ -121,7 +121,7 @@ export default function ProfileEditPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
               <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, flexShrink: 0 }}>
                 {avatarPreview || profile?.avatar_url
-                  ? <img src={avatarPreview || profile?.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ? <img src={avatarPreview || profile?.avatar_url || undefined} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : '👤'}
               </div>
               <div>

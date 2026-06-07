@@ -54,7 +54,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'cannot_change_own_role' }, { status: 400 })
     }
     // 対象が既に admin の場合も API では変更不可（admin の降格を防ぐ）
-    const { data: target } = await supabase.from('profiles').select('role').eq('id', id).single()
+    const { data: target } = await supabase.from('profiles').select('role').eq('id', id).maybeSingle()
     if (target?.role === 'admin') {
       return NextResponse.json(
         { error: 'cannot_demote_admin', detail: 'admin の降格は SQL 経由で実施してください' },

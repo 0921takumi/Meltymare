@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { escapeHtml } from '@/lib/sanitize'
 
 // apiVersion を明示固定（SDK更新時の挙動変化で決済不整合になるのを防ぐ）
@@ -21,10 +21,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-03
 
 // Webhook 用 Service Role クライアント（RLSバイパス、サーバー内のみで使用）
 // 命名: @supabase/ssr の createServerClient と紛らわしいので createServiceClient で別名 import している。
-const supabase = createServiceClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-)
+const supabase = createAdminClient()
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -195,7 +192,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // status を pending → completed。
   // 同時に stripe_payment_intent_id を実際の payment_intent に更新しておく
   // （charge.refunded ハンドラが payment_intent で逆引きするため）。
-  const { error: updErr } = await supabase
+  const { data: updatedPurchase, error: updErr } = await supabase
     .from('purchases')
     .update({
       status: 'completed',
@@ -203,10 +200,32 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     })
     .eq('id', purchase.id)
     .eq('status', 'pending')  // 楽観ロック: 他のwebhookと競合した場合は失敗させる
+    .select('id')
+    .maybeSingle()
 
   if (updErr) {
     console.error('[webhook] update purchase failed:', updErr)
     return
+  }
+  // 0行更新 = 別の webhook が先に completed 化済み。sold_count/通知/メールを二重に
+  // 走らせないため、ここで終了する（charge.refunded ハンドラと同じ 0 行検知パターンに統一）。
+  if (!updatedPurchase) {
+    console.log('[webhook] purchase already completed by concurrent webhook, skipping:', purchase.id)
+    return
+  }
+
+  // 防御的: 実課金額(session.amount_total)とDB記録(purchase.amount)の乖離を検知。
+  // Stripe Checkout は金額改竄不可だが、万一の不整合（pending作成後のクーポン枯渇との
+  // 競合等）を監査ログに残して可視化する。決済確定自体は止めない（既に課金済みのため）。
+  if (session.amount_total != null && purchase.amount != null && session.amount_total !== purchase.amount) {
+    console.error(`[webhook] amount mismatch purchase=${purchase.id} db=${purchase.amount} stripe=${session.amount_total}`)
+    await supabase.from('audit_logs').insert({
+      actor_id: purchase.user_id,
+      action: 'purchase.amount_mismatch',
+      target_type: 'purchase',
+      target_id: purchase.id,
+      metadata: { db_amount: purchase.amount, stripe_amount: session.amount_total, stripe_session_id: session.id },
+    })
   }
 
   // sold_count インクリメント
@@ -307,6 +326,22 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     // 既に refunded、または completed でない（pending のまま等）。冪等として終了。
     console.log('[webhook] refund skipped (not in completed state):', purchase.id, 'current:', purchase.status)
     return
+  }
+
+  // 返金確定後、sold_count を1戻す（限定枠 stock_limit の永久目減り＝SOLD OUT 固着を防ぐ）。
+  // 返金は低頻度のため read-modify-write で十分（atomic な decrement RPC 化は将来課題）。
+  // status='completed'→'refunded' の楽観ロックを1回通った時のみ到達するので二重デクリメントは無い。
+  const { data: refundedContent } = await supabase
+    .from('contents')
+    .select('sold_count')
+    .eq('id', purchase.content_id)
+    .maybeSingle()
+  if (refundedContent && typeof refundedContent.sold_count === 'number' && refundedContent.sold_count > 0) {
+    const { error: decErr } = await supabase
+      .from('contents')
+      .update({ sold_count: refundedContent.sold_count - 1 })
+      .eq('id', purchase.content_id)
+    if (decErr) console.warn('[webhook] refund sold_count decrement failed:', decErr.message)
   }
 
   // 監査ログ

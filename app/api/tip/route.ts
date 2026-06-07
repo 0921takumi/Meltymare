@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
 
     // レート制限: 並列大量決済を防ぐ（金銭直撃のため厳しめ）
-    const rl = await rateLimit({ key: `tip:${user.id}`, limit: 5, windowSec: 60 })
+    const rl = await rateLimit({ key: `tip:${user.id}`, limit: 5, windowSec: 60, failClosed: true })
     if (!rl.ok) return NextResponse.json({ error: 'リクエストが多すぎます。少し時間をおいてください' }, { status: 429 })
 
     const { creatorId, amount, message } = await req.json()
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       .select('id, display_name, role')
       .eq('id', creatorId)
       .eq('role', 'creator')
-      .single()
+      .maybeSingle()
     if (!creator) return NextResponse.json({ error: 'クリエイターが見つかりません' }, { status: 404 })
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    await supabase.from('tips').insert({
+    const { error: tipInsertErr } = await supabase.from('tips').insert({
       user_id: user.id,
       creator_id: creatorId,
       amount,
@@ -84,6 +84,13 @@ export async function POST(req: NextRequest) {
       stripe_payment_intent_id: session.payment_intent as string ?? session.id,
       status: 'pending',
     })
+    // insert を握り潰さない: 失敗すると「決済されたのに tips 行が無い → webhook が
+    // 逆引きできず課金だけ成立」という最悪状態になるため、Checkout URL を返さず 500。
+    // （purchase 側と同じ厳格度。Stripe Session は未使用のまま期限切れになり課金されない）
+    if (tipInsertErr) {
+      console.error('[tip] insert failed:', tipInsertErr)
+      return NextResponse.json({ error: 'チップ処理に失敗しました' }, { status: 500 })
+    }
 
     return NextResponse.json({ checkoutUrl: session.url })
   } catch (e: unknown) {

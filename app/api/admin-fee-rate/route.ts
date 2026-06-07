@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { requireAdmin } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
  * クリエイター手数料率の変更（管理者専用）
@@ -12,18 +12,12 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 const UUID_RE = /^[0-9a-f-]{36}$/i
 
-const admin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-)
+const admin = createAdminClient()
 
 export async function PATCH(req: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') return NextResponse.json({ error: 'admin_only' }, { status: 403 })
+  const ctx = await requireAdmin()
+  if (ctx instanceof NextResponse) return ctx
+  const { user } = ctx
 
   const body = await req.json().catch(() => ({}))
   const creatorId = body?.creator_id

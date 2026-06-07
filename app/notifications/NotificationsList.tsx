@@ -34,21 +34,24 @@ export default function NotificationsList({ initial }: { initial: NotifItem[] })
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false)
-      setItems(items.map(n => ({ ...n, read: true })))
+      const { error } = await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false)
+      // 失敗時は楽観更新しない（次回ロードで実状態を反映。サイレント既読化を防ぐ）
+      if (!error) setItems(items.map(n => ({ ...n, read: true })))
     }
     setBusy(false)
   }
 
   const markOne = async (id: string) => {
     const supabase = createClient()
-    await supabase.from('notifications').update({ read: true }).eq('id', id)
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id)
+    if (error) return  // 失敗時はUIを変えない（次回ロードで実状態を反映）
     setItems(items.map(n => n.id === id ? { ...n, read: true } : n))
   }
 
   const deleteOne = async (id: string) => {
     const supabase = createClient()
-    await supabase.from('notifications').delete().eq('id', id)
+    const { error } = await supabase.from('notifications').delete().eq('id', id)
+    if (error) return  // 失敗時はUIを変えない（サイレント削除を防ぐ）
     setItems(items.filter(n => n.id !== id))
   }
 

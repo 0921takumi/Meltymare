@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { Ban } from 'lucide-react'
 import BlocksManager from './BlocksManager'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 
 export const metadata: Metadata = { title: 'ブロック管理' }
 export const dynamic = 'force-dynamic'
@@ -23,7 +24,7 @@ export default async function CreatorBlocksPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login?next=/creator/blocks')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
   if (profile?.role !== 'creator' && profile?.role !== 'admin') redirect('/contents')
 
   // ブロック一覧（creator_blocks 未作成時はエラー → 空表示）

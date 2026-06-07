@@ -6,6 +6,7 @@ import { BarChart3 } from 'lucide-react'
 import PollCreator from '@/components/poll/PollCreator'
 import CreatorPollList, { type ManagedPoll } from '@/components/poll/CreatorPollList'
 import { getVoteCounts } from '@/lib/polls'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 
 export const metadata: Metadata = { title: 'アンケート管理' }
 export const dynamic = 'force-dynamic'
@@ -15,7 +16,7 @@ export default async function CreatorPollsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login?next=/creator/polls')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
   if (profile?.role !== 'creator' && profile?.role !== 'admin') redirect('/contents')
 
   const { data: rawPolls, error } = await supabase

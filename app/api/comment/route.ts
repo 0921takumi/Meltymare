@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     .from('contents')
     .select('id, is_published, review_status')
     .eq('id', contentId)
-    .single()
+    .maybeSingle()
   if (!content || !content.is_published || content.review_status !== 'approved') {
     return NextResponse.json({ error: 'content_not_found' }, { status: 404 })
   }
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
       .from('content_comments')
       .select('id, content_id')
       .eq('id', parentId)
-      .single()
+      .maybeSingle()
     if (!parent || parent.content_id !== contentId) {
       return NextResponse.json({ error: 'invalid_parent' }, { status: 400 })
     }

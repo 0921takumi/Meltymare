@@ -48,6 +48,12 @@ export interface RateLimitOptions {
   limit: number
   /** ウィンドウ秒数 */
   windowSec: number
+  /**
+   * Redis 障害時に fail-closed（429で拒否）にするか。
+   * 決済系（tip/purchase/coupon 等、スパムが金銭直撃する経路）で true を指定する。
+   * 未指定（false）の閲覧・通知系は従来どおり fail-open（サービス継続優先）。
+   */
+  failClosed?: boolean
 }
 
 export interface RateLimitResult {
@@ -61,7 +67,7 @@ export interface RateLimitResult {
  *
  * 既存呼び出し側（同期で `rateLimit({...})` していたコード）は `await` を追加すること。
  */
-export async function rateLimit({ key, limit, windowSec }: RateLimitOptions): Promise<RateLimitResult> {
+export async function rateLimit({ key, limit, windowSec, failClosed = false }: RateLimitOptions): Promise<RateLimitResult> {
   const now = Date.now()
   const fullKey = `rl:${key}`
 
@@ -82,10 +88,14 @@ export async function rateLimit({ key, limit, windowSec }: RateLimitOptions): Pr
       }
       return { ok: true, remaining: limit - count, resetAt }
     } catch (err) {
-      // Redis 障害時はフェイルオープン（リクエストを通す）。
-      // セキュリティ的にはフェイルクローズの方が安全だが、Redis が落ちただけで
-      // サービス全停止するのも避けたい。代わりに log だけ残す。
-      console.error('[rate-limit] Upstash error, falling open:', err)
+      // Redis 障害時の挙動は用途で分岐する。
+      //   failClosed=true（決済系・金銭直撃）→ fail-closed(429)。スパムを通すリスクの方が
+      //                                        一時的な決済不可より深刻なため拒否する。
+      //   failClosed=false（閲覧・通知系）  → fail-open。Redis 障害でのサービス全停止を避ける。
+      console.error(`[rate-limit] Upstash error (failClosed=${failClosed}):`, err)
+      if (failClosed) {
+        return { ok: false, remaining: 0, resetAt: now + windowSec * 1000 }
+      }
       return { ok: true, remaining: limit, resetAt: now + windowSec * 1000 }
     }
   }

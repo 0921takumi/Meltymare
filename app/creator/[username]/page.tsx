@@ -94,28 +94,37 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
   const fans = await topFans(creator.id, 10)
   const myFanRank = user ? await userRankForCreator(user.id, creator.id) : null
 
-  // ストーリー (24h以内)
-  const { data: storiesData } = await supabase
-    .from('stories')
-    .select('id, media_url, media_type, created_at')
-    .eq('creator_id', creator.id)
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false })
-    .limit(6)
-  const stories = storiesData ?? []
+  // ストーリー (24h以内) — 機能停止中(FEATURES.stories=false)はクエリ自体をスキップ
+  let stories: { id: string; media_url: string; media_type: string; created_at: string }[] = []
+  if (FEATURES.stories) {
+    const { data: storiesData } = await supabase
+      .from('stories')
+      .select('id, media_url, media_type, created_at')
+      .eq('creator_id', creator.id)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(6)
+    stories = storiesData ?? []
+  }
 
-  // サブスクプラン
-  const { data: plansData } = await supabase
-    .from('subscription_plans')
-    .select('id, name, description, monthly_price, benefits, badge_emoji, badge_color, member_count')
-    .eq('creator_id', creator.id)
-    .eq('is_active', true)
-    .order('monthly_price', { ascending: true })
-  const plans = plansData ?? []
+  // サブスクプラン — 機能停止中(FEATURES.subscriptions=false)はクエリ自体をスキップ
+  let plans: {
+    id: string; name: string; description: string | null; monthly_price: number;
+    benefits: string[] | null; badge_emoji: string; badge_color: string; member_count: number
+  }[] = []
+  if (FEATURES.subscriptions) {
+    const { data: plansData } = await supabase
+      .from('subscription_plans')
+      .select('id, name, description, monthly_price, benefits, badge_emoji, badge_color, member_count')
+      .eq('creator_id', creator.id)
+      .eq('is_active', true)
+      .order('monthly_price', { ascending: true })
+    plans = plansData ?? []
+  }
 
-  // 自分の購読チェック
+  // 自分の購読チェック — 機能停止中(FEATURES.subscriptions=false)はスキップ
   let mySubscriptions = new Set<string>()
-  if (user) {
+  if (FEATURES.subscriptions && user) {
     const { data: mySubs } = await supabase
       .from('subscriptions')
       .select('plan_id')
@@ -125,15 +134,18 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
     mySubscriptions = new Set((mySubs ?? []).map(s => s.plan_id))
   }
 
-  // 配信予定 / ライブ中
-  const { data: liveData } = await supabase
-    .from('live_streams')
-    .select('id, title, scheduled_at, status, thumbnail_url')
-    .eq('creator_id', creator.id)
-    .in('status', ['scheduled', 'live'])
-    .order('scheduled_at', { ascending: true })
-    .limit(3)
-  const upcomingStreams = liveData ?? []
+  // 配信予定 / ライブ中 — 機能停止中(FEATURES.live=false)はクエリ自体をスキップ
+  let upcomingStreams: { id: string; title: string; scheduled_at: string; status: string; thumbnail_url: string | null }[] = []
+  if (FEATURES.live) {
+    const { data: liveData } = await supabase
+      .from('live_streams')
+      .select('id, title, scheduled_at, status, thumbnail_url')
+      .eq('creator_id', creator.id)
+      .in('status', ['scheduled', 'live'])
+      .order('scheduled_at', { ascending: true })
+      .limit(3)
+    upcomingStreams = liveData ?? []
+  }
 
   // アンケート（公開中）
   const { data: pollsData } = await supabase

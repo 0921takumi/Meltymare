@@ -37,22 +37,49 @@ export async function POST(req: Request) {
 
   const now = new Date().toISOString()
 
+  // 各 update は error と「実際に影響した行数」の両方を検証する。
+  // Supabase は 0 行 update でも error:null を返すため、.select() で行の有無を確認し、
+  // 失敗・0 行なら監査ログを書く前に中断する（モデレーションの整合性担保）。
   if (action === 'hide') {
-    await supabase.from('content_comments').update({ is_hidden: true }).eq('id', comment_id)
-    await supabase
+    const { data: hidden, error: hideErr } = await supabase
+      .from('content_comments')
+      .update({ is_hidden: true })
+      .eq('id', comment_id)
+      .select('id')
+    if (hideErr) return NextResponse.json({ error: hideErr.message }, { status: 500 })
+    if (!hidden || hidden.length === 0) {
+      return NextResponse.json({ error: 'comment_not_found' }, { status: 404 })
+    }
+
+    const { data: resolved, error: resolveErr } = await supabase
       .from('comment_reports')
       .update({ status: 'resolved', resolved_by: user.id, resolved_at: now })
       .eq('id', report_id)
+      .select('id')
+    if (resolveErr) return NextResponse.json({ error: resolveErr.message }, { status: 500 })
+    if (!resolved || resolved.length === 0) {
+      return NextResponse.json({ error: 'report_not_found' }, { status: 404 })
+    }
   } else if (action === 'resolve') {
-    await supabase
+    const { data: resolved, error: resolveErr } = await supabase
       .from('comment_reports')
       .update({ status: 'resolved', resolved_by: user.id, resolved_at: now })
       .eq('id', report_id)
+      .select('id')
+    if (resolveErr) return NextResponse.json({ error: resolveErr.message }, { status: 500 })
+    if (!resolved || resolved.length === 0) {
+      return NextResponse.json({ error: 'report_not_found' }, { status: 404 })
+    }
   } else if (action === 'dismiss') {
-    await supabase
+    const { data: dismissed, error: dismissErr } = await supabase
       .from('comment_reports')
       .update({ status: 'dismissed', resolved_by: user.id, resolved_at: now })
       .eq('id', report_id)
+      .select('id')
+    if (dismissErr) return NextResponse.json({ error: dismissErr.message }, { status: 500 })
+    if (!dismissed || dismissed.length === 0) {
+      return NextResponse.json({ error: 'report_not_found' }, { status: 404 })
+    }
   }
 
   await supabase.from('admin_actions').insert({

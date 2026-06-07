@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { rateLimit } from '@/lib/rate-limit'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { escapeHtml, sanitizeText } from '@/lib/sanitize'
 
-const supabase = createServiceClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+const supabase = createAdminClient()
 
 const ALLOWED_CATEGORIES = ['general', 'bug', 'payment', 'account', 'creator', 'other']
 const CATEGORY_LABELS: Record<string, string> = {
@@ -23,10 +20,7 @@ export async function POST(req: NextRequest) {
     // 認証不要 API なので IP ベースで rate limit。
     // 攻撃シナリオ: 他人のメアドを email に指定して大量送信 → その人に「受付確認メール」
     // が大量に届く（spam relay）。5req/分で十分防げる。
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || req.headers.get('x-real-ip')
-      || 'unknown'
+    const ip = getClientIp(req)
     const rl = await rateLimit({ key: `contact:${ip}`, limit: 5, windowSec: 60 })
     if (!rl.ok) {
       return NextResponse.json({ error: 'リクエストが多すぎます。しばらくしてから再試行してください' }, { status: 429 })

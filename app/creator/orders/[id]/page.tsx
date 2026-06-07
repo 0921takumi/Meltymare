@@ -2,14 +2,14 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
+import { PROFILE_PUBLIC_SELECT, type PublicProfile } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import { Upload, CheckCircle, ArrowLeft } from 'lucide-react'
 
 export default function DeliverOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const [purchaseId, setPurchaseId] = useState<string>('')
-  const [profile, setProfile] = useState<any>(null)
+  const [profile, setProfile] = useState<PublicProfile | null>(null)
   const [purchase, setPurchase] = useState<any>(null)
   const [deliveryFile, setDeliveryFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
@@ -101,7 +101,7 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
   const handleBlock = async () => {
     const buyerId = purchase?.buyer?.id
     if (!buyerId) return
-    const name = purchase?.buyer?.display_name ?? purchase?.buyer?.email ?? 'この購入者'
+    const name = purchase?.buyer?.display_name ?? 'この購入者'
     if (!window.confirm(`${name} をブロックしますか？\nブロックすると、この購入者はあなたのコンテンツを購入できなくなります。`)) return
     setBlocking(true)
     setError('')

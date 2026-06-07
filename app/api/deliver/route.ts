@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { requireCreator } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 
 /**
@@ -20,20 +20,12 @@ import { rateLimit } from '@/lib/rate-limit'
 
 const UUID_RE = /^[0-9a-f-]{36}$/i
 
-const admin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-)
+const admin = createAdminClient()
 
 export async function POST(req: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'creator' && profile?.role !== 'admin') {
-    return NextResponse.json({ error: 'creator_only' }, { status: 403 })
-  }
+  const ctx = await requireCreator()
+  if (ctx instanceof NextResponse) return ctx
+  const { user, role } = ctx
 
   const rl = await rateLimit({ key: `deliver:${user.id}`, limit: 30, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
@@ -58,11 +50,11 @@ export async function POST(req: Request) {
     .from('purchases')
     .select('id, status, content:contents(creator_id)')
     .eq('id', purchaseId)
-    .single()
+    .maybeSingle()
   if (!purchase) return NextResponse.json({ error: 'not_found' }, { status: 404 })
 
   const content = purchase.content as { creator_id?: string } | null
-  if (content?.creator_id !== user.id && profile?.role !== 'admin') {
+  if (content?.creator_id !== user.id && role !== 'admin') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
   // 完了済みの購入のみ納品可（pending/failed には納品しない）
