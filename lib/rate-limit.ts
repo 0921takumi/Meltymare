@@ -74,13 +74,15 @@ export async function rateLimit({ key, limit, windowSec, failClosed = false }: R
   // ─── Upstash 版（本番想定） ─────────────────────
   if (redis) {
     try {
-      // INCR + EXPIRE のパターン。初回は EXPIRE で TTL を設定。
-      // pipeline で1往復にまとめてレイテンシ削減。
-      const pipe = redis.pipeline()
-      pipe.incr(fullKey)
-      pipe.expire(fullKey, windowSec, 'NX')  // NX: 既存TTLは上書きしない
-      pipe.pttl(fullKey)
-      const [count, , pttl] = (await pipe.exec()) as [number, unknown, number]
+      // INCR でカウントし、初回（count===1）のみ EXPIRE で TTL を張る。
+      // EXPIRE の 'NX' オプションは Upstash のプラン/REST 実装によって弾かれ、
+      // pipeline 全体が失敗→fail-open に落ちることがあるため使わない。
+      // count===1 判定で「初回だけ TTL を設定」= NX 相当を互換性高く実現する。
+      const count = await redis.incr(fullKey)
+      if (count === 1) {
+        await redis.expire(fullKey, windowSec)
+      }
+      const pttl = await redis.pttl(fullKey)
 
       const resetAt = pttl > 0 ? now + pttl : now + windowSec * 1000
       if (count > limit) {
