@@ -15,7 +15,7 @@ export default async function CreatorOrdersPage() {
 
   const { data: purchases } = await supabase
     .from('purchases')
-    .select('*, content:contents(id, title, thumbnail_url, price), buyer:profiles!purchases_user_id_fkey(id, display_name, email)')
+    .select('*, content:contents(id, title, thumbnail_url, price), buyer:profiles!purchases_user_id_fkey(id, display_name)')
     .eq('contents.creator_id', user.id)
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
@@ -29,7 +29,7 @@ export default async function CreatorOrdersPage() {
 
   const { data: allPurchases } = await supabase
     .from('purchases')
-    .select('*, content:contents(id, title, thumbnail_url, price), buyer:profiles!purchases_user_id_fkey(id, display_name, email)')
+    .select('*, content:contents(id, title, thumbnail_url, price), buyer:profiles!purchases_user_id_fkey(id, display_name)')
     .in('content_id', myContentIds.length > 0 ? myContentIds : ['__none__'])
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
@@ -115,7 +115,7 @@ function OrderRow({ purchase, isPending }: { purchase: any; isPending: boolean }
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{content?.title ?? '(削除済み)'}</p>
         <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2 }}>
-          購入者: {buyer?.display_name ?? buyer?.email ?? '不明'}
+          購入者: {buyer?.display_name ?? '不明'}
         </p>
         <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 1 }}>
           {new Date(purchase.created_at).toLocaleDateString('ja-JP')} · ¥{purchase.amount?.toLocaleString()}
