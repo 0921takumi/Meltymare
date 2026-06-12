@@ -38,8 +38,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: '無効な招待コードです' })
   }
   const code = codeRaw.trim().toUpperCase()
-  // 形式チェック（MYF-XXXXXX）。誤った形式は DB クエリ前に弾く
-  if (!/^MYF-[A-Z2-9]{6}$/.test(code)) {
+  // 形式チェック。誤った形式は DB クエリ前に弾く。
+  //   - MYF-XXXXXX: 管理画面の自動発行コード
+  //   - 英数4〜16文字: キャンペーン用バニティコード（例: MYFOCUS）
+  if (!/^MYF-[A-Z2-9]{6}$/.test(code) && !/^[A-Z0-9]{4,16}$/.test(code)) {
     return NextResponse.json({ ok: false, error: '無効な招待コードです' })
   }
 

@@ -82,8 +82,13 @@ export const FEATURES: { stories: boolean; live: boolean; auctions: boolean; sub
 
 // ─── サービスモード ──────────────────────────
 export const SERVICE_MODE = {
-  /** 招待制（新規登録を制限） */
-  inviteOnly: process.env.MYFOCUS_INVITE_ONLY === 'true',
+  /** 招待制（新規登録を制限）。
+   * NEXT_PUBLIC_ にしているのは、signup ページ（client）でも
+   * 「Googleで続ける」前に招待コード入力を強制する必要があるため。
+   * サーバ側（/api/invite/verify・/auth/callback）も同じ値を参照する。 */
+  inviteOnly:
+    process.env.NEXT_PUBLIC_MYFOCUS_INVITE_ONLY === 'true'
+    || process.env.MYFOCUS_INVITE_ONLY === 'true',
   /** ベータ表記を表示 */
   showBetaBadge: process.env.MYFOCUS_BETA_MODE !== 'false',
   /** メンテナンスモード */

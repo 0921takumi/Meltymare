@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
+import { SERVICE_MODE } from '@/lib/config'
 import { Eye, EyeOff } from 'lucide-react'
 
 function passwordStrength(pw: string): { label: string; color: string; score: number } {
@@ -47,7 +48,8 @@ function SignupForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [displayName, setDisplayName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
-  const [error, setError] = useState('')
+  // OAuth 招待制リジェクト等、リダイレクトで戻された際のエラーを表示
+  const [error, setError] = useState(search.get('error') ?? '')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
   const [agreed, setAgreed] = useState(false)
@@ -195,7 +197,7 @@ function SignupForm() {
               <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} required
                 className="mm-auth-input"
                 style={{ fontFamily: 'monospace', letterSpacing: '0.12em' }}
-                placeholder="MYF-XXXXXX" />
+                placeholder="招待コード" />
               <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 6, lineHeight: 1.6 }}>
                 招待コードはクリエイターの SNS や運営からのご案内に記載されています。
               </p>
@@ -248,7 +250,7 @@ function SignupForm() {
             <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
           </div>
 
-          <GoogleLoginButton next={validNext ?? undefined} />
+          <GoogleLoginButton next={validNext ?? undefined} inviteCode={inviteCode} requireInvite={SERVICE_MODE.inviteOnly} />
 
           <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13, color: 'var(--mm-text-sub)' }}>
             すでにアカウントをお持ちの方は{' '}

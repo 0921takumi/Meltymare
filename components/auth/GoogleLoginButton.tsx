@@ -2,13 +2,28 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-export default function GoogleLoginButton({ next }: { next?: string }) {
+export default function GoogleLoginButton({ next, inviteCode, requireInvite }: {
+  next?: string
+  /** signup ページから渡される入力中の招待コード。OAuth 往復を跨ぐため cookie に退避する */
+  inviteCode?: string
+  /** 招待制ON時、コード未入力なら Google 遷移前に止める（signup ページ用） */
+  requireInvite?: boolean
+}) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const handleLogin = async () => {
-    setLoading(true)
     setError('')
+    const code = (inviteCode ?? '').trim().toUpperCase()
+    if (requireInvite && !code) {
+      setError('先に招待コードを入力してください')
+      return
+    }
+    setLoading(true)
+    // OAuth リダイレクトを跨いで招待コードを /auth/callback へ届ける（10分で失効）
+    if (code) {
+      document.cookie = `myf_invite=${encodeURIComponent(code)}; path=/; max-age=600; SameSite=Lax`
+    }
     const supabase = createClient()
     const redirectTo = `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`
     const { error } = await supabase.auth.signInWithOAuth({
