@@ -1,9 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
+import { Eye, EyeOff } from 'lucide-react'
 
 function passwordStrength(pw: string): { label: string; color: string; score: number } {
   let score = 0
@@ -17,9 +19,32 @@ function passwordStrength(pw: string): { label: string; color: string; score: nu
   return { label: '強い', color: '#10b981', score: 5 }
 }
 
-export default function SignupPage() {
+/** Supabase の生英語エラーを、ユーザーに伝わる日本語へ変換する */
+function signupErrorMessage(raw: string): string {
+  const m = raw.toLowerCase()
+  if (m.includes('already registered') || m.includes('already been registered')) {
+    return 'このメールアドレスはすでに登録されています。ログインをお試しください。'
+  }
+  if (m.includes('invalid') && m.includes('email')) {
+    return 'メールアドレスの形式をご確認ください。'
+  }
+  if (m.includes('rate limit') || m.includes('too many')) {
+    return 'しばらく時間をおいてから、もう一度お試しください。'
+  }
+  if (m.includes('password')) {
+    return 'パスワードの条件を満たしていません。8文字以上で設定してください。'
+  }
+  return '登録できませんでした。お手数ですが、もう一度お試しください。'
+}
+
+function SignupForm() {
+  const search = useSearchParams()
+  // ?next= はメール確認後の復帰先（open redirect 防止のため相対パスのみ許可）
+  const rawNext = search.get('next')
+  const validNext = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : null
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [displayName, setDisplayName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState('')
@@ -56,11 +81,11 @@ export default function SignupPage() {
       password,
       options: {
         data: { display_name: displayName, signup_invite_code: inviteCode || null },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback${validNext ? `?next=${encodeURIComponent(validNext)}` : ''}`,
       },
     })
     if (error) {
-      setError(error.message)
+      setError(signupErrorMessage(error.message))
       setLoading(false)
     } else {
       // 招待コード使用記録
@@ -91,6 +116,10 @@ export default function SignupPage() {
         <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', lineHeight: 1.8 }}>
           <strong style={{ color: 'var(--mm-ink)' }}>{email}</strong> 宛に確認メールを送りました。<br />
           メール内のリンクをクリックして登録を完了してください。
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', lineHeight: 1.8, marginTop: 14 }}>
+          数分たっても届かない場合は、迷惑メールフォルダをご確認ください。<br />
+          それでも見つからないときは <Link href="/contact" style={{ color: 'var(--mm-primary)' }}>お問い合わせ</Link> からご連絡ください。
         </p>
         <Link href="/auth/login" style={{
           display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -139,8 +168,15 @@ export default function SignupPage() {
             </div>
             <div>
               <label style={authLabelStyle}>Password</label>
-              <input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
-                className="mm-auth-input" placeholder="8文字以上" />
+              <div style={{ position: 'relative' }}>
+                <input type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
+                  className="mm-auth-input" style={{ paddingRight: 48 }} placeholder="8文字以上" />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  aria-label={showPassword ? 'パスワードを隠す' : 'パスワードを表示'}
+                  style={{ position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mm-text-muted)' }}>
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
               {password && (
                 <div style={{ marginTop: 8 }}>
                   <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
@@ -156,10 +192,13 @@ export default function SignupPage() {
               <label style={authLabelStyle}>
                 Invite code <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', fontWeight: 500, textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>（β期間中は必須）</span>
               </label>
-              <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())}
+              <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} required
                 className="mm-auth-input"
                 style={{ fontFamily: 'monospace', letterSpacing: '0.12em' }}
                 placeholder="MYF-XXXXXX" />
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 6, lineHeight: 1.6 }}>
+                招待コードはクリエイターの SNS や運営からのご案内に記載されています。
+              </p>
             </div>
 
             {/* 同意チェック */}
@@ -168,6 +207,9 @@ export default function SignupPage() {
                 <input type="checkbox" checked={age18} onChange={e => setAge18(e.target.checked)} style={{ marginTop: 2, accentColor: 'var(--mm-primary)' }} />
                 <span>私は<strong style={{ color: 'var(--mm-ink)' }}>18歳以上</strong>であり、虚偽がないことを確認しました</span>
               </label>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', lineHeight: 1.7, paddingLeft: 24 }}>
+                ※ My Focus は18歳以上の方にご利用いただけます。過度な露出を含むコンテンツの出品はガイドラインで禁止しています。
+              </p>
               <label style={checkLabelStyle}>
                 <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ marginTop: 2, accentColor: 'var(--mm-primary)' }} />
                 <span>
@@ -184,7 +226,7 @@ export default function SignupPage() {
               </p>
             )}
 
-            <button type="submit" disabled={loading}
+            <button type="submit" disabled={loading} className="mm-auth-submit"
               style={{
                 background: 'var(--mm-ink)', color: 'white',
                 padding: '14px', borderRadius: 999,
@@ -192,10 +234,12 @@ export default function SignupPage() {
                 border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
                 opacity: loading ? 0.6 : 1,
                 marginTop: 4,
-                transition: 'opacity 0.2s',
               }}>
               {loading ? '登録中...' : '無料登録（30秒）→'}
             </button>
+            <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
+              登録は無料です。クレジットカードの入力は購入時まで必要ありません。
+            </p>
           </form>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 18px' }}>
@@ -204,11 +248,11 @@ export default function SignupPage() {
             <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
           </div>
 
-          <GoogleLoginButton />
+          <GoogleLoginButton next={validNext ?? undefined} />
 
           <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13, color: 'var(--mm-text-sub)' }}>
             すでにアカウントをお持ちの方は{' '}
-            <Link href="/auth/login" style={{ color: 'var(--mm-ink)', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 1 }}>
+            <Link href={validNext ? `/auth/login?next=${encodeURIComponent(validNext)}` : '/auth/login'} style={{ color: 'var(--mm-ink)', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 1 }}>
               ログイン <span style={{ color: 'var(--mm-primary)' }}>→</span>
             </Link>
           </p>
@@ -219,6 +263,14 @@ export default function SignupPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh' }} />}>
+      <SignupForm />
+    </Suspense>
   )
 }
 

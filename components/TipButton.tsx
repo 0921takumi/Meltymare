@@ -20,6 +20,7 @@ export default function TipButton({
   const [custom, setCustom] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [tipError, setTipError] = useState('')
 
   const handleOpen = () => {
     if (!isLoggedIn) {
@@ -32,9 +33,10 @@ export default function TipButton({
   const handleTip = async () => {
     const finalAmount = custom ? parseInt(custom, 10) : amount
     if (!finalAmount || finalAmount < 100) {
-      alert('¥100以上の金額を指定してください')
+      setTipError('¥100以上の金額を指定してください')
       return
     }
+    setTipError('')
     setLoading(true)
     try {
       const res = await fetch('/api/tip', {
@@ -45,8 +47,8 @@ export default function TipButton({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'error')
       if (data.checkoutUrl) window.location.href = data.checkoutUrl
-    } catch (e: any) {
-      alert(e.message ?? 'エラーが発生しました')
+    } catch (e: unknown) {
+      setTipError(e instanceof Error && e.message !== 'error' ? e.message : 'エラーが発生しました。もう一度お試しください')
       setLoading(false)
     }
   }
@@ -55,11 +57,12 @@ export default function TipButton({
     <>
       <button
         onClick={handleOpen}
+        className="mm-btn-primary"
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px',
-          background: 'linear-gradient(90deg, #ec4899, #f97316)', color: 'white',
-          border: 0, borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-          boxShadow: '0 2px 8px rgba(236,72,153,0.3)',
+          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '11px 22px',
+          background: 'var(--mm-primary)', color: 'white',
+          border: 0, borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          boxShadow: '0 8px 20px -8px rgba(211, 107, 36, 0.5)',
         }}
       >
         <Heart size={14} fill="white" /> チップを贈る
@@ -92,9 +95,10 @@ export default function TipButton({
             </button>
 
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
-              <Sparkles size={28} color="#ec4899" style={{ marginBottom: 8 }} />
-              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{creatorName} にチップを贈る</h3>
-              <p style={{ fontSize: 12, color: '#888' }}>応援メッセージとチップでクリエイターを支援できます</p>
+              <Sparkles size={28} color="var(--mm-primary)" style={{ marginBottom: 8 }} />
+              <p className="font-serif-display" style={{ fontSize: 13, fontWeight: 600, fontStyle: 'italic', color: 'var(--mm-primary)', letterSpacing: '0.12em', marginBottom: 4 }}>Send a tip</p>
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: 'var(--mm-ink)' }}>{creatorName} にチップを贈る</h3>
+              <p style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>応援メッセージとチップでクリエイターを支援できます</p>
             </div>
 
             <div style={{ marginBottom: 14 }}>
@@ -106,9 +110,10 @@ export default function TipButton({
                     onClick={() => { setAmount(p); setCustom('') }}
                     style={{
                       padding: '10px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                      border: amount === p && !custom ? '2px solid #ec4899' : '1px solid #e5e7eb',
-                      borderRadius: 10, background: amount === p && !custom ? '#fdf2f8' : 'white',
-                      color: amount === p && !custom ? '#ec4899' : '#333',
+                      border: amount === p && !custom ? '2px solid var(--mm-primary)' : '1px solid var(--mm-border)',
+                      borderRadius: 10, background: amount === p && !custom ? 'var(--mm-primary-light)' : 'white',
+                      color: amount === p && !custom ? 'var(--mm-primary)' : 'var(--mm-text)',
+                      transition: 'background 0.15s, color 0.15s, border-color 0.15s',
                     }}
                   >
                     ¥{p.toLocaleString()}
@@ -126,12 +131,10 @@ export default function TipButton({
                 placeholder="例: 2000"
                 min={100}
                 max={100000}
-                style={{
-                  width: '100%', padding: '10px 12px', fontSize: 14,
-                  border: '1px solid #e5e7eb', borderRadius: 10,
-                }}
+                className="mm-auth-input"
+                style={{ borderRadius: 10 }}
               />
-              <p style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>¥100〜¥100,000</p>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 4 }}>¥100〜¥100,000</p>
             </div>
 
             <div style={{ marginBottom: 20 }}>
@@ -141,21 +144,28 @@ export default function TipButton({
                 onChange={(e) => setMessage(e.target.value.slice(0, 200))}
                 placeholder="いつも応援しています！"
                 rows={3}
-                style={{
-                  width: '100%', padding: 10, fontSize: 14, border: '1px solid #e5e7eb',
-                  borderRadius: 10, resize: 'vertical',
-                }}
+                className="mm-auth-input"
+                style={{ borderRadius: 10, resize: 'vertical' }}
               />
-              <p style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>{message.length}/200</p>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 4 }}>{message.length}/200</p>
             </div>
+
+            {tipError && (
+              <p style={{ fontSize: 12, color: '#dc2626', background: '#fef2f2', padding: '9px 12px', borderRadius: 8, marginBottom: 12, lineHeight: 1.5 }}>
+                {tipError}
+              </p>
+            )}
 
             <button
               onClick={handleTip}
               disabled={loading}
+              className="mm-btn-primary"
               style={{
                 width: '100%', padding: 14, fontSize: 15, fontWeight: 700,
-                color: 'white', border: 0, borderRadius: 12, cursor: loading ? 'wait' : 'pointer',
-                background: loading ? '#ccc' : 'linear-gradient(90deg, #ec4899, #f97316)',
+                color: 'white', border: 0, borderRadius: 999, cursor: loading ? 'wait' : 'pointer',
+                background: loading ? 'var(--mm-text-muted)' : 'var(--mm-primary)',
+                boxShadow: loading ? 'none' : '0 8px 20px -8px rgba(211, 107, 36, 0.5)',
+                letterSpacing: '0.04em',
               }}
             >
               {loading ? '処理中...' : `¥${(custom ? parseInt(custom, 10) || 0 : amount).toLocaleString()} を贈る`}

@@ -5,6 +5,7 @@ import Footer from '@/components/layout/Footer'
 import ContentCard from '@/components/ui/ContentCard'
 import { createClient } from '@/lib/supabase/server'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
+import { PenLine, Search, CreditCard, ShieldCheck, EyeOff, PenTool, MessageCircle } from 'lucide-react'
 /**
  * ヒーローのポラロイド画像 URL。
  * `null` の場合はグラデーション＋アイコンのフォールバック表示。
@@ -18,18 +19,19 @@ const HERO_POLAROIDS: { src: string | null; tint: string }[] = [
 ]
 
 const HOW_TO = [
-  { step: '01', icon: '📝', title: '無料で会員登録',         desc: 'メールアドレスだけで30秒登録。クレカ登録は購入時のみでOK。' },
-  { step: '02', icon: '🔍', title: '好きなクリエイターを探す', desc: 'クリエイター一覧やコンテンツ一覧から気になる子をチェック。' },
-  { step: '03', icon: '💳', title: 'カードで安全に購入',     desc: 'Stripe決済で安心。購入後はクリエイターがメッセージを書き込んでお届け。' },
+  { step: '01', icon: PenLine,    title: '無料で会員登録',         desc: 'メールアドレスだけで30秒登録。クレカ登録は購入時のみでOK。' },
+  { step: '02', icon: Search,     title: '好きなクリエイターを探す', desc: 'クリエイター一覧やコンテンツ一覧から気になる子をチェック。' },
+  { step: '03', icon: CreditCard, title: 'カードで安全に購入',     desc: 'Stripe決済で安心。購入後はクリエイターがメッセージを書き込んでお届け。' },
 ]
 
+// アバターのフォールバック配色: ブランドパレット由来の6トーン（紙×墨×オレンジ×ティールの世界観）
 const CREATOR_COLORS = [
-  { bg: '#e8b4c8', text: '#8b2252' },
-  { bg: '#b4d4e8', text: '#1a5276' },
-  { bg: '#c8e8b4', text: '#1e5631' },
-  { bg: '#e8d4b4', text: '#7d4e12' },
-  { bg: '#d4b4e8', text: '#512e5f' },
-  { bg: '#e8e4b4', text: '#7d6608' },
+  { bg: '#f5d4be', text: '#8a4a18' },
+  { bg: '#dcedf3', text: '#1a6c85' },
+  { bg: '#fce9d8', text: '#b85a1c' },
+  { bg: '#ece4d4', text: '#6b5d4a' },
+  { bg: '#e3d5c0', text: '#7d5a2e' },
+  { bg: '#d8e4e1', text: '#3c6e64' },
 ]
 
 export default async function HomePage() {
@@ -165,14 +167,13 @@ export default async function HomePage() {
 
             {/* CTA ペア */}
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-              <Link href="/contents" style={{
+              <Link href="/contents" className="mm-btn-primary" style={{
                 display: 'inline-flex', alignItems: 'center', gap: 10,
                 background: 'var(--mm-ink)', color: 'white',
                 padding: '16px 32px', borderRadius: 999,
                 fontWeight: 600, fontSize: 14, letterSpacing: '0.04em',
                 textDecoration: 'none',
                 boxShadow: '0 8px 24px -8px rgba(31,26,21,0.4)',
-                transition: 'transform .2s, box-shadow .2s',
               }}>
                 コンテンツを見る
                 <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 18, lineHeight: 1 }}>→</span>
@@ -388,15 +389,16 @@ export default async function HomePage() {
       {/* ━━━ 人気クリエイター ━━━ */}
       {creators && creators.length > 0 && (
         <section style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 16px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
-            <div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 28 }}>
+            <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ width: 24, height: 1, background: 'var(--mm-primary)' }} />
-                CREATOR
+                <span className="font-serif-display" style={{ fontSize: 13, fontWeight: 600, color: 'var(--mm-primary)' }}>01</span>
+                — CREATOR
               </p>
-              <h2 className="font-serif-display" style={{ fontSize: 30, fontWeight: 500, color: 'var(--mm-ink)', letterSpacing: '0.01em' }}>人気のクリエイター</h2>
+              <h2 className="font-serif-display" style={{ fontSize: 'clamp(24px, 5vw, 30px)', fontWeight: 500, color: 'var(--mm-ink)', letterSpacing: '0.01em' }}>人気のクリエイター</h2>
             </div>
-            <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-text)', textDecoration: 'none', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 2 }}>
+            <Link href="/creators" style={{ fontSize: 13, color: 'var(--mm-text)', textDecoration: 'none', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>
               全員を見る <span style={{ color: 'var(--mm-primary)' }}>→</span>
             </Link>
           </div>
@@ -409,7 +411,7 @@ export default async function HomePage() {
                   <div className="mm-creator-card-photo" style={{ background: color.bg }}>
                     {creator.avatar_url
                       ? <img src={creator.avatar_url} alt={creator.display_name} />
-                      : <span className="font-serif-display" style={{ fontSize: 56, fontWeight: 500, fontStyle: 'italic', color: color.text }}>{creator.display_name[0]}</span>}
+                      : <span className="font-serif-display" style={{ fontSize: 56, fontWeight: 500, color: color.text }}>{creator.display_name[0]}</span>}
                     {i === 0 && (
                       <span className="mm-creator-card-rank">
                         <span style={{ color: 'var(--mm-primary)' }}>★</span> No.1
@@ -434,15 +436,16 @@ export default async function HomePage() {
       {/* ━━━ 新着コンテンツ ━━━ */}
       {contents && contents.length > 0 && (
         <section style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 16px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
-            <div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 28 }}>
+            <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ width: 24, height: 1, background: 'var(--mm-primary)' }} />
-                CONTENTS
+                <span className="font-serif-display" style={{ fontSize: 13, fontWeight: 600, color: 'var(--mm-primary)' }}>02</span>
+                — NEW ARRIVALS
               </p>
-              <h2 className="font-serif-display" style={{ fontSize: 30, fontWeight: 500, color: 'var(--mm-ink)', letterSpacing: '0.01em' }}>新着コンテンツ</h2>
+              <h2 className="font-serif-display" style={{ fontSize: 'clamp(24px, 5vw, 30px)', fontWeight: 500, color: 'var(--mm-ink)', letterSpacing: '0.01em' }}>新着コンテンツ</h2>
             </div>
-            <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-text)', textDecoration: 'none', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 2 }}>
+            <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-text)', textDecoration: 'none', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>
               もっと見る <span style={{ color: 'var(--mm-primary)' }}>→</span>
             </Link>
           </div>
@@ -463,41 +466,52 @@ export default async function HomePage() {
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-text-sub)', letterSpacing: '0.18em', marginBottom: 14, display: 'inline-flex', alignItems: 'center', gap: 10 }}>
             <span style={{ width: 24, height: 1, background: 'var(--mm-primary)' }} />
-            HOW TO
+            <span className="font-serif-display" style={{ fontSize: 13, fontWeight: 600, color: 'var(--mm-primary)' }}>03</span>
+            — HOW TO
             <span style={{ width: 24, height: 1, background: 'var(--mm-primary)' }} />
           </p>
-          <h2 className="font-serif-display" style={{ fontSize: 34, fontWeight: 500, color: 'var(--mm-ink)', letterSpacing: '0.01em', fontStyle: 'italic' }}>ご利用の流れ</h2>
+          <h2 className="font-serif-display" style={{ fontSize: 34, fontWeight: 500, color: 'var(--mm-ink)', letterSpacing: '0.06em' }}>ご利用の流れ</h2>
         </div>
         <div className="mm-howto-grid">
-          {HOW_TO.map((step, i) => (
-            <div key={i} className="mm-card" style={{ padding: '32px 24px', textAlign: 'center', position: 'relative', background: 'white' }}>
-              <span className="font-serif-display" style={{ fontSize: 56, fontWeight: 500, fontStyle: 'italic',
-                color: 'var(--mm-primary)', opacity: 0.18,
-                position: 'absolute', top: 8, right: 18, lineHeight: 1 }}>{step.step}</span>
-              <div style={{ fontSize: 38, marginBottom: 16 }}>{step.icon}</div>
-              <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10, color: 'var(--mm-ink)' }}>{step.title}</h3>
-              <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', lineHeight: 1.75 }}>{step.desc}</p>
-            </div>
-          ))}
+          {HOW_TO.map((step, i) => {
+            const StepIcon = step.icon
+            return (
+              <div key={i} className="mm-card" style={{ padding: '32px 24px', textAlign: 'center', position: 'relative', background: 'white' }}>
+                <span className="font-serif-display" style={{ fontSize: 56, fontWeight: 500, fontStyle: 'italic',
+                  color: 'var(--mm-primary)', opacity: 0.18,
+                  position: 'absolute', top: 8, right: 18, lineHeight: 1 }}>{step.step}</span>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--mm-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                  <StepIcon size={26} strokeWidth={1.5} color="var(--mm-primary)" />
+                </div>
+                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10, color: 'var(--mm-ink)' }}>{step.title}</h3>
+                <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', lineHeight: 1.75 }}>{step.desc}</p>
+              </div>
+            )
+          })}
         </div>
       </section>
 
       {/* ━━━ 安心ポイント ━━━ */}
       <section className="mm-reveal" style={{ maxWidth: 900, margin: '72px auto 0', padding: '0 24px' }}>
         <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 16, padding: '40px 32px' }}>
-          <h2 className="font-serif-display" style={{ fontSize: 22, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-ink)', textAlign: 'center', marginBottom: 32 }}>安心・安全のプラットフォーム</h2>
+          <h2 className="font-serif-display" style={{ fontSize: 22, fontWeight: 500, color: 'var(--mm-ink)', textAlign: 'center', marginBottom: 32, letterSpacing: '0.06em' }}>安心・安全のプラットフォーム</h2>
           <div className="mm-trust-grid">
             {[
-              { icon: '🛡️', text: 'Stripeによる安全な決済' },
-              { icon: '🙈', text: '閲覧履歴は完全非公開' },
-              { icon: '✍️', text: '手書きメッセージ付き納品' },
-              { icon: '💬', text: '通常2営業日以内の返信' },
-            ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 24 }}>{item.icon}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--mm-text-sub)' }}>{item.text}</span>
-              </div>
-            ))}
+              { icon: ShieldCheck,   text: 'Stripeによる安全な決済' },
+              { icon: EyeOff,        text: '閲覧履歴は完全非公開' },
+              { icon: PenTool,       text: '手書きメッセージ付き納品' },
+              { icon: MessageCircle, text: '通常2営業日以内の返信' },
+            ].map((item, i) => {
+              const TrustIcon = item.icon
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--mm-primary-light)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <TrustIcon size={18} strokeWidth={1.6} color="var(--mm-primary)" />
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--mm-text-sub)' }}>{item.text}</span>
+                </div>
+              )
+            })}
           </div>
         </div>
       </section>
@@ -512,24 +526,25 @@ export default async function HomePage() {
           position: 'relative',
           overflow: 'hidden',
         }}>
-          <div className="mm-grain" aria-hidden style={{ opacity: 0.2 }} />
+          {/* multiply はダーク地で不可視のため overlay で粒子を見せる */}
+          <div className="mm-grain" aria-hidden style={{ opacity: 0.25, mixBlendMode: 'overlay' }} />
           {/* 装飾: 横ライン（オレンジ） */}
           <span style={{
             display: 'inline-block', width: 56, height: 1,
             background: 'var(--mm-primary)', marginBottom: 24,
           }} />
           <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--mm-primary)', letterSpacing: '0.32em', textTransform: 'uppercase', marginBottom: 16 }}>
-            Get Started
+            <span className="font-serif-display" style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.1em' }}>04</span> — Get Started
           </p>
-          <h2 className="font-serif-display" style={{
-            fontSize: 'clamp(36px, 5vw, 56px)',
-            fontWeight: 500, fontStyle: 'italic',
-            color: 'white', marginBottom: 16, letterSpacing: '0.01em', lineHeight: 1.1,
+          <h2 className="font-jp-serif" style={{
+            fontSize: 'clamp(34px, 5vw, 52px)',
+            fontWeight: 600,
+            color: 'white', marginBottom: 16, letterSpacing: '0.06em', lineHeight: 1.15,
           }}>今すぐ、はじめる。</h2>
           <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 36, maxWidth: 480, margin: '0 auto 36px' }}>
             無料登録するだけ。30秒で完了。<br/>購入しなくてもコンテンツ一覧は自由に閲覧できます。
           </p>
-          <Link href="/auth/signup" style={{
+          <Link href="/auth/signup" className="mm-btn-primary" style={{
             display: 'inline-flex', alignItems: 'center', gap: 10,
             background: 'var(--mm-primary)', color: 'white',
             padding: '18px 44px', borderRadius: 999, fontWeight: 600, fontSize: 15,

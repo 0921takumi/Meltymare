@@ -5,13 +5,19 @@ import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
+import { Eye, EyeOff } from 'lucide-react'
 
 function LoginForm() {
   const router = useRouter()
   const search = useSearchParams()
   const initialError = search.get('error') ?? ''
+  // ?next= で元のページ（商品詳細など）へ戻す。open redirect 防止のため
+  // 「/ 始まりかつ // 始まりでない」相対パスのみ許可する
+  const rawNext = search.get('next')
+  const validNext = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : null
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState(initialError)
   const [loading, setLoading] = useState(false)
 
@@ -25,7 +31,7 @@ function LoginForm() {
       setError('メールアドレスまたはパスワードが正しくありません')
       setLoading(false)
     } else {
-      router.push('/contents')
+      router.push(validNext ?? '/contents')
       router.refresh()
     }
   }
@@ -67,9 +73,17 @@ function LoginForm() {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 8, color: 'var(--mm-text-sub)', letterSpacing: '0.16em', textTransform: 'uppercase' }}>Password</label>
-              <input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required
-                className="mm-auth-input"
-                placeholder="••••••••" />
+              <div style={{ position: 'relative' }}>
+                <input type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required
+                  className="mm-auth-input"
+                  style={{ paddingRight: 48 }}
+                  placeholder="••••••••" />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  aria-label={showPassword ? 'パスワードを隠す' : 'パスワードを表示'}
+                  style={{ position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mm-text-muted)' }}>
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -78,7 +92,7 @@ function LoginForm() {
               </p>
             )}
 
-            <button type="submit" disabled={loading}
+            <button type="submit" disabled={loading} className="mm-auth-submit"
               style={{
                 background: 'var(--mm-ink)', color: 'white',
                 padding: '14px', borderRadius: 999,
@@ -86,7 +100,6 @@ function LoginForm() {
                 border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
                 opacity: loading ? 0.6 : 1,
                 marginTop: 6,
-                transition: 'opacity 0.2s',
               }}>
               {loading ? 'ログイン中...' : 'ログイン →'}
             </button>
@@ -104,11 +117,11 @@ function LoginForm() {
             <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
           </div>
 
-          <GoogleLoginButton />
+          <GoogleLoginButton next={validNext ?? undefined} />
 
           <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13, color: 'var(--mm-text-sub)' }}>
             アカウントがない方は{' '}
-            <Link href="/auth/signup" style={{ color: 'var(--mm-ink)', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 1 }}>
+            <Link href={validNext ? `/auth/signup?next=${encodeURIComponent(validNext)}` : '/auth/signup'} style={{ color: 'var(--mm-ink)', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 1 }}>
               新規登録 <span style={{ color: 'var(--mm-primary)' }}>→</span>
             </Link>
           </p>

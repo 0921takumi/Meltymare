@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
+import Footer from '@/components/layout/Footer'
 import Link from 'next/link'
-import { Trophy, TrendingUp, Users, ShoppingBag, Flame } from 'lucide-react'
+import { TrendingUp, Users, ShoppingBag, Flame } from 'lucide-react'
 import { topCreators, trendingCreators, type Period, type CreatorRankRow } from '@/lib/rankings'
 import type { Metadata } from 'next'
 
@@ -48,11 +49,12 @@ export default async function RankingsPage({ searchParams }: { searchParams: Pro
       <div className="mm-page-pad" style={{ maxWidth: 1000, margin: '0 auto' }}>
 
         <div style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <Trophy size={22} color="#f59e0b" />
-            <h1 style={{ fontSize: 24, fontWeight: 700 }}>ランキング</h1>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>いま推されているクリエイターをチェック</p>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--mm-text-sub)', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+            RANKING
+          </p>
+          <h1 className="font-serif-display" style={{ fontSize: 30, fontWeight: 500, color: 'var(--mm-ink)' }}>ランキング</h1>
+          <p style={{ fontSize: 13, color: 'var(--mm-text-muted)', marginTop: 4 }}>いま推されているクリエイターをチェック</p>
         </div>
 
         {/* 期間タブ */}
@@ -119,7 +121,7 @@ export default async function RankingsPage({ searchParams }: { searchParams: Pro
         )}
 
         {/* TOP3（表彰台） */}
-        {top3.length >= 3 && (
+        {top3.length > 0 && (
           <div style={{ marginBottom: 32 }}>
             <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 16 }}>
               TOP 3 <span style={{ fontSize: 12, color: 'var(--mm-text-muted)', fontWeight: 500 }}>· {METRIC_LABELS[metric]}</span>
@@ -182,12 +184,25 @@ export default async function RankingsPage({ searchParams }: { searchParams: Pro
         )}
 
         {sorted.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--mm-text-muted)' }}>
-            <p style={{ fontSize: 40, marginBottom: 12 }}>🏆</p>
-            <p>まだランキングデータがありません</p>
+          <div className="mm-card" style={{ textAlign: 'center', padding: 'clamp(40px,7vw,64px) 24px', position: 'relative', overflow: 'hidden' }}>
+            <span style={{ position: 'absolute', top: 16, left: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', top: 16, right: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, left: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, right: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'var(--mm-primary)', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+              NO RANKING DATA
+              <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+            </p>
+            <p className="font-serif-display" style={{ fontStyle: 'italic', fontSize: 26, color: 'var(--mm-ink)', marginBottom: 12 }}>Nothing to show yet.</p>
+            <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', marginBottom: 24 }}>まだランキングデータがありません</p>
+            <Link href="/creators" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--mm-ink)', color: 'white', padding: '12px 24px', borderRadius: 999, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+              クリエイターを探す →
+            </Link>
           </div>
         )}
       </div>
+      <Footer />
     </div>
   )
 }

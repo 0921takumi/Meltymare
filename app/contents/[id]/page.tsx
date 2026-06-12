@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
+import Footer from '@/components/layout/Footer'
 import PurchaseButton from './PurchaseButton'
 import ContentCard from '@/components/ui/ContentCard'
 import ReviewSection from './ReviewSection'
@@ -152,10 +153,10 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
       <div className="mm-page-pad" style={{ maxWidth: 900, margin: '0 auto' }}>
         <div className="mm-content-detail" style={{ alignItems: 'start' }}>
 
-          {/* サムネイル */}
-          <div className="mm-card" style={{ overflow: 'hidden', aspectRatio: '4/3', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--mm-primary-light)' }}>
+          {/* サムネイル（PC 4/3・モバイル 4/5 = チェキ縦。.mm-content-detail-thumb が制御） */}
+          <div className="mm-card mm-content-detail-thumb" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--mm-primary-light)' }}>
             {content.thumbnail_url ? (
-              <img src={content.thumbnail_url} alt={content.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src={content.thumbnail_url} alt={content.title} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
             ) : content.content_type === 'video' ? (
               <VideoIcon size={64} color="var(--mm-accent)" />
             ) : (
@@ -174,9 +175,9 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
               </p>
               <h1 className="font-serif-display" style={{
                 fontSize: 'clamp(24px, 3vw, 32px)',
-                fontWeight: 500, fontStyle: 'italic',
-                color: 'var(--mm-ink)', lineHeight: 1.25,
-                marginBottom: 14, letterSpacing: '0.01em',
+                fontWeight: 500,
+                color: 'var(--mm-ink)', lineHeight: 1.3,
+                marginBottom: 14, letterSpacing: '0.06em',
               }}>
                 {content.title}
               </h1>
@@ -192,15 +193,19 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
                   <span style={{ fontSize: '0.6em', verticalAlign: '0.25em', marginRight: 2, color: 'var(--mm-text-muted)' }}>¥</span>
                   {content.price.toLocaleString()}
                 </span>
-                {content.stock_limit && (
-                  <span style={{
-                    fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
-                    color: isSoldOut ? '#dc2626' : 'var(--mm-text-muted)',
-                    fontWeight: isSoldOut ? 700 : 500,
-                  }}>
-                    {isSoldOut ? 'Sold out' : `残 ${Math.max(0, content.stock_limit - content.sold_count)}`}
-                  </span>
-                )}
+                {content.stock_limit && (() => {
+                  const remaining = Math.max(0, content.stock_limit - content.sold_count)
+                  const low = !isSoldOut && remaining <= 3
+                  return (
+                    <span style={{
+                      fontSize: low ? 12 : 11, letterSpacing: '0.1em',
+                      color: isSoldOut ? '#dc2626' : low ? 'var(--mm-primary)' : 'var(--mm-text-muted)',
+                      fontWeight: isSoldOut || low ? 700 : 500,
+                    }}>
+                      {isSoldOut ? 'Sold out' : `残り ${remaining} 点`}
+                    </span>
+                  )
+                })()}
               </div>
             </div>
 
@@ -228,7 +233,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
                     {content.creator.avatar_url ? (
                       <img src={content.creator.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
-                      <span className="font-serif-display" style={{ fontSize: 28, fontStyle: 'italic', color: 'var(--mm-primary)' }}>{content.creator.display_name[0]}</span>
+                      <span className="font-serif-display" style={{ fontSize: 28, color: 'var(--mm-primary)' }}>{content.creator.display_name[0]}</span>
                     )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -270,7 +275,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
                   <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
                   More from this creator
                 </p>
-                <h2 className="font-serif-display" style={{ fontSize: 24, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-ink)' }}>
+                <h2 className="font-serif-display" style={{ fontSize: 24, fontWeight: 500, color: 'var(--mm-ink)', letterSpacing: '0.04em' }}>
                   {content.creator?.display_name} の他のコンテンツ
                 </h2>
               </div>
@@ -309,10 +314,10 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
               <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
               Discover
             </p>
-            <h2 className="font-serif-display" style={{ fontSize: 24, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-ink)', marginBottom: 20 }}>
+            <h2 className="font-serif-display" style={{ fontSize: 24, fontWeight: 500, color: 'var(--mm-ink)', marginBottom: 20, letterSpacing: '0.04em' }}>
               このクリエイターを見ている方へ
             </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
               {recCreators.map((c: any, i: number) => (
                 <Link key={c.id} href={`/creator/${c.username}`} style={{ textDecoration: 'none' }}>
                   <div className="mm-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -333,6 +338,8 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
         )}
 
       </div>
+
+      <Footer />
     </div>
   )
 }

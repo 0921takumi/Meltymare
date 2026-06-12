@@ -34,7 +34,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja">
       <head>
         <meta name="theme-color" content="#d36b24" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        {/* maximum-scale=1 はピンチズーム禁止（WCAG 1.4.4違反）のため撤廃。
+            viewport-fit=cover はノッチ端末の safe-area-inset を有効化する */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
       <body>{children}</body>
     </html>

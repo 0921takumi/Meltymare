@@ -24,7 +24,11 @@ export default async function ContactPage() {
       <Header user={profile} />
 
       <div className="mm-page-pad" style={{ maxWidth: 720, margin: '0 auto' }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>お問い合わせ</h1>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--mm-text-sub)', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <span style={{ width: 18, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+          CONTACT
+        </p>
+        <h1 className="font-serif-display" style={{ fontSize: 28, fontWeight: 500, color: 'var(--mm-ink)', marginBottom: 8 }}>お問い合わせ</h1>
         <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', lineHeight: 1.7, marginBottom: 24 }}>
           サービスに関するご質問・ご要望・不具合のご報告などはこちらからお送りください。<br />
           通常2営業日以内にご返信いたします。

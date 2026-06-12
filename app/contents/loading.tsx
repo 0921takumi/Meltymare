@@ -18,11 +18,11 @@ export default function ContentsLoading() {
         <div className="mm-content-grid">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="mm-card" style={{ overflow: 'hidden' }}>
-              <div style={{ ...sk('100%', 0), aspectRatio: '4/3', borderRadius: 0 }} />
-              <div style={{ padding: '12px 14px' }}>
+              <div style={{ ...sk('100%', 0), aspectRatio: '4/5', borderRadius: 0 }} />
+              <div style={{ padding: '14px 14px 16px' }}>
                 <div style={sk(60, 11, 4)} />
                 <div style={sk('90%', 14, 8)} />
-                <div style={sk(50, 16, 8)} />
+                <div style={{ ...sk(50, 16, 8), marginTop: 8, borderTop: '1px solid var(--mm-border)', paddingTop: 8 }} />
               </div>
             </div>
           ))}
@@ -37,7 +37,7 @@ const sk = (w: number | string, h: number, br = 6): React.CSSProperties => ({
   width: typeof w === 'number' ? w : w,
   height: h,
   borderRadius: br,
-  background: 'linear-gradient(90deg, #e8eff5 25%, #f5f8fb 50%, #e8eff5 75%)',
+  background: 'linear-gradient(90deg, #ede5d8 25%, #f7f2ea 50%, #ede5d8 75%)',
   backgroundSize: '200% 100%',
   animation: 'shimmer 1.4s infinite',
   marginBottom: 0,

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
+import Footer from '@/components/layout/Footer'
 import Link from 'next/link'
 import { Medal } from 'lucide-react'
 
@@ -149,6 +150,7 @@ export default async function CreatorsPage() {
           </Link>
         </div>
       </div>
+      <Footer />
     </div>
   )
 }

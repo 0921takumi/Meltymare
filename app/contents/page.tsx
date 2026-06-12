@@ -2,8 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import ContentCard from '@/components/ui/ContentCard'
 import Header from '@/components/layout/Header'
+import Footer from '@/components/layout/Footer'
 import ContentsFilter from './ContentsFilter'
 import { Sparkles } from 'lucide-react'
+import Link from 'next/link'
 
 type SortKey = 'newest' | 'popular' | 'price_asc' | 'price_desc'
 type TypeKey = 'all' | 'image' | 'video'
@@ -121,16 +123,23 @@ export default async function ContentsPage({
       <Header user={profile} />
 
       <div className="mm-page-pad" style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>コンテンツ一覧</h1>
-          <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>{contents?.length ?? 0} 件</p>
+        <div style={{ marginBottom: 24 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--mm-text-sub)', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <span style={{ width: 24, height: 1, background: 'var(--mm-primary)' }} />
+            ALL CONTENTS
+          </p>
+          <h1 className="font-serif-display" style={{ fontSize: 'clamp(24px, 5vw, 30px)', fontWeight: 500, color: 'var(--mm-ink)', marginBottom: 6, letterSpacing: '0.04em' }}>コンテンツ一覧</h1>
+          <p style={{ fontSize: 13, color: 'var(--mm-text-muted)' }}>
+            <span className="font-serif-display" style={{ fontSize: 18, fontWeight: 600, color: 'var(--mm-ink)' }}>{contents?.length ?? 0}</span>
+            <span style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', marginLeft: 5 }}>items</span>
+          </p>
         </div>
 
         {/* あなたへのおすすめ */}
         {recommendations && recommendations.length > 0 && (
           <div style={{ marginBottom: 32 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <Sparkles size={17} color="#a855f7" />
+              <Sparkles size={17} color="var(--mm-primary)" />
               <h2 style={{ fontSize: 16, fontWeight: 700 }}>あなたへのおすすめ</h2>
               <span style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 500 }}>同じ推しを応援する人がチェックしているコンテンツ</span>
             </div>
@@ -151,9 +160,16 @@ export default async function ContentsPage({
         />
 
         {!contents || contents.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--mm-text-muted)' }}>
-            <p style={{ fontSize: 48, marginBottom: 16 }}>📭</p>
-            <p style={{ fontSize: 16 }}>コンテンツが見つかりませんでした</p>
+          <div style={{ position: 'relative', background: 'white', border: '1px solid var(--mm-border)', borderRadius: 16, padding: 'clamp(48px, 8vw, 72px) 24px', textAlign: 'center', overflow: 'hidden' }}>
+            <span style={{ position: 'absolute', top: 16, left: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', top: 16, right: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, left: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, right: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <p className="font-serif-display" style={{ fontSize: 28, fontWeight: 500, fontStyle: 'italic', color: 'var(--mm-ink)', marginBottom: 12 }}>Nothing here yet.</p>
+            <p style={{ fontSize: 14, color: 'var(--mm-text-sub)', marginBottom: 20 }}>条件に合うコンテンツが見つかりませんでした。条件を変えて探してみてください。</p>
+            <Link href="/contents" style={{ fontSize: 13, color: 'var(--mm-text)', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 2, textDecoration: 'none' }}>
+              フィルターをリセット <span style={{ color: 'var(--mm-primary)' }}>→</span>
+            </Link>
           </div>
         ) : (
           <div className="mm-content-grid">
@@ -167,6 +183,8 @@ export default async function ContentsPage({
           </div>
         )}
       </div>
+
+      <Footer />
     </div>
   )
 }

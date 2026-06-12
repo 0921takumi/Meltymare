@@ -36,34 +36,52 @@ function ContentsFilterInner({ currentSort, currentType, currentTag, popularTags
     { value: 'video', label: '動画' },
   ]
 
+  // 種別＝塗りチップ、ソート＝下線タブ。両方オレンジ点灯で判別不能だった問題を役割分担で解消
   const chipStyle = (active: boolean): React.CSSProperties => ({
-    padding: '6px 14px',
-    borderRadius: 20,
+    padding: '9px 16px',
+    borderRadius: 999,
     fontSize: 13,
-    fontWeight: active ? 700 : 400,
-    border: `1px solid ${active ? 'var(--mm-primary)' : 'var(--mm-border)'}`,
-    background: active ? 'var(--mm-primary)' : 'white',
+    fontWeight: active ? 700 : 500,
+    border: `1px solid ${active ? 'var(--mm-ink)' : 'var(--mm-border)'}`,
+    background: active ? 'var(--mm-ink)' : 'white',
     color: active ? 'white' : 'var(--mm-text-sub)',
     cursor: 'pointer',
     whiteSpace: 'nowrap' as const,
-    transition: 'all 0.15s',
+    transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+  })
+
+  const sortTabStyle = (active: boolean): React.CSSProperties => ({
+    padding: '9px 4px',
+    background: 'transparent',
+    border: 'none',
+    borderBottom: active ? '2px solid var(--mm-primary)' : '2px solid transparent',
+    borderRadius: 0,
+    fontSize: 13,
+    fontWeight: active ? 700 : 500,
+    color: active ? 'var(--mm-ink)' : 'var(--mm-text-muted)',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+    transition: 'color 0.15s, border-color 0.15s',
   })
 
   return (
     <div style={{ marginBottom: 24 }}>
-      {/* 種別 */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        {typeOptions.map(o => (
-          <button key={o.value} onClick={() => update('type', o.value)} style={chipStyle(currentType === o.value)}>
-            {o.label}
-          </button>
-        ))}
-        <div style={{ width: 1, background: 'var(--mm-border)', margin: '0 6px' }} />
-        {sortOptions.map(o => (
-          <button key={o.value} onClick={() => update('sort', o.value)} style={chipStyle(currentSort === o.value)}>
-            {o.label}
-          </button>
-        ))}
+      {/* 種別（左）× ソート（右） */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {typeOptions.map(o => (
+            <button key={o.value} onClick={() => update('type', o.value)} style={chipStyle(currentType === o.value)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 14, overflowX: 'auto' }}>
+          {sortOptions.map(o => (
+            <button key={o.value} onClick={() => update('sort', o.value)} style={sortTabStyle(currentSort === o.value)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* タグ */}
@@ -71,7 +89,7 @@ function ContentsFilterInner({ currentSort, currentType, currentTag, popularTags
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginRight: 4 }}>タグ:</span>
           {currentTag && (
-            <button onClick={() => update('tag', '')} style={{ ...chipStyle(true), background: '#7c3aed', borderColor: '#7c3aed', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button onClick={() => update('tag', '')} style={{ ...chipStyle(true), display: 'flex', alignItems: 'center', gap: 4 }}>
               #{currentTag} ✕
             </button>
           )}

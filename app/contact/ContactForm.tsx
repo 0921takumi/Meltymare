@@ -40,10 +40,6 @@ export default function ContactForm({ defaultName, defaultEmail }: { defaultName
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 14px', border: '1px solid var(--mm-border)',
-    borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: 'white',
-  }
   const labelStyle: React.CSSProperties = {
     display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--mm-text-sub)',
   }
@@ -66,31 +62,32 @@ export default function ContactForm({ defaultName, defaultEmail }: { defaultName
     <div className="mm-card" style={{ padding: 28 }}>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div>
-          <label style={labelStyle}>お名前 <span style={{ color: '#ef4444' }}>*</span></label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} placeholder="山田 太郎" />
+          <label style={labelStyle}>お名前（ニックネーム可） <span style={{ color: 'var(--mm-primary)' }}>*</span></label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="mm-auth-input" placeholder="お名前またはニックネーム" />
         </div>
 
         <div>
-          <label style={labelStyle}>メールアドレス <span style={{ color: '#ef4444' }}>*</span></label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyle} placeholder="mail@example.com" />
+          <label style={labelStyle}>メールアドレス <span style={{ color: 'var(--mm-primary)' }}>*</span></label>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mm-auth-input" placeholder="mail@example.com" />
         </div>
 
         <div>
-          <label style={labelStyle}>お問い合わせ種別 <span style={{ color: '#ef4444' }}>*</span></label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} required style={inputStyle}>
+          <label style={labelStyle}>お問い合わせ種別 <span style={{ color: 'var(--mm-primary)' }}>*</span></label>
+          <select value={category} onChange={(e) => setCategory(e.target.value)} required className="mm-auth-input">
             {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
         </div>
 
         <div>
-          <label style={labelStyle}>件名 <span style={{ color: '#ef4444' }}>*</span></label>
-          <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} required maxLength={100} style={inputStyle} placeholder="例: 購入したコンテンツがダウンロードできません" />
+          <label style={labelStyle}>件名 <span style={{ color: 'var(--mm-primary)' }}>*</span></label>
+          <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} required maxLength={100} className="mm-auth-input" placeholder="例: 購入したコンテンツがダウンロードできません" />
         </div>
 
         <div>
-          <label style={labelStyle}>お問い合わせ内容 <span style={{ color: '#ef4444' }}>*</span></label>
+          <label style={labelStyle}>お問い合わせ内容 <span style={{ color: 'var(--mm-primary)' }}>*</span></label>
           <textarea value={body} onChange={(e) => setBody(e.target.value)} required rows={7} maxLength={2000}
-            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7 }}
+            className="mm-auth-input"
+            style={{ resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7, width: '100%', boxSizing: 'border-box' }}
             placeholder="ご質問・ご要望を具体的にお書きください" />
           <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 4, textAlign: 'right' }}>{body.length}/2000</p>
         </div>

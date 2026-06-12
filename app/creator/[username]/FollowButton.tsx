@@ -44,19 +44,19 @@ export default function FollowButton({ creatorId, isFollowing: initialFollowing,
         display: 'flex',
         alignItems: 'center',
         gap: 6,
-        padding: '9px 20px',
-        borderRadius: 24,
-        border: `1.5px solid ${isFollowing ? '#ec4899' : 'var(--mm-border)'}`,
-        background: isFollowing ? '#fdf2f8' : 'white',
-        color: isFollowing ? '#ec4899' : 'var(--mm-text-sub)',
+        padding: '12px 22px',
+        borderRadius: 999,
+        border: `1.5px solid ${isFollowing ? 'var(--mm-primary)' : 'var(--mm-border)'}`,
+        background: isFollowing ? 'var(--mm-primary-light)' : 'white',
+        color: isFollowing ? 'var(--mm-primary)' : 'var(--mm-text-sub)',
         fontWeight: 700,
         fontSize: 13,
         cursor: loading ? 'not-allowed' : 'pointer',
-        transition: 'all 0.2s',
+        transition: 'background 0.2s, color 0.2s, border-color 0.2s',
         flexShrink: 0,
       }}
     >
-      <Heart size={15} fill={isFollowing ? '#ec4899' : 'none'} color={isFollowing ? '#ec4899' : 'var(--mm-text-muted)'} />
+      <Heart size={15} fill={isFollowing ? 'var(--mm-primary)' : 'none'} color={isFollowing ? 'var(--mm-primary)' : 'var(--mm-text-muted)'} />
       {isFollowing ? 'フォロー中' : 'フォロー'}
       <span style={{ fontSize: 12, opacity: 0.7 }}>{count}</span>
     </button>

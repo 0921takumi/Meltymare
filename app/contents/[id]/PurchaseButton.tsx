@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Download, ShoppingCart, Lock, Clock, Tag, Heart } from 'lucide-react'
 
@@ -29,12 +30,13 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
   const [couponData, setCouponData] = useState<{ discount_amount: number; final_price: number; code: string } | null>(null)
   const [couponError, setCouponError] = useState('')
   const [tipPercent, setTipPercent] = useState<TipPercent>(0)
+  const [purchaseError, setPurchaseError] = useState('')
 
   // 購入済み・納品済み → ダウンロード
   if (isPurchased && deliveryStatus === 'delivered' && downloadUrl) {
     return (
-      <a href={downloadUrl} download
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#059669', color: 'white', padding: '14px 24px', borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>
+      <a href={downloadUrl} download className="mm-btn-primary"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#059669', color: 'white', padding: '14px 24px', borderRadius: 999, fontWeight: 700, fontSize: 15, textDecoration: 'none', letterSpacing: '0.04em' }}>
         <Download size={18} />
         ダウンロード
       </a>
@@ -68,7 +70,7 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
 
   if (isSoldOut) {
     return (
-      <div style={{ textAlign: 'center', padding: '14px', background: 'var(--mm-bg)', border: '1px solid var(--mm-border)', borderRadius: 10, color: 'var(--mm-text-muted)', fontWeight: 600, fontSize: 14 }}>
+      <div style={{ textAlign: 'center', padding: '14px', background: 'var(--mm-bg)', border: '1px solid var(--mm-border)', borderRadius: 999, color: 'var(--mm-text-muted)', fontWeight: 600, fontSize: 14 }}>
         完売しました
       </div>
     )
@@ -76,11 +78,20 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
 
   if (!isLoggedIn) {
     return (
-      <button onClick={() => router.push('/auth/login')}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', background: 'var(--mm-primary)', color: 'white', padding: '14px 24px', borderRadius: 10, fontWeight: 700, fontSize: 15, border: 'none', cursor: 'pointer' }}>
-        <Lock size={17} />
-        ログインして購入 ¥{price.toLocaleString()}
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* ?next= で購入意思のあるユーザーをこの商品ページへ確実に戻す（CVR導線） */}
+        <button onClick={() => router.push(`/auth/login?next=/contents/${contentId}`)} className="mm-btn-primary"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', background: 'var(--mm-primary)', color: 'white', padding: '14px 24px', borderRadius: 999, fontWeight: 700, fontSize: 15, border: 'none', cursor: 'pointer', letterSpacing: '0.04em', boxShadow: '0 12px 28px -10px rgba(211,107,36,0.5)' }}>
+          <Lock size={17} />
+          ログインして購入 ¥{price.toLocaleString()}
+        </button>
+        <p style={{ fontSize: 12, color: 'var(--mm-text-sub)', textAlign: 'center' }}>
+          はじめての方は{' '}
+          <Link href={`/auth/signup?next=/contents/${contentId}`} style={{ color: 'var(--mm-ink)', fontWeight: 600, borderBottom: '1px solid var(--mm-ink)', paddingBottom: 1, textDecoration: 'none' }}>
+            無料登録（30秒）→
+          </Link>
+        </p>
+      </div>
     )
   }
 
@@ -105,6 +116,7 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
 
   const handlePurchase = async () => {
     setLoading(true)
+    setPurchaseError('')
     try {
       const res = await fetch('/api/purchase', {
         method: 'POST',
@@ -115,14 +127,25 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
       if (!res.ok) throw new Error(data.error)
       window.location.href = data.checkoutUrl
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '購入処理に失敗しました'
-      alert(msg)
+      // alert() はモバイルで唐突なため、ボタン直上のインライン表示にする
+      const msg = e instanceof Error && e.message ? e.message : '決済ページに進めませんでした。通信環境をご確認のうえ、もう一度お試しください。'
+      setPurchaseError(msg)
       setLoading(false)
     }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="mm-purchase-sticky" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* 受注制作の流れ（納品待ちを「特別感」として先に伝える） */}
+      <div className="mm-card" style={{ padding: '12px 16px', background: 'var(--mm-bg-soft)' }}>
+        <p style={{ fontSize: 11, color: 'var(--mm-text-sub)', lineHeight: 1.7, letterSpacing: '0.02em' }}>
+          <span style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>① ご購入</span> → <span style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>② クリエイターがあなたのために仕上げ</span> → <span style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>③ マイページからダウンロード</span>
+        </p>
+        <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 4 }}>
+          ご購入後、クリエイターがあなただけの一枚に仕上げてお届けします。
+        </p>
+      </div>
+
       {/* クーポン入力 */}
       <div className="mm-card" style={{ padding: '14px 16px' }}>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -132,7 +155,7 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
               value={couponCode}
               onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponData(null); setCouponError('') }}
               placeholder="クーポンコード"
-              style={{ width: '100%', padding: '9px 12px 9px 30px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace', letterSpacing: '0.05em' }}
+              style={{ width: '100%', padding: '9px 12px 9px 30px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 16, outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace', letterSpacing: '0.05em' }}
             />
           </div>
           <button onClick={applyCoupon} disabled={couponLoading || !couponCode.trim()}
@@ -194,11 +217,22 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
         <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--mm-text)' }}>¥{finalPrice.toLocaleString()}</span>
       </div>
 
-      <button onClick={handlePurchase} disabled={loading}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', background: 'var(--mm-primary)', color: 'white', padding: '14px 24px', borderRadius: 10, fontWeight: 700, fontSize: 15, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+      {purchaseError && (
+        <p style={{ fontSize: 13, color: '#dc2626', background: '#fef2f2', padding: '10px 14px', borderRadius: 8, lineHeight: 1.6 }}>
+          {purchaseError}
+        </p>
+      )}
+
+      <button onClick={handlePurchase} disabled={loading} className="mm-btn-primary"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', background: 'var(--mm-primary)', color: 'white', padding: '14px 24px', borderRadius: 999, fontWeight: 700, fontSize: 15, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, letterSpacing: '0.04em', boxShadow: '0 12px 28px -10px rgba(211,107,36,0.5)' }}>
         <ShoppingCart size={17} />
         {loading ? '処理中...' : `購入する ¥${finalPrice.toLocaleString()}`}
       </button>
+
+      <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, lineHeight: 1.6 }}>
+        <Lock size={11} style={{ flexShrink: 0 }} />
+        決済は Stripe で安全に処理されます。カード情報が My Focus に保存されることはありません。
+      </p>
     </div>
   )
 }

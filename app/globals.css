@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Caveat:wght@500;600&family=Shippori+Mincho:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Caveat:wght@500;600&family=Klee+One:wght@400;600&family=Shippori+Mincho:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
 /* ─── グローバルリセット（モバイル横はみ出し防止の基本） ───
@@ -56,7 +56,8 @@ html, body {
 /* ─── ヒーロー専用ユーティリティ ─────────────────── */
 .font-serif-display { font-family: 'Cormorant Garamond', 'Shippori Mincho', serif; }
 .font-jp-serif { font-family: 'Shippori Mincho', 'Cormorant Garamond', serif; }
-.font-script { font-family: 'Caveat', 'Cormorant Garamond', serif; }
+/* 手書き: 欧文=Caveat、和文グリフは Klee One（Caveatに和文は無くゴシックに落ちるため） */
+.font-script { font-family: 'Caveat', 'Klee One', cursive; }
 
 /* polaroid アニメーション（ふわり浮かぶ）— デスクトップのみ
  * `top` だけ動かす設計。transform は各breakpointのpolaroid位置/回転に任せる。
@@ -389,7 +390,9 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 58px;
+  height: auto;
+  min-height: 58px;
+  padding-bottom: env(safe-area-inset-bottom);
   background: white;
   border-top: 1px solid var(--mm-border);
   box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
@@ -398,9 +401,9 @@ body {
 @media (min-width: 640px) {
   .mm-bottom-nav { display: none; }
 }
-/* モバイル時のみ下に余白（ボトムナビ分） */
+/* モバイル時のみ下に余白（ボトムナビ + ホームインジケータ分） */
 @media (max-width: 639px) {
-  body { padding-bottom: 58px; }
+  body { padding-bottom: calc(58px + env(safe-area-inset-bottom)); }
 }
 
 /* ─── クリエイターダッシュボード ─────────────────── */
@@ -612,12 +615,24 @@ body {
   left: 0;
   right: 0;
   text-align: center;
-  font-family: 'Caveat', cursive;
+  font-family: 'Caveat', 'Klee One', cursive;
   font-weight: 600;
   font-size: 18px;
   color: var(--mm-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 6px;
 }
-.mm-polaroid:hover { transform: translateY(-6px) rotate(0) scale(1.03); z-index: 10; }
+/* モバイル: カードが小さいのでキャプションも控えめに（はみ出し防止） */
+@media (max-width: 599px) {
+  .mm-polaroid { padding: 10px 10px 34px; }
+  .mm-polaroid-caption { font-size: 13px; bottom: 10px; }
+}
+/* hover はポインタ環境のみ（タッチでタップ時にカードが吹き飛ぶのを防ぐ） */
+@media (hover: hover) and (min-width: 600px) {
+  .mm-polaroid:hover { transform: translateY(-6px) rotate(0) scale(1.03); z-index: 10; }
+}
 
 /* カメラのファインダー枠（hero 装飾） */
 .mm-viewfinder-corner {
@@ -900,11 +915,11 @@ body {
   padding: 10px 14px;
 }
 
-/* コンテンツ詳細: モバイルでサムネイルのアスペクト比を緩める */
-@media (max-width: 480px) {
-  .mm-content-detail > div:first-child {
-    aspect-ratio: 16/9;
-  }
+/* コンテンツ詳細サムネイル: デスクトップ4/3、モバイルはチェキ縦4/5（商材の顔クロップ防止）
+ * 旧 `.mm-content-detail > div:first-child` はインラインstyleに負けて無効だったため class 化 */
+.mm-content-detail-thumb { aspect-ratio: 4 / 3; }
+@media (max-width: 640px) {
+  .mm-content-detail-thumb { aspect-ratio: 4 / 5; }
 }
 
 /* スクロールバーを細くする */
@@ -927,7 +942,7 @@ a { color: inherit; }
   padding: 13px 16px;
   border: 1px solid var(--mm-border);
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 16px; /* iOSのフォーカス自動ズーム回避（16px未満だとズームされる） */
   outline: none;
   box-sizing: border-box;
   background: white;
@@ -953,4 +968,93 @@ a { color: inherit; }
   -webkit-text-fill-color: var(--mm-ink) !important;
   caret-color: var(--mm-ink);
   transition: background-color 5000s ease-in-out 0s;  /* 遅延で実質無効化 */
+}
+
+/* ─── 仕上げユーティリティ（Issue 01 ブラッシュアップ） ─────────────── */
+
+/* iOS自動ズームの根治: モバイルの全入力を16px以上に */
+@media (max-width: 640px) {
+  input[type="text"], input[type="search"], input[type="email"],
+  input[type="password"], input[type="number"], input:not([type]),
+  textarea, select { font-size: 16px; }
+}
+
+/* テキスト選択色をブランドに */
+::selection { background: rgba(211, 107, 36, 0.22); color: var(--mm-ink); }
+
+/* 見出しの行折れバランス */
+h1, h2, h3 { text-wrap: balance; }
+
+/* プライマリCTA（ピル型）の押し心地 */
+.mm-btn-primary {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.2s;
+}
+@media (hover: hover) {
+  .mm-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 32px -10px rgba(31, 26, 21, 0.45); }
+}
+.mm-btn-primary:active { transform: scale(0.97); }
+
+/* 認証系送信ボタンの押し心地 */
+.mm-auth-submit { transition: background 0.2s, transform 0.15s; }
+.mm-auth-submit:hover:not(:disabled) { background: #2e2620 !important; }
+.mm-auth-submit:active:not(:disabled) { transform: scale(0.99); }
+
+/* 検索inputのフォーカス */
+.mm-search-input { transition: border-color 0.2s, box-shadow 0.2s, background 0.2s; }
+.mm-search-input:focus {
+  border-color: var(--mm-ink) !important;
+  background: white !important;
+  box-shadow: 0 0 0 3px rgba(31, 26, 21, 0.08);
+}
+
+/* モバイル: ファインダー四隅を控えめに（CTAとの視覚競合を回避） */
+@media (max-width: 639px) {
+  .mm-viewfinder-corner { width: 20px; height: 20px; opacity: 0.3; }
+  .mm-viewfinder-corner.bl, .mm-viewfinder-corner.br { display: none; }
+}
+
+/* カテゴリピル: 右端フェードで「まだ続く」を示唆 + hover統一（オレンジ） */
+.mm-category-pills {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+}
+.mm-category-pill { transition: background 0.2s, color 0.2s, border-color 0.2s; }
+@media (hover: hover) {
+  .mm-category-pill:hover {
+    background: white !important;
+    color: var(--mm-primary) !important;
+    border-color: var(--mm-primary) !important;
+  }
+}
+
+/* 商品サムネにヒーローと同じフィルムヴィネット（全写真が「同じカメラの一冊」になる） */
+.mm-content-card-thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.16) 100%);
+  opacity: 0.5;
+  z-index: 1;
+}
+
+/* モバイル: 購入ボタンを追従（ボトムナビの上に常駐） */
+@media (max-width: 639px) {
+  .mm-purchase-sticky {
+    position: sticky;
+    bottom: calc(58px + 10px + env(safe-area-inset-bottom));
+    z-index: 30;
+  }
+}
+
+/* アニメーション削減設定の尊重（必ず最後に置く） */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

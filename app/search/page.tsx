@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
+import Footer from '@/components/layout/Footer'
 import ContentCard from '@/components/ui/ContentCard'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
@@ -83,9 +84,22 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         </div>
 
         {!query ? (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--mm-text-muted)' }}>
-            <Search size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
-            <p style={{ fontSize: 16 }}>クリエイター名やコンテンツ名を入力してください</p>
+          <div className="mm-card" style={{ textAlign: 'center', padding: 'clamp(40px,7vw,64px) 24px', position: 'relative', overflow: 'hidden' }}>
+            <span style={{ position: 'absolute', top: 16, left: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', top: 16, right: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, left: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, right: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'var(--mm-primary)', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+              SEARCH
+              <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+            </p>
+            <p className="font-serif-display" style={{ fontStyle: 'italic', fontSize: 26, color: 'var(--mm-ink)', marginBottom: 12 }}>Find your favorite.</p>
+            <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', marginBottom: 24 }}>クリエイター名やコンテンツ名を入力してください</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Link href="/contents?tag=チェキ" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--mm-bg)', border: '1px solid var(--mm-border)', color: 'var(--mm-text-sub)', padding: '8px 18px', borderRadius: 999, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>#チェキ</Link>
+              <Link href="/contents?tag=動画" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--mm-bg)', border: '1px solid var(--mm-border)', color: 'var(--mm-text-sub)', padding: '8px 18px', borderRadius: 999, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>#動画</Link>
+            </div>
           </div>
         ) : total === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--mm-text-muted)' }}>
@@ -109,10 +123,10 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                             ? <img src={creator.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             : creator.display_name[0]}
                         </div>
-                        <div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--mm-text)' }}>{creator.display_name}</p>
                           <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2 }}>@{creator.username}</p>
-                          {creator.bio && <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 400 }}>{creator.bio}</p>}
+                          {creator.bio && <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{creator.bio}</p>}
                         </div>
                         <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--mm-primary)', fontWeight: 600, flexShrink: 0 }}>プロフィールを見る →</span>
                       </div>
@@ -136,6 +150,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           </div>
         )}
       </div>
+      <Footer />
     </div>
   )
 }

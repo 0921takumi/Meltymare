@@ -32,7 +32,7 @@ export default function ContentCard({ content, isPurchased }: ContentCardProps) 
       {/* サムネイル */}
       <div className="mm-content-card-thumb">
         {content.thumbnail_url ? (
-          <img src={content.thumbnail_url} alt={content.title} className="mm-content-card-img" />
+          <img src={content.thumbnail_url} alt={content.title} className="mm-content-card-img" loading="lazy" decoding="async" />
         ) : (
           <div style={{
             width: '100%', height: '100%',
@@ -84,7 +84,6 @@ export default function ContentCard({ content, isPurchased }: ContentCardProps) 
               color: 'white', letterSpacing: '0.04em',
               textDecoration: 'line-through',
               textDecorationThickness: '1px',
-              textUnderlineOffset: 6,
             }}>
               Sold out
             </div>
@@ -122,17 +121,17 @@ export default function ContentCard({ content, isPurchased }: ContentCardProps) 
 
         {/* メタ行: 価格＋在庫 */}
         <div className="mm-content-card-meta">
-          <span className="mm-content-card-price">
+          <span className="mm-content-card-price" style={{ fontVariantNumeric: 'tabular-nums' }}>
             <span style={{ fontSize: '0.65em', verticalAlign: '0.2em', marginRight: 1, color: 'var(--mm-text-muted)' }}>¥</span>
             {content.price.toLocaleString()}
           </span>
           {remaining !== null && (
             <span style={{
-              fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
+              fontSize: 10, letterSpacing: '0.1em',
               color: isLowStock ? 'var(--mm-primary)' : 'var(--mm-text-muted)',
               fontWeight: isLowStock ? 700 : 500,
             }}>
-              {isSoldOut ? 'Sold out' : `残 ${remaining}`}
+              {isSoldOut ? 'SOLD OUT' : `残り ${remaining} 点`}
             </span>
           )}
         </div>

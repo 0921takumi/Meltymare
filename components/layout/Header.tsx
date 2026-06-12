@@ -51,6 +51,15 @@ export default function Header({ user }: HeaderProps) {
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
 
+  // Escape で検索オーバーレイ／ドロップダウンを閉じる
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setSearchOpen(false); setAvatarMenuOpen(false) }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (query.trim()) {
@@ -98,13 +107,14 @@ export default function Header({ user }: HeaderProps) {
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="クリエイター・タグ・コンテンツを検索"
+              className="mm-search-input"
               style={{ width: '100%', padding: '9px 12px 9px 38px', border: '1px solid var(--mm-border)', borderRadius: 999, fontSize: 13, outline: 'none', background: 'var(--mm-bg)', boxSizing: 'border-box' }}
             />
           </form>
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* モバイル検索アイコン */}
-            <button className="mm-header-nav-mobile" onClick={openSearch} aria-label="検索" style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+            <button className="mm-header-nav-mobile" onClick={openSearch} aria-label="検索" style={{ padding: 12, background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
               <Search size={20} color="var(--mm-text)" />
             </button>
 
@@ -184,38 +194,34 @@ export default function Header({ user }: HeaderProps) {
                 <Link href="/auth/login" className="mm-header-nav" style={{ alignItems: 'center', gap: 6, padding: '8px 12px', fontSize: 13, color: 'var(--mm-text-sub)', textDecoration: 'none' }}>
                   <LogIn size={15} />ログイン
                 </Link>
-                <Link href="/auth/signup" style={{ padding: '8px 16px', fontSize: 13, background: 'var(--mm-primary)', color: 'white', textDecoration: 'none', borderRadius: 999, fontWeight: 700 }}>
+                <Link href="/auth/signup" className="mm-btn-primary" style={{ padding: '11px 18px', fontSize: 13, background: 'var(--mm-primary)', color: 'white', textDecoration: 'none', borderRadius: 999, fontWeight: 700, whiteSpace: 'nowrap' }}>
                   はじめる
                 </Link>
               </>
             )}
 
             {/* モバイルハンバーガー */}
-            <button className="mm-header-nav-mobile" onClick={() => setMenuOpen(v => !v)} aria-label="メニュー" style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+            <button className="mm-header-nav-mobile" onClick={() => setMenuOpen(v => !v)} aria-label="メニュー" style={{ padding: 12, background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
               {menuOpen ? <X size={22} color="var(--mm-text)" /> : <Menu size={22} color="var(--mm-text)" />}
             </button>
           </div>
         </div>
 
-        {/* 2段目: カテゴリピル（横スクロール可） */}
+        {/* 2段目: カテゴリピル（横スクロール可・右端フェードで「続き」を示唆） */}
         <div style={{ borderTop: '1px solid var(--mm-border)', background: 'white' }}>
           <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 16px' }}>
-            <div className="mm-category-pills" style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '8px 0', scrollbarWidth: 'none' }}>
+            <div className="mm-category-pills" style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '8px 16px', margin: '0 -16px', scrollbarWidth: 'none' }}>
               {CATEGORIES.filter(c => isCategoryEnabled(c.key)).map(c => {
                 const Icon = c.icon
-                const tint = c.tint ?? 'var(--mm-primary)'
                 return (
-                  <Link key={c.key} href={c.href} style={{
+                  <Link key={c.key} href={c.href} className="mm-category-pill" style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '6px 12px', borderRadius: 999,
+                    padding: '9px 14px', borderRadius: 999,
                     background: 'var(--mm-bg)', color: 'var(--mm-text-sub)',
                     fontSize: 12, fontWeight: 600, textDecoration: 'none',
                     whiteSpace: 'nowrap', flexShrink: 0,
                     border: '1px solid transparent',
-                  }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.color = tint; e.currentTarget.style.borderColor = tint }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--mm-bg)'; e.currentTarget.style.color = 'var(--mm-text-sub)'; e.currentTarget.style.borderColor = 'transparent' }}
-                  >
+                  }}>
                     <Icon size={13} />{c.label}
                   </Link>
                 )
@@ -226,8 +232,10 @@ export default function Header({ user }: HeaderProps) {
 
         {/* モバイル検索オーバーレイ */}
         {searchOpen && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'flex-start', paddingTop: 56 }}>
-            <div style={{ width: '100%', background: 'white', padding: '16px' }}>
+          <div onClick={() => setSearchOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'flex-start', paddingTop: 56 }}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ width: '100%', background: 'white', padding: '16px', borderRadius: '0 0 16px 16px', boxShadow: '0 12px 32px rgba(0,0,0,0.12)' }}>
               <form onSubmit={handleSearch} style={{ display: 'flex', gap: 8 }}>
                 <div style={{ flex: 1, position: 'relative' }}>
                   <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--mm-text-muted)', pointerEvents: 'none' }} />
@@ -317,6 +325,8 @@ function MobileBottomNav({ user, pathname }: { user: HeaderProps['user']; pathna
             gap: 2, padding: '7px 4px', textDecoration: 'none',
             color: active ? 'var(--mm-primary)' : 'var(--mm-text-muted)',
             fontSize: 10, fontWeight: active ? 700 : 500,
+            boxShadow: active ? 'inset 0 2px 0 var(--mm-primary)' : 'none',
+            transition: 'color 0.2s',
           }}>
             <Icon size={18} />{it.label}
           </Link>

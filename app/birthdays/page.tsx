@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
+import Footer from '@/components/layout/Footer'
 import Link from 'next/link'
 import { Cake, Gift } from 'lucide-react'
 import type { Metadata } from 'next'
@@ -88,10 +89,15 @@ export default async function BirthdaysPage() {
       <Header user={profile} />
 
       {/* ヒーロー */}
-      <div style={{ background: 'linear-gradient(135deg, #fce7f3 0%, #fef3c7 100%)', padding: '40px 20px 56px', textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 8 }}>🎂</div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: '#831843' }}>バースデー</h1>
-        <p style={{ fontSize: 13, color: '#9f1239', marginTop: 6 }}>推しのお誕生日をみんなでお祝いしよう</p>
+      <div style={{ background: 'var(--mm-bg-soft, var(--mm-bg))', borderTop: '1px solid var(--mm-border)', borderBottom: '1px solid var(--mm-border)', padding: '40px 20px 48px', textAlign: 'center' }}>
+        <Cake size={32} color="var(--mm-primary)" style={{ marginBottom: 12 }} />
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--mm-text-sub)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
+          <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+          BIRTHDAY
+          <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+        </p>
+        <h1 className="font-serif-display" style={{ fontSize: 30, fontWeight: 500, color: 'var(--mm-ink)' }}>バースデー</h1>
+        <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', marginTop: 6 }}>推しのお誕生日をみんなでお祝いしよう</p>
       </div>
 
       <div className="mm-page-pad" style={{ maxWidth: 960, margin: '0 auto' }}>
@@ -165,13 +171,26 @@ export default async function BirthdaysPage() {
         )}
 
         {creators.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--mm-text-muted)' }}>
-            <p style={{ fontSize: 40, marginBottom: 12 }}>🎈</p>
-            <p style={{ fontSize: 14 }}>誕生日を公開しているクリエイターがまだいません</p>
+          <div className="mm-card" style={{ textAlign: 'center', padding: 'clamp(40px,7vw,64px) 24px', position: 'relative', overflow: 'hidden' }}>
+            <span style={{ position: 'absolute', top: 16, left: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', top: 16, right: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, left: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, right: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'var(--mm-primary)', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+              NO BIRTHDAYS YET
+              <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+            </p>
+            <p className="font-serif-display" style={{ fontStyle: 'italic', fontSize: 26, color: 'var(--mm-ink)', marginBottom: 12 }}>No celebrations today.</p>
+            <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', marginBottom: 24 }}>誕生日を公開しているクリエイターがまだいません</p>
+            <Link href="/creators" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--mm-ink)', color: 'white', padding: '12px 24px', borderRadius: 999, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+              クリエイター一覧へ →
+            </Link>
           </div>
         )}
 
       </div>
+      <Footer />
     </div>
   )
 }

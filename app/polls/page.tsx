@@ -1,6 +1,7 @@
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import { createClient } from '@/lib/supabase/server'
+import Link from 'next/link'
 import type { Metadata } from 'next'
 import { BarChart3 } from 'lucide-react'
 import PollCard from '@/components/poll/PollCard'
@@ -52,21 +53,33 @@ export default async function PollsFeedPage() {
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
       <Header user={profile} />
       <div className="mm-page-pad" style={{ maxWidth: 640, margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <BarChart3 size={22} color="var(--mm-primary)" />
-          <h1 style={{ fontSize: 22, fontWeight: 700 }}>アンケート</h1>
+        <div style={{ marginBottom: 24 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--mm-text-sub)', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+            POLLS
+          </p>
+          <h1 className="font-serif-display" style={{ fontSize: 30, fontWeight: 500, color: 'var(--mm-ink)' }}>アンケート</h1>
+          <p style={{ fontSize: 13, color: 'var(--mm-text-muted)', marginTop: 4 }}>
+            クリエイターからの質問に投票しよう。
+          </p>
         </div>
-        <p style={{ fontSize: 13, color: 'var(--mm-text-muted)', marginBottom: 24 }}>
-          クリエイターからの質問に投票しよう。
-        </p>
 
         {polls.length === 0 ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            minHeight: '70vh', textAlign: 'center', color: 'var(--mm-text-muted)',
-          }}>
-            <p style={{ fontSize: 15, marginBottom: 8 }}>現在公開中のアンケートはありません。</p>
-            <p style={{ fontSize: 12 }}>クリエイターをフォローすると、新しいアンケートの通知が届きます。</p>
+          <div className="mm-card" style={{ textAlign: 'center', padding: 'clamp(40px,7vw,64px) 24px', minHeight: '40vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+            <span style={{ position: 'absolute', top: 16, left: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', top: 16, right: 16, width: 24, height: 24, borderTop: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, left: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderLeft: '1px solid var(--mm-primary)' }} />
+            <span style={{ position: 'absolute', bottom: 16, right: 16, width: 24, height: 24, borderBottom: '1px solid var(--mm-primary)', borderRight: '1px solid var(--mm-primary)' }} />
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'var(--mm-primary)', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+              NO OPEN POLLS
+              <span style={{ width: 24, height: 1, background: 'var(--mm-primary)', display: 'inline-block' }} />
+            </p>
+            <p className="font-serif-display" style={{ fontStyle: 'italic', fontSize: 22, color: 'var(--mm-ink)', marginBottom: 12 }}>Nothing on the ballot.</p>
+            <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', marginBottom: 24 }}>クリエイターをフォローすると、新しいアンケートのお知らせが届きます。</p>
+            <Link href="/creators" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--mm-ink)', color: 'white', padding: '12px 24px', borderRadius: 999, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+              クリエイターを探す →
+            </Link>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
