@@ -94,7 +94,10 @@ export async function GET(req: NextRequest) {
   const { error } = await supabase.auth.exchangeCodeForSession(code)
 
   if (error) {
-    return NextResponse.redirect(`${origin}/auth/login?error=${encodeURIComponent(error.message)}`)
+    // アプリ内ブラウザ等で PKCE の code_verifier を引き継げず交換に失敗することがある。
+    // メール確認(verify)自体は完了しているケースが多いため、エラーではなく
+    // ログインへ優しく誘導する（メール確認OFF運用ではそもそもここをほぼ通らない）。
+    return NextResponse.redirect(`${origin}/auth/login?notice=${encodeURIComponent('メールアドレスの確認が完了しました。ログインしてください。')}`)
   }
 
   // プロフィールが存在しない場合は作成（OAuth初回ログイン時）

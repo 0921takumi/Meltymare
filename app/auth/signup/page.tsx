@@ -33,7 +33,7 @@ function signupErrorMessage(raw: string): string {
     return 'しばらく時間をおいてから、もう一度お試しください。'
   }
   if (m.includes('password')) {
-    return 'パスワードの条件を満たしていません。8文字以上で設定してください。'
+    return 'パスワードは「大文字・小文字・数字・記号」をそれぞれ1つ以上含む8文字以上で設定してください。'
   }
   return '登録できませんでした。お手数ですが、もう一度お試しください。'
 }
@@ -90,13 +90,19 @@ function SignupForm() {
       setError(signupErrorMessage(error.message))
       setLoading(false)
     } else {
-      // 招待コード使用記録
+      // 招待コード使用記録（メール確認OFF時は signUp で session 済み＝認証が通る）
       if (verify.invite_code_id && data.user?.id) {
         await fetch('/api/invite/redeem', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ invite_code_id: verify.invite_code_id, user_id: data.user.id }),
         })
+      }
+      // メール確認OFF時は signUp が即セッションを返す → そのままログイン状態で遷移。
+      // 確認ON時（session=null）は従来どおり確認メール待ち画面を出す。
+      if (data.session) {
+        window.location.href = validNext ?? '/contents'
+        return
       }
       setDone(true)
     }
@@ -189,6 +195,9 @@ function SignupForm() {
                   <p style={{ fontSize: 11, color: strength.color, fontWeight: 600 }}>強度: {strength.label}</p>
                 </div>
               )}
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                大文字・小文字・数字・記号をそれぞれ1つ以上含む8文字以上で設定してください。
+              </p>
             </div>
             <div>
               <label style={authLabelStyle}>

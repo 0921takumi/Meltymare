@@ -11,6 +11,7 @@ function LoginForm() {
   const router = useRouter()
   const search = useSearchParams()
   const initialError = search.get('error') ?? ''
+  const notice = search.get('notice') ?? ''
   // ?next= で元のページ（商品詳細など）へ戻す。open redirect 防止のため
   // 「/ 始まりかつ // 始まりでない」相対パスのみ許可する
   const rawNext = search.get('next')
@@ -86,6 +87,11 @@ function LoginForm() {
               </div>
             </div>
 
+            {notice && !error && (
+              <p style={{ fontSize: 13, color: '#059669', background: '#ecfdf5', padding: '10px 14px', borderRadius: 8, lineHeight: 1.5 }}>
+                {notice}
+              </p>
+            )}
             {error && (
               <p style={{ fontSize: 13, color: '#dc2626', background: '#fef2f2', padding: '10px 14px', borderRadius: 8, lineHeight: 1.5 }}>
                 {error}
