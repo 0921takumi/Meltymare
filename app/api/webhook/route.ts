@@ -268,28 +268,34 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // 購入完了メール
   await sendPurchaseEmail(purchase.user_id, purchase.content_id, purchase.id)
 
-  // アプリ内通知（購入者 + クリエイター）
+  // アプリ内通知（購入者 + クリエイター）。
+  // 行欠落で .single() 例外→Stripeへ200返却→リトライ無し で通知が静かに消えるのを防ぐ
+  // ため .maybeSingle() 化し、insert の error も必ずログに残す（売上通知のサイレント欠損防止）。
   const { data: content } = await supabase
     .from('contents')
     .select('title, creator_id')
     .eq('id', purchase.content_id)
-    .single()
+    .maybeSingle()
   if (content) {
-    await supabase.from('notifications').insert({
+    const { error: buyerNotifErr } = await supabase.from('notifications').insert({
       user_id: purchase.user_id,
       type: 'purchase',
       title: 'ご購入ありがとうございます',
       body: `${content.title} の購入が完了しました`,
       link: '/mypage',
     })
-    const { data: buyer } = await supabase.from('profiles').select('display_name').eq('id', purchase.user_id).single()
-    await supabase.from('notifications').insert({
+    if (buyerNotifErr) console.error('[webhook] buyer notification insert failed:', buyerNotifErr.message, 'purchase:', purchase.id)
+    const { data: buyer } = await supabase.from('profiles').select('display_name').eq('id', purchase.user_id).maybeSingle()
+    const { error: creatorNotifErr } = await supabase.from('notifications').insert({
       user_id: content.creator_id,
       type: 'purchase',
       title: '新しい購入がありました',
       body: `${buyer?.display_name ?? 'ファン'} さんが ${content.title} を購入しました`,
       link: '/creator/orders',
     })
+    if (creatorNotifErr) console.error('[webhook] creator notification insert failed:', creatorNotifErr.message, 'purchase:', purchase.id)
+  } else {
+    console.error('[webhook] content not found; purchase notifications skipped. content_id:', purchase.content_id, 'purchase:', purchase.id)
   }
 }
 
@@ -357,20 +363,22 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     },
   })
 
-  // 返金通知（旧実装には無かった。ユーザーが返金に気づけないと信用毀損につながるため追加）
+  // 返金通知（旧実装には無かった。ユーザーが返金に気づけないと信用毀損につながるため追加）。
+  // content 削除と並走しても通知が落ちないよう .maybeSingle()（title は ?? でフォールバック）。
   const { data: content } = await supabase
     .from('contents')
     .select('title')
     .eq('id', purchase.content_id)
-    .single()
+    .maybeSingle()
 
-  await supabase.from('notifications').insert({
+  const { error: refundNotifErr } = await supabase.from('notifications').insert({
     user_id: purchase.user_id,
     type: 'refund',
     title: 'ご返金が完了しました',
     body: `${content?.title ?? 'コンテンツ'} のご購入を返金しました。Stripe からの返金処理は数営業日以内にご利用カードに反映されます。`,
     link: '/mypage',
   })
+  if (refundNotifErr) console.error('[webhook] refund notification insert failed:', refundNotifErr.message, 'purchase:', purchase.id)
 }
 
 // ─── メール送信ヘルパ ─────────────────────────────────

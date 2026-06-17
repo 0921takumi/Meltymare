@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   // 購入レコードを検証（自分の購入かつ納品済み）
-  const { data: purchase } = await supabase
+  const { data: purchase, error: purchaseError } = await supabase
     .from('purchases')
     .select('id, user_id, delivery_status, delivered_file_url')
     .eq('id', id)
@@ -25,14 +25,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .eq('delivery_status', 'delivered')
     .maybeSingle()
 
+  // DB 障害を「購入なし(404)」と誤魔化さない。障害は 503 で表面化させ、運用が
+  // 「お金を払ったのにDLできない」を障害として検知できるようにする（サイレント劣化防止）。
+  if (purchaseError) {
+    console.error('[download] purchase lookup failed:', purchaseError.message, 'purchase_id:', id, 'user:', user.id)
+    return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 })
+  }
+
   if (!purchase || !purchase.delivered_file_url) {
     return NextResponse.json({ error: 'Not found or not yet delivered' }, { status: 404 })
   }
 
-  // 署名URLの有効期限。大容量動画でもDL開始前に失効しないよう 300 秒（5分）を確保。
+  // 署名URLの有効期限。大容量動画でもDL完了まで失効しないよう 3600 秒（1時間）を確保
+  // （商品詳細ページの配信URL発行と同値に統一）。
   const { data: urlData } = await supabase.storage
     .from('deliveries')
-    .createSignedUrl(purchase.delivered_file_url, 300, { download: true })
+    .createSignedUrl(purchase.delivered_file_url, 3600, { download: true })
 
   if (!urlData?.signedUrl) {
     return NextResponse.json({ error: 'Failed to generate download URL' }, { status: 500 })

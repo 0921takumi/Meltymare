@@ -120,12 +120,18 @@ export async function GET(req: NextRequest) {
       .maybeSingle()
 
     if (!existing) {
-      const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string; avatar_url?: string }
-      const displayName = meta.full_name ?? meta.name ?? user.email?.split('@')[0] ?? 'ユーザー'
+      const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string; display_name?: string; avatar_url?: string }
+      const emailPrefix = user.email?.split('@')[0] ?? 'user'
+      const displayName = meta.display_name ?? meta.full_name ?? meta.name ?? emailPrefix
       const avatarUrl = meta.avatar_url ?? null
 
+      // profiles は email/username が NOT NULL。通常は DB トリガー handle_new_user が
+      // 先に作成済み（→ existing で skip）だが、トリガー未適用環境でも OAuth 登録が
+      // 機能するよう、ここでも全必須列を満たして作成する（フォールバック）。
       await supabase.from('profiles').insert({
         id: user.id,
+        email: user.email ?? `${user.id}@no-email.local`,
+        username: `${emailPrefix}_${user.id.slice(0, 6)}`,
         display_name: displayName,
         avatar_url: avatarUrl,
         role: 'user',

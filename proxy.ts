@@ -82,16 +82,27 @@ export async function proxy(request: NextRequest) {
   }
 
   if ((needsAdmin || needsCreator) && user) {
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
-    if (needsAdmin && profile?.role !== 'admin') {
+    // profile 行が無い/取得失敗時は保護ルートへ通さない。
+    //  - error: DB 障害等。握り潰すとサイレント劣化するので必ずログに残す。
+    //  - !profile: プロフィール未作成ユーザー（トリガー取りこぼし等）。.single() だと
+    //    0 行で例外→500 になるため .maybeSingle() で null を明示的に扱う。
+    if (profileError) {
+      console.error('[proxy] profile lookup failed:', profileError.message, 'path:', pathname)
+      return NextResponse.redirect(new URL('/auth/login', request.url))
+    }
+    if (!profile) {
+      return NextResponse.redirect(new URL('/auth/login', request.url))
+    }
+    if (needsAdmin && profile.role !== 'admin') {
       return NextResponse.redirect(new URL('/', request.url))
     }
-    if (needsCreator && profile?.role !== 'creator' && profile?.role !== 'admin') {
+    if (needsCreator && profile.role !== 'creator' && profile.role !== 'admin') {
       return NextResponse.redirect(new URL('/contents', request.url))
     }
   }

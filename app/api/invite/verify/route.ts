@@ -14,7 +14,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { SERVICE_MODE } from '@/lib/config'
 import { rateLimit } from '@/lib/rate-limit'
 
@@ -45,8 +45,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: '無効な招待コードです' })
   }
 
-  const supabase = await createClient()
-  const { data: invite } = await supabase
+  // invite_codes は anon/authenticated に RLS で読ませていない（コード存在の列挙を
+  // 防ぐ）。この API 自体が rate limit + 統一エラーでセキュリティ境界を担保しているため、
+  // 照会は service_role で行う。anon の server client だと RLS で 0 件になり、正しい
+  // コードも「無効」と誤判定して招待制で誰も登録できなくなる（重大事故の修正）。
+  const admin = createAdminClient()
+  const { data: invite } = await admin
     .from('invite_codes')
     .select('id, max_uses, used_count, expires_at, is_active')
     .eq('code', code)

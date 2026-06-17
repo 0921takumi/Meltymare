@@ -10,8 +10,10 @@ export default async function CreatorDashboard() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
-  if (profile?.role !== 'creator') redirect('/contents')
+  // profile 欠落で .single() が例外→500 になるのを防ぎ、未作成ユーザーは login へ。
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).maybeSingle()
+  if (!profile) redirect('/auth/login?next=/creator/dashboard')
+  if (profile.role !== 'creator') redirect('/contents')
 
   const { data: contents } = await supabase
     .from('contents')
@@ -20,9 +22,13 @@ export default async function CreatorDashboard() {
     .order('created_at', { ascending: false })
 
   const contentIds = contents?.map(c => c.id) ?? []
-  const { data: completedPurchases } = contentIds.length > 0
+  const { data: completedPurchases, error: purchasesError } = contentIds.length > 0
     ? await supabase.from('purchases').select('*').in('content_id', contentIds).eq('status', 'completed')
-    : { data: [] }
+    : { data: [], error: null }
+  // クエリ障害時に売上¥0を「正常な空」として誤表示しないよう、障害はログに残す。
+  if (purchasesError) {
+    console.error('[creator/dashboard] purchases query failed:', purchasesError.message, 'creator:', user.id)
+  }
 
   const pendingCount = completedPurchases?.filter(p => (p as any).delivery_status === 'pending').length ?? 0
 

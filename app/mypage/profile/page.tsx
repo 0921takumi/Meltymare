@@ -62,16 +62,16 @@ export default function ProfileEditPage() {
       if (avatarFile) {
         const v = validateUpload(avatarFile, 'image')
         if (!v.ok) throw new Error(v.error)
-        // アバター画像もEXIF除去（プライバシー対策）
+        // アバター画像もEXIF除去（プライバシー対策）してからサーバーへ。
+        // アップロードは /api/me/avatar（service_role）が担当し RLS 依存を排除する。
+        // 失敗時は必ずエラーを投げて、壊れた URL を profiles に保存しない。
         const safeAvatar = await stripExif(avatarFile)
-        const ext = (safeAvatar.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
-        const path = `avatars/${user.id}.${ext || 'jpg'}`
-        await supabase.storage.from('thumbnails').upload(path, safeAvatar, {
-          upsert: true,
-          contentType: safeAvatar.type,
-        })
-        const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
-        avatarUrl = urlData.publicUrl + `?t=${Date.now()}`
+        const fd = new FormData()
+        fd.append('file', safeAvatar, safeAvatar.name)
+        const res = await fetch('/api/me/avatar', { method: 'POST', body: fd })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok || !j.url) throw new Error(j.error ?? '画像のアップロードに失敗しました')
+        avatarUrl = j.url
       }
 
       const cleanDisplayName = sanitizeText(displayName, { maxLength: 50, allowNewlines: false })

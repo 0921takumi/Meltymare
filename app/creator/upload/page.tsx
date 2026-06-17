@@ -81,18 +81,30 @@ function UploadForm() {
       // 画像の EXIF（GPS等）を除去（プライバシー対策）
       const { stripExif } = await import('@/lib/strip-exif')
 
+      // 署名付きアップロードURLを発行してもらい、ストレージへ直接アップロードする。
+      // （storage RLS に依存せず、動画など大容量も安全にアップできる）
+      const getSigned = async (bucket: 'contents' | 'thumbnails', ext: string) => {
+        const res = await fetch('/api/me/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bucket, ext: ext || 'bin' }),
+        })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok || !j.token) throw new Error(j.error ?? 'アップロードURLの発行に失敗しました')
+        return j as { path: string; token: string; publicUrl?: string }
+      }
+
       if (contentFile) {
         const v = validateUpload(contentFile, contentType)
         if (!v.ok) throw new Error(v.error)
         // 画像のみ EXIF 除去（動画はそのまま）
         const safeFile = contentType === 'image' ? await stripExif(contentFile) : contentFile
         const ext = (safeFile.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
-        const path = `${user.id}/${Date.now()}.${ext || 'bin'}`
-        const { error: upErr } = await supabase.storage.from('contents').upload(path, safeFile, {
-          contentType: safeFile.type,
-        })
+        const signed = await getSigned('contents', ext)
+        const { error: upErr } = await supabase.storage.from('contents')
+          .uploadToSignedUrl(signed.path, signed.token, safeFile, { contentType: safeFile.type })
         if (upErr) throw upErr
-        fileUrl = path
+        fileUrl = signed.path
       }
 
       if (thumbnailFile) {
@@ -101,13 +113,11 @@ function UploadForm() {
         // サムネイルも EXIF 除去
         const safeThumb = await stripExif(thumbnailFile)
         const ext = (safeThumb.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
-        const path = `${user.id}/${Date.now()}_thumb.${ext || 'jpg'}`
-        const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, safeThumb, {
-          contentType: safeThumb.type,
-        })
+        const signed = await getSigned('thumbnails', ext)
+        const { error: upErr } = await supabase.storage.from('thumbnails')
+          .uploadToSignedUrl(signed.path, signed.token, safeThumb, { contentType: safeThumb.type })
         if (upErr) throw upErr
-        const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
-        thumbnailUrl = urlData.publicUrl
+        thumbnailUrl = signed.publicUrl ?? supabase.storage.from('thumbnails').getPublicUrl(signed.path).data.publicUrl
       }
 
       const payload: any = {

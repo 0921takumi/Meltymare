@@ -5,7 +5,7 @@ import {
   User, LogIn, Menu, Search, X, ShoppingBag, Heart, Home,
   Compass, Sparkles, Camera, Video, Cake, MessageCircle, Shirt,
   Trophy, Crown, Settings, LogOut, BookOpenCheck, ShieldCheck, PlusSquare,
-  Radio, BarChart3, Gem, Ban,
+  Radio, BarChart3, Gem, Ban, KeyRound, Store,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
@@ -158,6 +158,10 @@ export default function Header({ user }: HeaderProps) {
                       <DropdownItem href="/mypage/oshikatsu" icon={Sparkles} label="推し活記録" sub="支出・推し期間" onClick={() => setAvatarMenuOpen(false)} />
                       {FEATURES.subscriptions && <DropdownItem href="/mypage/subscriptions" icon={Gem} label="サブスク" sub="加入中プラン" onClick={() => setAvatarMenuOpen(false)} />}
                       <DropdownItem href="/mypage/profile" icon={Settings} label="プロフィール設定" onClick={() => setAvatarMenuOpen(false)} />
+                      <DropdownItem href="/mypage/account" icon={KeyRound} label="アカウント設定" sub="メール・パスワード変更" onClick={() => setAvatarMenuOpen(false)} />
+                      {user.role !== 'creator' && user.role !== 'admin' && (
+                        <DropdownItem href="/creator/verification" icon={Store} label="クリエイターになる" sub="本人確認して出品申請" highlight onClick={() => setAvatarMenuOpen(false)} />
+                      )}
                       {user.role === 'creator' && (
                         <>
                           <div style={{ borderTop: '1px solid var(--mm-border)' }} />
@@ -260,6 +264,8 @@ export default function Header({ user }: HeaderProps) {
                 <MobileItem href="/mypage/follows" label="フォロー中" icon={Heart} onClick={() => setMenuOpen(false)} />
                 <MobileItem href="/mypage/oshikatsu" label="推し活記録" icon={Sparkles} onClick={() => setMenuOpen(false)} />
                 <MobileItem href="/mypage/profile" label="設定" icon={Settings} onClick={() => setMenuOpen(false)} />
+                <MobileItem href="/mypage/account" label="アカウント設定" icon={KeyRound} onClick={() => setMenuOpen(false)} />
+                {user.role !== 'creator' && user.role !== 'admin' && <MobileItem href="/creator/verification" label="クリエイターになる" icon={Store} highlight onClick={() => setMenuOpen(false)} />}
                 {user.role === 'creator' && <MobileItem href="/creator/dashboard" label="クリエイター管理" icon={User} highlight onClick={() => setMenuOpen(false)} />}
                 {user.role === 'admin'   && <MobileItem href="/admin"             label="管理コンソール"     icon={Crown} highlight onClick={() => setMenuOpen(false)} />}
                 <form action="/api/auth/signout" method="POST" style={{ marginTop: 6, paddingTop: 10, borderTop: '1px solid var(--mm-border)' }}>
