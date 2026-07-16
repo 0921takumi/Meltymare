@@ -32,6 +32,17 @@ export async function PATCH(req: Request) {
   const { error } = await admin.from('profiles').update({ fee_rate: feeRate }).eq('id', creatorId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // v49で発覚: 手数料率の変更はクリエイターの取り分に直結する重要な変更なのに
+  // admin_actionsへのログのみで本人には一切通知されず、次の入金で初めて気づく状態だった。
+  const { error: notifErr } = await admin.from('notifications').insert({
+    user_id: creatorId,
+    type: 'fee_rate_change',
+    title: '手数料率が変更されました',
+    body: `プラットフォーム手数料率が ${feeRate}% に変更されました。次回以降の売上に適用されます。`,
+    link: '/creator/dashboard',
+  })
+  if (notifErr) console.error('[admin-fee-rate] notification insert failed:', notifErr.message)
+
   await admin.from('admin_actions').insert({
     admin_id: user.id,
     action_type: 'fee_rate_change',

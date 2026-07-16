@@ -124,15 +124,11 @@ export const EMAIL = {
 } as const
 
 // ─── 計算ヘルパー ──────────────────────────
-/** 売上から手数料を引いた振込額（端数切り捨て） */
-export function netPayout(grossYen: number, feeRatePercent: number): number {
-  return Math.floor(grossYen * (100 - feeRatePercent) / 100)
-}
-
-/** 手数料額 */
-export function platformFee(grossYen: number, feeRatePercent: number): number {
-  return grossYen - netPayout(grossYen, feeRatePercent)
-}
+// v49で発覚: netPayout/platformFee は呼び出し箇所が一切無いデッドコードで、しかも
+// admin/sales・admin/payouts・creator/dashboard が個別にinlineで書いている
+// Math.floor(price * rate / 100) の実計算式と端数処理が1円ずれる（未使用なので実害は
+// 無いが、後で誰かがこれを「共通化」のつもりで呼び出すと実際の金額と1円ズレる地雷に
+// なる）。呼び出し側を1円ズレる関数に合わせて壊すより、デッドコードごと削除する。
 
 /** 振込可能か（最低金額チェック） */
 export function isPayoutAvailable(amountYen: number): boolean {

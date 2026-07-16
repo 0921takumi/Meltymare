@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
 import { sanitizeOptional } from '@/lib/sanitize'
@@ -41,5 +42,22 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  // v49で発覚: レビュー投稿がクリエイターに一切通知されず、自分からコンテンツ詳細
+  // ページを開かない限りレビューが付いたことに気づけなかった（他の通知箇所と同じ穴）。
+  const { data: content } = await supabase.from('contents').select('creator_id, title').eq('id', content_id).maybeSingle()
+  if (content?.creator_id && content.creator_id !== user.id) {
+    const { data: reviewer } = await supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
+    const admin = createAdminClient()
+    const { error: notifErr } = await admin.from('notifications').insert({
+      user_id: content.creator_id,
+      type: 'review',
+      title: '新しいレビューが届きました',
+      body: `${reviewer?.display_name ?? 'ファン'} さんが「${content.title}」に★${ratingNum}のレビューを投稿しました`,
+      link: `/contents/${content_id}`,
+    })
+    if (notifErr) console.error('[review] notification insert failed:', notifErr.message)
+  }
+
   return NextResponse.json(data)
 }

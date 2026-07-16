@@ -150,6 +150,12 @@ function SignupForm() {
       // メール確認OFF時は signUp が即セッションを返す → そのままログイン状態で遷移。
       // 確認ON時（session=null）は従来どおり確認メール待ち画面を出す。
       if (data.session) {
+        // v49: handle_new_user トリガーは profiles insert 失敗を握りつぶして
+        // auth.users 作成自体は成功させる設計のため、ごく稀に「セッションはあるのに
+        // profiles 行が無い」状態になり得た（OAuth経路には元々あったフォールバックが
+        // メール登録には無かった＝project_myfocus_profile_trigger_incidentの再発リスク）。
+        // 遷移前に一度だけ確認・補完する。
+        await fetch('/api/auth/ensure-profile', { method: 'POST' }).catch(() => {})
         window.location.href = validNext ?? '/contents'
         return
       }

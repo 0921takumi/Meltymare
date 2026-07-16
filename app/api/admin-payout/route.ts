@@ -60,6 +60,11 @@ export async function PATCH(req: Request) {
   // 「後」に発生した購入まで一緒に紐付いてしまい、後日別の振込を作った際にその購入が
   // 二重計上されない代わりに「もう払われたことになっている」と誤認される恐れがあった
   // （period_endはDATEなのでその日の終わりまでを含めるよう23:59:59.999まで許容する）。
+  // v49: net_amount は payouts 行作成時に手入力される値で、実際に紐付いた
+  // purchases/tips の合計と突き合わせる仕組みが一切無かった（入力ミス・期間の
+  // 取り違え等があっても気づく手段が無い）。紐付け結果を集計してnet_amountと比較し、
+  // 不一致なら監査ログに残す（自動修正はしない＝金額を勝手に書き換えない）。
+  let linkedTotal = 0
   if (status === 'completed' && payoutRow?.creator_id) {
     const { data: creatorContents } = await admin.from('contents').select('id').eq('creator_id', payoutRow.creator_id)
     const contentIds = (creatorContents ?? []).map(c => c.id)
@@ -72,8 +77,9 @@ export async function PATCH(req: Request) {
       if (payoutRow.period_start) linkQuery = linkQuery.gte('created_at', payoutRow.period_start)
       if (payoutRow.period_end) linkQuery = linkQuery.lte('created_at', `${payoutRow.period_end}T23:59:59.999Z`)
       else console.warn('[admin-payout] payout has no period_end, linking without upper bound:', payoutId)
-      const { error: linkErr } = await linkQuery
+      const { data: linkedPurchases, error: linkErr } = await linkQuery.select('amount')
       if (linkErr) console.error('[admin-payout] purchases payout_id linkage failed:', linkErr.message, 'payout:', payoutId)
+      linkedTotal += (linkedPurchases ?? []).reduce((s, p) => s + (p.amount ?? 0), 0)
     }
 
     // v40: 単発チップ(tips)も同じ振込に紐付ける。tips は creator_id を直接持つため
@@ -85,8 +91,24 @@ export async function PATCH(req: Request) {
       .eq('status', 'completed')
     if (payoutRow.period_start) tipLink = tipLink.gte('created_at', payoutRow.period_start)
     if (payoutRow.period_end) tipLink = tipLink.lte('created_at', `${payoutRow.period_end}T23:59:59.999Z`)
-    const { error: tipLinkErr } = await tipLink
+    const { data: linkedTips, error: tipLinkErr } = await tipLink.select('amount')
     if (tipLinkErr) console.error('[admin-payout] tips payout_id linkage failed:', tipLinkErr.message, 'payout:', payoutId)
+    linkedTotal += (linkedTips ?? []).reduce((s, t) => s + (t.amount ?? 0), 0)
+
+    const netAmount = payoutRow.net_amount ?? 0
+    if (linkedTotal !== netAmount) {
+      console.error(
+        '[admin-payout] RECONCILIATION MISMATCH: net_amount(手入力)と実際に紐付いた購入/チップ合計が不一致。手入力ミスまたは期間指定の誤りの可能性。要目視確認。',
+        'payout:', payoutId, 'net_amount:', netAmount, 'linked_total:', linkedTotal,
+      )
+      await admin.from('audit_logs').insert({
+        actor_id: user.id,
+        action: 'payout.reconciliation_mismatch',
+        target_type: 'payout',
+        target_id: payoutId,
+        metadata: { net_amount: netAmount, linked_total: linkedTotal, diff: linkedTotal - netAmount },
+      })
+    }
   }
 
   // 監査ログ（service_role で記録）

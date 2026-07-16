@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 const UUID_RE = /^[0-9a-f-]{36}$/i
 const ALLOWED_ACTIONS = new Set(['hide', 'resolve', 'dismiss'])
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
       .from('content_comments')
       .update({ is_hidden: true })
       .eq('id', comment_id)
-      .select('id')
+      .select('id, user_id, content_id')
     if (hideErr) return NextResponse.json({ error: hideErr.message }, { status: 500 })
     if (!hidden || hidden.length === 0) {
       return NextResponse.json({ error: 'comment_not_found' }, { status: 404 })
@@ -59,6 +60,22 @@ export async function POST(req: Request) {
     if (resolveErr) return NextResponse.json({ error: resolveErr.message }, { status: 500 })
     if (!resolved || resolved.length === 0) {
       return NextResponse.json({ error: 'report_not_found' }, { status: 404 })
+    }
+
+    // v49で発覚: 通報対応でコメントを非表示にしても投稿者本人には何も知らされず、
+    // 自分のコメントが（Comments.tsx上「あなたにのみ表示」の非表示状態で）消えたことに
+    // 気づく手段が無かった。
+    const hiddenComment = hidden[0]
+    if (hiddenComment.user_id) {
+      const admin = createAdminClient()
+      const { error: notifErr } = await admin.from('notifications').insert({
+        user_id: hiddenComment.user_id,
+        type: 'comment_hidden',
+        title: 'コメントが非表示になりました',
+        body: '通報に基づき、あなたのコメントの一つが非表示になりました。',
+        link: `/contents/${hiddenComment.content_id}`,
+      })
+      if (notifErr) console.error('[admin-comment] notification insert failed:', notifErr.message)
     }
   } else if (action === 'resolve') {
     const { data: resolved, error: resolveErr } = await supabase
