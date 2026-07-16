@@ -42,6 +42,12 @@ export async function ensureProfile(
     role: 'user',
   })
 
-  if (insertErr) return { ok: false, error: insertErr.message }
+  // v49再修正: select→insert の間に handle_new_user トリガーや別の ensureProfile が
+  // 先に行を作ると 23505(重複PK)で落ちる。その場合プロフィールは既に存在する＝
+  // 目的は達成されているので成功として扱う（従来は500を返してしまっていた）。
+  if (insertErr) {
+    if ((insertErr as { code?: string }).code === '23505') return { ok: true }
+    return { ok: false, error: insertErr.message }
+  }
   return { ok: true }
 }

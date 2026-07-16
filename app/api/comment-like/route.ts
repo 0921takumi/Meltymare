@@ -10,6 +10,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { assertActorNotSuspended } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
 
 const UUID_RE = /^[0-9a-f-]{36}$/i
@@ -18,6 +19,10 @@ export async function POST(req: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // v49: 凍結・退会済みアカウントの素通りを塞ぐ
+  const suspendedRes = await assertActorNotSuspended(supabase)
+  if (suspendedRes) return suspendedRes
 
   const rl = await rateLimit({ key: `comment-like:${user.id}`, limit: 60, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'rate_limited' }, { status: 429 })

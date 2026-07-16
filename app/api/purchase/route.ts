@@ -22,8 +22,14 @@ export async function POST(req: NextRequest) {
     // 凍結・退会済みアカウントによる購入がここでは一切ブロックされていなかった
     // （proxy.ts の凍結ゲートは matcher で /api を除外している）。
     // is_suspended/deleted_at は列単位REVOKE対象のPII列のため my_auth_gate_info() RPC で取得する。
-    const { data: buyerGateRows } = await supabase.rpc('my_auth_gate_info')
+    const { data: buyerGateRows, error: buyerGateErr } = await supabase.rpc('my_auth_gate_info')
     const buyerGate = buyerGateRows?.[0] ?? null
+    // v49再修正: RPCエラーを握り潰すと「凍結でないと断定できない」のに購入が通る fail-open に
+    // なっていた（同ファイルのクリエイター側チェック/creator_blocksは fail-closed なのに不整合）。
+    if (buyerGateErr) {
+      console.error('[purchase] buyer gate lookup failed (fail-closed):', buyerGateErr.message)
+      return NextResponse.json({ error: 'システムエラーが発生しました。時間をおいて再度お試しください' }, { status: 503 })
+    }
     if (buyerGate?.is_suspended) {
       return NextResponse.json({ error: 'account_suspended', message: 'このアカウントは現在ご利用いただけません' }, { status: 403 })
     }
@@ -171,7 +177,9 @@ export async function POST(req: NextRequest) {
     let appliedCouponId: string | null = null
 
     if (couponCode && typeof couponCode === 'string') {
-      const { data: coupon } = await supabase
+      // v49: coupons_select RLS を owner/admin 限定に絞ったため、購入時のクーポン照会は
+      // service_role(admin) で行う（購入者は他人/汎用クーポンの行を直接読めない）。
+      const { data: coupon } = await admin
         .from('coupons')
         .select('*')
         .eq('code', couponCode.toUpperCase().trim())

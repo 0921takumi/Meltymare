@@ -18,7 +18,16 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 
 const BUCKETS = new Set(['contents', 'thumbnails'])
-const EXT_RE = /^[a-z0-9]{1,5}$/
+// v49で発覚: 拡張子を「英数字1〜5文字」でしか絞っておらず、'svg'/'html' 等も通っていた。
+// thumbnails は公開バケットのため、SVG(スクリプト入り)を上げて直リンクで踏ませる導線に
+// なり得た（My Focus内は<img>描画なので発火しないが、supabase.co直URLでは発火し得る）。
+// バケットの用途に合う画像/動画拡張子だけを許可する。thumbnails は画像のみ。
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif'])
+const VIDEO_EXTS = new Set(['mp4', 'mov', 'webm', 'm4v'])
+const ALLOWED_EXTS_BY_BUCKET: Record<string, Set<string>> = {
+  thumbnails: IMAGE_EXTS,
+  contents: new Set([...IMAGE_EXTS, ...VIDEO_EXTS]),
+}
 
 export async function POST(req: Request) {
   // v31: 'contents'バケットへの署名URL発行はクリエイター専用機能。以前は認証済みなら
@@ -35,7 +44,7 @@ export async function POST(req: Request) {
   const bucket = String(body.bucket ?? '')
   const ext = String(body.ext ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
   if (!BUCKETS.has(bucket)) return NextResponse.json({ error: 'invalid bucket' }, { status: 400 })
-  if (!EXT_RE.test(ext)) return NextResponse.json({ error: 'invalid ext' }, { status: 400 })
+  if (!ALLOWED_EXTS_BY_BUCKET[bucket]?.has(ext)) return NextResponse.json({ error: 'invalid ext' }, { status: 400 })
 
   // パスは必ずサーバ側で「本人フォルダ」に生成（クライアントはフォルダを指定できない）
   const rand = Math.random().toString(36).slice(2, 10)

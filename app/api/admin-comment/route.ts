@@ -18,7 +18,15 @@ const ALLOWED_ACTIONS = new Set(['hide', 'resolve', 'dismiss'])
 export async function POST(req: Request) {
   const ctx = await requireAdmin()
   if (ctx instanceof NextResponse) return ctx
-  const { supabase, user } = ctx
+  const { user } = ctx
+
+  // v49で発覚: これまで content_comments / comment_reports の更新を session client
+  // (requireAdmin が返すのは authenticated ロールのクライアント) で行っていたため、
+  // content_comments の UPDATE RLS "USING (auth.uid() = user_id)" に阻まれ、admin が
+  // 「自分が書いたのではない」コメントを非表示にしようとすると 0 行更新→404 になり、
+  // モデレーションの非表示機能そのものが動作していなかった。書き込みは service_role に
+  // 集約する（認可は requireAdmin() で担保済み）。
+  const admin = createAdminClient()
 
   const body = await req.json().catch(() => ({}))
   const { report_id, comment_id, action } = body
@@ -42,7 +50,7 @@ export async function POST(req: Request) {
   // Supabase は 0 行 update でも error:null を返すため、.select() で行の有無を確認し、
   // 失敗・0 行なら監査ログを書く前に中断する（モデレーションの整合性担保）。
   if (action === 'hide') {
-    const { data: hidden, error: hideErr } = await supabase
+    const { data: hidden, error: hideErr } = await admin
       .from('content_comments')
       .update({ is_hidden: true })
       .eq('id', comment_id)
@@ -52,7 +60,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'comment_not_found' }, { status: 404 })
     }
 
-    const { data: resolved, error: resolveErr } = await supabase
+    const { data: resolved, error: resolveErr } = await admin
       .from('comment_reports')
       .update({ status: 'resolved', resolved_by: user.id, resolved_at: now })
       .eq('id', report_id)
@@ -67,7 +75,6 @@ export async function POST(req: Request) {
     // 気づく手段が無かった。
     const hiddenComment = hidden[0]
     if (hiddenComment.user_id) {
-      const admin = createAdminClient()
       const { error: notifErr } = await admin.from('notifications').insert({
         user_id: hiddenComment.user_id,
         type: 'comment_hidden',
@@ -78,7 +85,7 @@ export async function POST(req: Request) {
       if (notifErr) console.error('[admin-comment] notification insert failed:', notifErr.message)
     }
   } else if (action === 'resolve') {
-    const { data: resolved, error: resolveErr } = await supabase
+    const { data: resolved, error: resolveErr } = await admin
       .from('comment_reports')
       .update({ status: 'resolved', resolved_by: user.id, resolved_at: now })
       .eq('id', report_id)
@@ -88,7 +95,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'report_not_found' }, { status: 404 })
     }
   } else if (action === 'dismiss') {
-    const { data: dismissed, error: dismissErr } = await supabase
+    const { data: dismissed, error: dismissErr } = await admin
       .from('comment_reports')
       .update({ status: 'dismissed', resolved_by: user.id, resolved_at: now })
       .eq('id', report_id)
@@ -99,7 +106,7 @@ export async function POST(req: Request) {
     }
   }
 
-  await supabase.from('admin_actions').insert({
+  await admin.from('admin_actions').insert({
     admin_id: user.id,
     action_type: `comment_report_${action}`,
     target_type: 'comment',

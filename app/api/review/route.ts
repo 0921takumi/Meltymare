@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { assertActorNotSuspended } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
 import { sanitizeOptional } from '@/lib/sanitize'
@@ -10,6 +11,10 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // v49: 凍結・退会済みアカウントの素通りを塞ぐ
+  const suspendedRes = await assertActorNotSuspended(supabase)
+  if (suspendedRes) return suspendedRes
 
   const rl = await rateLimit({ key: `review:${user.id}`, limit: 20, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })

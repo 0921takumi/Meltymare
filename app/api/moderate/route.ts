@@ -78,11 +78,25 @@ export async function POST(req: NextRequest) {
       }
       const fileResult = await moderateImage(fileUrlToCheck)
 
-      if (content.thumbnail_url) {
+      // v49で発覚(SSRF): thumbnail_url は creator が直接 PATCH できる列で、moderateImage は
+      // 渡されたURLをそのまま fetch する。内部ホスト(169.254.169.254 等)を指定して
+      // 審査結果/エラー文言をオラクルにした内部ポートスキャンが可能だった。サムネは
+      // 自プロジェクトのSupabase Storageホスト上のURLに限って審査し、それ以外は
+      // 審査対象から外す（本体 file_url は必ず審査済みなので実害の主線は守られる）。
+      const supabaseHost = (() => { try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').host } catch { return '' } })()
+      const thumbIsSafe = (() => {
+        if (!content.thumbnail_url) return false
+        try {
+          const u = new URL(content.thumbnail_url)
+          return u.protocol === 'https:' && !!supabaseHost && u.host === supabaseHost
+        } catch { return false }
+      })()
+      if (thumbIsSafe) {
         const thumbResult = await moderateImage(content.thumbnail_url)
         const severity: Record<string, number> = { rejected: 2, pending: 1, approved: 0, skip: 0 }
         result = severity[thumbResult.verdict] > severity[fileResult.verdict] ? thumbResult : fileResult
       } else {
+        if (content.thumbnail_url) console.warn('[moderate] thumbnail_url not on supabase host, skipping thumbnail scan:', content_id)
         result = fileResult
       }
     }

@@ -12,6 +12,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { assertActorNotSuspended } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { sanitizeText } from '@/lib/sanitize'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -22,6 +23,10 @@ export async function POST(req: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // v49: 凍結・退会済みアカウントの素通りを塞ぐ
+  const suspendedRes = await assertActorNotSuspended(supabase)
+  if (suspendedRes) return suspendedRes
 
   const rl = await rateLimit({ key: `birthday-msg:${user.id}`, limit: 10, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
@@ -48,11 +53,13 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data: creator } = await admin
     .from('profiles')
-    .select('id, role, accepts_birthday_messages, birthdate')
+    .select('id, role, accepts_birthday_messages, birthdate, is_suspended, deleted_at')
     .eq('id', creatorId)
     .maybeSingle()
 
   if (!creator || creator.role !== 'creator') return NextResponse.json({ error: 'creator_not_found' }, { status: 404 })
+  // v49: 凍結・退会済みクリエイターへのメッセージ送信を止める
+  if (creator.is_suspended || creator.deleted_at) return NextResponse.json({ error: 'creator_not_found' }, { status: 404 })
   if (!creator.accepts_birthday_messages) return NextResponse.json({ error: 'not_accepting' }, { status: 403 })
   if (!creator.birthdate) return NextResponse.json({ error: 'no_birthdate' }, { status: 400 })
 

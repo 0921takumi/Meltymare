@@ -36,14 +36,19 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
 
       // v22: 購入者の email（PII）は authenticated では読めない。display_name は
       // NOT NULL のため購入者表示には十分。email の埋め込みは行わない。
+      // v49: select('*') だと購入者の stripe_payment_intent_id 等までクリエイターの
+      // ブラウザへ送られていた（purchasesは列単位REVUKE対象外）。この画面が実際に使う
+      // 列だけを明示selectする。
       const { data: p } = await supabase
         .from('purchases')
-        .select('*, content:contents(id, title, thumbnail_url, price, creator_id), buyer:profiles!purchases_user_id_fkey(id, display_name)')
+        .select('id, created_at, delivery_status, content:contents(id, title, thumbnail_url, price, creator_id), buyer:profiles!purchases_user_id_fkey(id, display_name)')
         .eq('id', purchaseId)
         .eq('status', 'completed')
         .single()
 
-      if (!p || p.content?.creator_id !== user.id) {
+      // content は to-one FK だが supabase-js の型推論では配列になり得るため実体で判定する。
+      const pContent = (p?.content as unknown as { creator_id?: string } | null) ?? null
+      if (!p || pContent?.creator_id !== user.id) {
         router.push('/creator/orders'); return
       }
       setPurchase(p)

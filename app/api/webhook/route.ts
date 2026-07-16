@@ -86,11 +86,20 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('[webhook] handler error:', err)
     if (err instanceof TransientWebhookError) {
+      // 🔴 v49再修正: dedup行は「先に」記録しているため、ここで500を返して
+      // Stripeにリトライさせても、リトライは同じevent.idで23505に弾かれ
+      // ハンドラが二度と走らない＝「課金済みなのにpendingのまま永久に取り残される」
+      // 状態になっていた（自己修正で作り込んだ回帰）。一時エラーで処理が完了して
+      // いない場合は dedup行を消してから500を返し、リトライが正常に再処理できる
+      // ようにする（成功時・恒久エラー時は行を残して二重処理を防ぐ）。
+      const { error: delErr } = await supabase.from('stripe_webhook_events').delete().eq('event_id', event.id)
+      if (delErr) console.error('[webhook] failed to roll back dedup row on transient error:', delErr.message, 'event:', event.id)
       // DB一時障害の疑い。500 を返して Stripe の自動リトライに委ねる
       // （恒久的なロジックエラーでここに来ないよう、各ハンドラ側で条件を絞ってある）。
       return NextResponse.json({ error: 'internal error, retry requested' }, { status: 500 })
     }
     // それ以外（未知の例外）は無限リトライ化を避けるため 200 のまま。ログで拾う。
+    // （dedup行は残す＝恒久的なロジックエラーをリトライで無限ループさせない）
   }
 
   return NextResponse.json({ ok: true })
@@ -405,7 +414,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
 
   const { data: purchase } = await supabase
     .from('purchases')
-    .select('id, user_id, content_id, status, amount, content_price, tip_amount, payout_id')
+    .select('id, user_id, content_id, status, amount, content_price, tip_amount, payout_id, coupon_id')
     .eq('stripe_payment_intent_id', paymentIntentId)
     .maybeSingle()
   if (!purchase) {
@@ -504,6 +513,15 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   // increment_sold_count と対になる decrement_sold_count RPC でアトミックに行う。
   const { error: decErr } = await supabase.rpc('decrement_sold_count', { content_id: purchase.content_id })
   if (decErr) console.warn('[webhook] refund sold_count decrement failed:', decErr.message)
+
+  // v49で発覚: sold_count は返金時に戻していたのに、クーポンの used_count は戻して
+  // いなかった（非対称）。全額返金された購入がクーポンを消費したままだと、max_uses付き
+  // クーポンが「実際には0件しか成立していないのに上限到達」で永久に使えなくなる。
+  // increment_coupon_used と対になる decrement_coupon_used RPC で0を下限にアトミックに戻す。
+  if (purchase.coupon_id) {
+    const { error: cpDecErr } = await supabase.rpc('decrement_coupon_used', { coupon_id: purchase.coupon_id })
+    if (cpDecErr) console.warn('[webhook] refund coupon used_count decrement failed:', cpDecErr.message)
+  }
 
   // 監査ログ
   const { error: auditErr } = await supabase.from('audit_logs').insert({

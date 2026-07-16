@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { assertActorNotSuspended, assertTargetCreatorActive } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { sanitizeOptional } from '@/lib/sanitize'
 import { cleanEnv } from '@/lib/config'
@@ -18,6 +19,10 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
+
+    // v49: 凍結・退会済みアカウントが直接このAPIで送金できていた穴を塞ぐ
+    const suspendedRes = await assertActorNotSuspended(supabase)
+    if (suspendedRes) return suspendedRes
 
     // レート制限: 並列大量決済を防ぐ（金銭直撃のため厳しめ）
     const rl = await rateLimit({ key: `tip:${user.id}`, limit: 5, windowSec: 60, failClosed: true })
@@ -49,6 +54,11 @@ export async function POST(req: NextRequest) {
       .eq('role', 'creator')
       .maybeSingle()
     if (!creator) return NextResponse.json({ error: 'クリエイターが見つかりません' }, { status: 404 })
+
+    // v49: 凍結・退会済みクリエイターへの送金を止める（購入側 purchase と同じ threat model。
+    // 公開ページは404になるがAPI直叩きは別途塞ぐ必要がある）。
+    const creatorRes = await assertTargetCreatorActive(creatorId)
+    if (creatorRes) return creatorRes
 
     // Stripe Checkout の success/cancel_url は invalid URL(末尾 BOM/CRLF 混入)を Stripe 側で
     // 弾かれるため、cleanEnv で必ず正規化してから使う。

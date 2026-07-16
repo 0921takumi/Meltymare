@@ -35,7 +35,10 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: true, username })
   }
 
-  const { data: taken } = await supabase.from('profiles').select('id').ilike('username', username).maybeSingle()
+  // v49再修正: .ilike() だと username 中の '_' がLIKEの1文字ワイルドカードとして解釈され、
+  // 'john_doe' が 'johnxdoe' 等に誤マッチして「使用中」と誤判定されていた。入力は既に
+  // 小文字化済み・保存値も小文字なので .eq() で正しく（かつワイルドカード無しで）判定する。
+  const { data: taken } = await supabase.from('profiles').select('id').eq('username', username).maybeSingle()
   if (taken) {
     return NextResponse.json({ error: 'username_taken', message: 'このIDは既に使われています。' }, { status: 409 })
   }

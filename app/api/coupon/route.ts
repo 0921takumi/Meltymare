@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCreator } from '@/lib/auth'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
@@ -20,8 +21,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'invalid price' }, { status: 400 })
   }
 
+  // v49: coupons_select RLS を owner/admin 限定に絞る（anonが全クーポンを列挙できた穴を塞ぐ）
+  // ため、コード照会はこのレート制限つき service_role 経由に一本化する。
   const supabase = await createClient()
-  const { data: coupon } = await supabase
+  const admin = createAdminClient()
+  const { data: coupon } = await admin
     .from('coupons')
     .select('*')
     .eq('code', code)
