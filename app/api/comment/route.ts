@@ -17,6 +17,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 import { sanitizeText } from '@/lib/sanitize'
 
@@ -91,10 +92,19 @@ export async function POST(req: Request) {
 
   // 監査で発覚: 新着コメント・返信がどちらも通知されず、クリエイター・親コメント投稿者は
   // 自分からコンテンツ詳細ページを開かない限りコメントが付いたことに気づけなかった。
+  //
+  // v49で発覚: 上記の修正自体、notifications に INSERT の RLS ポリシーが一切無い
+  // （service_role 経由でしか書き込めない設計）ことに気づかず session client
+  // (supabase, role='authenticated') のまま insert していたため、実際には毎回
+  // 「new row violates row-level security policy for table "notifications"」で
+  // 静かに失敗し続けていた（コメント投稿自体は200で成功するため誰も気づけなかった）。
+  // 他の通知insert箇所（webhook/admin-payout/subscribe/birthday-message/follow/
+  // notify・delivery）は全て admin(service_role) を使っており、ここだけ例外だった。
   const { data: commenter } = await supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
   const commenterName = commenter?.display_name ?? 'ファン'
+  const admin = createAdminClient()
   if (content.creator_id && content.creator_id !== user.id) {
-    const { error: creatorNotifErr } = await supabase.from('notifications').insert({
+    const { error: creatorNotifErr } = await admin.from('notifications').insert({
       user_id: content.creator_id,
       type: 'comment',
       title: '新しいコメントが届きました',
@@ -104,7 +114,7 @@ export async function POST(req: Request) {
     if (creatorNotifErr) console.error('[comment] creator notification insert failed:', creatorNotifErr.message)
   }
   if (parentAuthorId && parentAuthorId !== user.id && parentAuthorId !== content.creator_id) {
-    const { error: replyNotifErr } = await supabase.from('notifications').insert({
+    const { error: replyNotifErr } = await admin.from('notifications').insert({
       user_id: parentAuthorId,
       type: 'comment',
       title: 'コメントに返信が届きました',
