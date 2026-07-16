@@ -31,8 +31,19 @@ async function enforceInviteForOAuth(
   //    これを防ぐため、拒否時に user_metadata へ invite_rejected フラグを先に立てておき、
   //    deleteUser の成否に関わらず、経過時間によらず常に再拒否できるようにする。
   const alreadyRejected = user.user_metadata?.invite_rejected === true
-  const isNew = Date.now() - new Date(user.created_at).getTime() < 5 * 60_000
-  if (!alreadyRejected && !isNew) return 'ok'
+
+  // v49で発覚: 「作成から5分」を経過時間(Date.now() - created_at)で判定していたため、
+  // 攻撃者が Google 認証後の code 交換をわざと5分以上遅らせるだけで isNew=false になり、
+  // 招待コード無しで登録が成立してしまっていた（created_at 自体は攻撃者が自由に
+  // 遅らせられる=攻撃者が完全にコントロールできる値のため、経過時間での判定は無意味）。
+  // 「既存の（招待制導入前からいる）アカウントを誤って再ゲートしない」という本来の
+  // 目的は、経過時間ではなく「招待制が実際に有効化された固定の過去日時」との比較で
+  // 満たす（この日時は攻撃者が新規に作るアカウントのcreated_atより必ず後になるため、
+  // 待ち時間による迂回ができない）。日時は Supabase の app_settings.updated_at
+  // （invite_only を有効化した実績時刻）に合わせて適宜更新すること。
+  const INVITE_ONLY_ENABLED_AT = new Date('2026-07-08T00:00:00Z')
+  const isPreInviteAccount = new Date(user.created_at) < INVITE_ONLY_ENABLED_AT
+  if (!alreadyRejected && isPreInviteAccount) return 'ok'
 
   // cookie から招待コードを取得して検証（verify API と同じ判定）
   //

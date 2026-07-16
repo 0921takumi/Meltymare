@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
+import { CONTENT_CARD_WITH_CREATOR_SELECT } from '@/lib/content-fields'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import ContentCard from '@/components/ui/ContentCard'
@@ -35,7 +36,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         .limit(6),
       supabase
         .from('contents')
-        .select('*, creator:profiles(id, display_name, avatar_url)')
+        .select(CONTENT_CARD_WITH_CREATOR_SELECT)
         .eq('is_published', true)
         .ilike('title', `%${safeQ}%`)
         .order('created_at', { ascending: false })

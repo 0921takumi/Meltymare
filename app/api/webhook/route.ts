@@ -49,6 +49,25 @@ export async function POST(req: NextRequest) {
   // 監査用にイベント ID を記録（重複処理検知に使える）
   console.log(`[webhook] event=${event.type} id=${event.id}`)
 
+  // v49で発覚: checkout.session.completed/charge.refundedともにStripeの再送(リトライ・
+  // 手動再送)に対する重複排除が無かった。特に部分返金の金額按分はDBの現在値を
+  // 参照する処理のため、同一イベントが2回処理されると実際には1回しか返金されて
+  // いないのに2回分減額してしまう。stripe_webhook_events にevent_idをunique制約で
+  // 先に記録し、重複（23505）ならここで打ち切る。
+  const { error: dedupErr } = await supabase
+    .from('stripe_webhook_events')
+    .insert({ event_id: event.id, event_type: event.type })
+  if (dedupErr) {
+    if (dedupErr.code === '23505') {
+      console.log(`[webhook] duplicate event ignored: ${event.id}`)
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+    // dedup記録自体の失敗（DB一時障害等）は「本当に未処理か」を保証できないため、
+    // 二重処理を許すより Stripe の自動リトライに委ねる方が安全（fail-closed）。
+    console.error('[webhook] dedup insert failed, retrying via 500:', dedupErr.message)
+    return NextResponse.json({ error: 'dedup check failed' }, { status: 500 })
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -417,13 +436,24 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     console.log('[webhook] partial refund, purchase access retained:', purchase.id, 'refunded:', charge.amount_refunded, '/', charge.amount)
 
     if (purchase.payout_id == null && charge.amount > 0) {
-      const remainingRatio = Math.max(0, charge.amount - charge.amount_refunded) / charge.amount
-      const newAmount = Math.floor((purchase.amount ?? 0) * remainingRatio)
-      const newContentPrice = Math.floor((purchase.content_price ?? purchase.amount ?? 0) * remainingRatio)
-      const newTipAmount = Math.floor((purchase.tip_amount ?? 0) * remainingRatio)
+      // v49で発覚: charge.amount_refundedは「そのchargeに対する累計返金額」なので、
+      // 同じ購入に2回目の部分返金が来ると、既に1回目で減額済みのpurchase.amount(DB値)に
+      // 対してさらに remainingRatio を掛けてしまい、金額が二重に目減りしていた
+      // （例: 10000円→1回目で7000円に減額→2回目で本来5000円のはずが3500円になる）。
+      // 修正: 「今残っているべき絶対額」は charge.amount - charge.amount_refunded から
+      // 毎回そのまま計算できる（Stripe側の値は累計＝冪等）ため、DB値に掛け算せず絶対値を
+      // 直接採用する。content_price/tip_amountの内訳は「今のDB値の比率」を新合計に
+      // 適用し、端数はtip側に寄せて合計が必ず一致するようにする。
+      const newTotalAmount = Math.max(0, charge.amount - charge.amount_refunded)
+      const currentTotal = purchase.amount ?? 0
+      const currentContentPrice = purchase.content_price ?? currentTotal
+      const newContentPrice = currentTotal > 0
+        ? Math.floor(newTotalAmount * (currentContentPrice / currentTotal))
+        : newTotalAmount
+      const newTipAmount = newTotalAmount - newContentPrice
       const { error: adjustErr } = await supabase
         .from('purchases')
-        .update({ amount: newAmount, content_price: newContentPrice, tip_amount: newTipAmount })
+        .update({ amount: newTotalAmount, content_price: newContentPrice, tip_amount: newTipAmount })
         .eq('id', purchase.id)
         .eq('status', 'completed')
       if (adjustErr) console.error('[webhook] partial refund amount adjustment failed:', adjustErr.message, 'purchase:', purchase.id)
@@ -531,9 +561,10 @@ async function handleTipRefunded(
     console.log('[webhook] tip partial refund, no status change:', tip.id, 'refunded:', charge.amount_refunded, '/', charge.amount)
 
     // v47: purchases側と同じく、部分返金分をtips.amountに反映する（未精算の場合のみ）。
+    // v49: purchases側と同じ二重減算バグがあったため、DB値へのratio掛け算ではなく
+    // charge.amount - charge.amount_refunded の絶対値をそのまま採用する（冪等）。
     if ((tip.payout_id ?? null) == null && charge.amount > 0) {
-      const remainingRatio = Math.max(0, charge.amount - charge.amount_refunded) / charge.amount
-      const newAmount = Math.floor((tip.amount ?? 0) * remainingRatio)
+      const newAmount = Math.max(0, charge.amount - charge.amount_refunded)
       const { error: adjustErr } = await supabase.from('tips').update({ amount: newAmount }).eq('id', tip.id).eq('status', 'completed')
       if (adjustErr) console.error('[webhook] tip partial refund amount adjustment failed:', adjustErr.message, 'tip:', tip.id)
     } else if ((tip.payout_id ?? null) != null) {

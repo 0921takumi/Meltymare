@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
+import { CONTENT_CARD_WITH_CREATOR_AND_TAGS_SELECT } from '@/lib/content-fields'
 import ContentCard from '@/components/ui/ContentCard'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
@@ -25,9 +26,11 @@ export default async function ContentsPage({
     profile = data
   }
 
+  // v49: select('*') は未購入者にも file_url（実ファイルの保管パス）を露出させるため、
+  // ContentCardが実際に使う列＋タグ集計に要るtagsだけを明示selectする（lib/content-fields.ts参照）。
   let query = supabase
     .from('contents')
-    .select('*, creator:profiles(id, display_name, avatar_url)')
+    .select(CONTENT_CARD_WITH_CREATOR_AND_TAGS_SELECT)
     .eq('is_published', true)
 
   if (type !== 'all') query = query.eq('content_type', type)
@@ -109,7 +112,7 @@ export default async function ContentsPage({
         if (topIds.length > 0) {
           const { data: recs } = await supabase
             .from('contents')
-            .select('*, creator:profiles(id, display_name, avatar_url)')
+            .select(CONTENT_CARD_WITH_CREATOR_AND_TAGS_SELECT)
             .in('id', topIds)
             .eq('is_published', true)
           recommendations = recs ?? []

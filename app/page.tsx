@@ -5,6 +5,7 @@ import Footer from '@/components/layout/Footer'
 import ContentCard from '@/components/ui/ContentCard'
 import { createClient } from '@/lib/supabase/server'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
+import { CONTENT_CARD_WITH_CREATOR_SELECT } from '@/lib/content-fields'
 import { PenLine, Search, CreditCard, ShieldCheck, EyeOff, PenTool, MessageCircle } from 'lucide-react'
 /**
  * ヒーローのポラロイド画像 URL。
@@ -55,7 +56,7 @@ export default async function HomePage() {
   // コンテンツ一覧（最新8件）
   const { data: contents } = await supabase
     .from('contents')
-    .select('*, creator:profiles(id, display_name, avatar_url)')
+    .select(CONTENT_CARD_WITH_CREATOR_SELECT)
     .eq('is_published', true)
     .order('created_at', { ascending: false })
     .limit(8)

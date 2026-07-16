@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
+import { CONTENT_CARD_WITH_CREATOR_SELECT } from '@/lib/content-fields'
 import Header from '@/components/layout/Header'
 import ContentCard from '@/components/ui/ContentCard'
 import { notFound } from 'next/navigation'
@@ -57,9 +59,21 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
     .single()
   if (!creator) return notFound()
 
+  // v49: 凍結・退会済みクリエイターの公開ページ/購入導線が一切ブロックされていなかった
+  // （proxy.ts の凍結ゲートは本人のダッシュボードアクセスを止めるだけで、
+  // 他ユーザーから見た公開プロフィールには影響しない）。is_suspended/deleted_at は
+  // 他人の行のPII列のため service_role(admin) で読む。
+  const admin = createAdminClient()
+  const { data: creatorStatus } = await admin
+    .from('profiles')
+    .select('is_suspended, deleted_at')
+    .eq('id', creator.id)
+    .maybeSingle()
+  if (creatorStatus?.is_suspended || creatorStatus?.deleted_at) return notFound()
+
   const { data: contents } = await supabase
     .from('contents')
-    .select('*, creator:profiles(id, display_name, avatar_url)')
+    .select(CONTENT_CARD_WITH_CREATOR_SELECT)
     .eq('creator_id', creator.id)
     .eq('is_published', true)
     .order('created_at', { ascending: false })

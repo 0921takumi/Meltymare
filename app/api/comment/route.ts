@@ -27,6 +27,15 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // v49: 凍結・退会済みアカウントでも直接このAPIを叩けばコメント投稿できてしまっていた
+  // （proxy.ts の凍結ゲートは matcher で /api を除外している）。
+  // is_suspended/deleted_at は列単位REVOKE対象のPII列のため my_auth_gate_info() RPC で取得する。
+  const { data: gateRows } = await supabase.rpc('my_auth_gate_info')
+  const gate = gateRows?.[0] ?? null
+  if (gate?.is_suspended || gate?.deleted_at) {
+    return NextResponse.json({ error: 'account_suspended', message: 'このアカウントは現在ご利用いただけません' }, { status: 403 })
+  }
+
   const rl = await rateLimit({ key: `comment:${user.id}`, limit: 30, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
 

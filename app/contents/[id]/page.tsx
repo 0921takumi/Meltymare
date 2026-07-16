@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
+import { CONTENT_CARD_WITH_CREATOR_SELECT } from '@/lib/content-fields'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import PurchaseButton from './PurchaseButton'
@@ -65,6 +67,23 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
 
   if (!content) return notFound()
 
+  // v49: 凍結・退会済みクリエイターのコンテンツが一般訪問者から見えたまま購入可能だった
+  // （proxy.ts の凍結ゲートは本人のダッシュボードアクセスを止めるだけ）。ただし
+  // 本人(自分のコンテンツ確認)とadmin(モデレーション目的の確認)は従来通り閲覧可能に
+  // する必要があるため、それ以外の第三者にだけ404を返す。is_suspended/deleted_at は
+  // 他人の行のPII列のため service_role(admin) で読む。
+  const isOwner = !!user && user.id === (content as { creator_id: string }).creator_id
+  const isAdminViewer = profile?.role === 'admin'
+  if (!isOwner && !isAdminViewer) {
+    const admin = createAdminClient()
+    const { data: creatorStatus } = await admin
+      .from('profiles')
+      .select('is_suspended, deleted_at')
+      .eq('id', (content as { creator_id: string }).creator_id)
+      .maybeSingle()
+    if (creatorStatus?.is_suspended || creatorStatus?.deleted_at) return notFound()
+  }
+
   // 購入済みチェック
   let isPurchased = false
   let deliveryStatus: 'pending' | 'delivered' | null = null
@@ -92,9 +111,13 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   const isSoldOut = content.stock_limit != null && content.sold_count >= content.stock_limit
 
   // 同クリエイターの他コンテンツ（最大4件）
+  // v49: select('*') だと file_url（購入者しかDLしてはいけない実ファイルの保管パス）まで
+  // 取得され、ContentCard('use client')に丸ごと渡すことでRSCペイロードに乗って
+  // 未購入の訪問者のブラウザにまで送られていた（ContentCard自体はfile_urlを一切
+  // 使っていない＝完全に不要な露出）。ContentCardが実際に使う列だけを明示selectする。
   const { data: relatedContents } = await supabase
     .from('contents')
-    .select('*, creator:profiles(id, display_name, avatar_url)')
+    .select(CONTENT_CARD_WITH_CREATOR_SELECT)
     .eq('creator_id', content.creator_id)
     .eq('is_published', true)
     .neq('id', id)

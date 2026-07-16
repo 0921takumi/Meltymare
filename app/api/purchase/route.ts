@@ -18,6 +18,19 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
 
+    // v49: このルートは lib/auth.ts の requireUser() を経由せず自前で認証しているため、
+    // 凍結・退会済みアカウントによる購入がここでは一切ブロックされていなかった
+    // （proxy.ts の凍結ゲートは matcher で /api を除外している）。
+    // is_suspended/deleted_at は列単位REVOKE対象のPII列のため my_auth_gate_info() RPC で取得する。
+    const { data: buyerGateRows } = await supabase.rpc('my_auth_gate_info')
+    const buyerGate = buyerGateRows?.[0] ?? null
+    if (buyerGate?.is_suspended) {
+      return NextResponse.json({ error: 'account_suspended', message: 'このアカウントは現在ご利用いただけません' }, { status: 403 })
+    }
+    if (buyerGate?.deleted_at) {
+      return NextResponse.json({ error: 'account_deleted', message: 'このアカウントは退会処理中です' }, { status: 403 })
+    }
+
     // レート制限: 1ユーザーあたり 10req/分
     const rl = await rateLimit({ key: `purchase:${user.id}`, limit: 10, windowSec: 60, failClosed: true })
     if (!rl.ok) return NextResponse.json({ error: 'リクエストが多すぎます。しばらくしてから再試行してください' }, { status: 429 })
@@ -46,6 +59,23 @@ export async function POST(req: NextRequest) {
       .eq('review_status', 'approved')
       .single()
     if (contentError || !content) return NextResponse.json({ error: 'コンテンツが見つかりません' }, { status: 404 })
+
+    // v49: 凍結・退会済みクリエイターのコンテンツが購入可能なまま放置されていた
+    // （proxy.ts はクリエイター本人のダッシュボードアクセスを止めるだけで、
+    // 他ユーザーからの購入導線には一切影響しない）。creator_id の is_suspended/
+    // deleted_at は他人の行のPII列のため service_role(admin) で読む。
+    const { data: creatorStatus, error: creatorStatusErr } = await admin
+      .from('profiles')
+      .select('is_suspended, deleted_at')
+      .eq('id', content.creator_id)
+      .maybeSingle()
+    if (creatorStatusErr) {
+      console.error('[purchase] creator status check failed (fail-closed):', creatorStatusErr.message)
+      return NextResponse.json({ error: 'システムエラーが発生しました。時間をおいて再度お試しください' }, { status: 503 })
+    }
+    if (creatorStatus?.is_suspended || creatorStatus?.deleted_at) {
+      return NextResponse.json({ error: 'このクリエイターのコンテンツは現在購入できません' }, { status: 403 })
+    }
 
     // 自分のコンテンツは購入不可
     if (content.creator_id === user.id) {
