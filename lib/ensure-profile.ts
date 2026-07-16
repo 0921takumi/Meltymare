@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js'
+import { randomUsername } from '@/lib/username'
 
 /**
  * profiles 行が無ければ作成するフォールバック（session client でも
@@ -26,14 +27,16 @@ export async function ensureProfile(
   if (existing) return { ok: true }
 
   const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string; display_name?: string; avatar_url?: string }
-  const emailPrefix = user.email?.split('@')[0] ?? 'user'
-  const displayName = meta.display_name ?? meta.full_name ?? meta.name ?? emailPrefix
+  // v52: display_name/username を email のローカル部から作ると、そのまま公開プロフィール
+  // に個人情報が出てしまう。OAuth等で本名/表示名が取れた場合のみそれを使い、
+  // 取れない場合は非PIIな汎用名にする（display_nameは本人がすぐ変更できる）。
+  const displayName = meta.display_name ?? meta.full_name ?? meta.name ?? '新規ユーザー'
   const avatarUrl = meta.avatar_url ?? null
 
   const { error: insertErr } = await supabase.from('profiles').insert({
     id: user.id,
     email: user.email ?? `${user.id}@no-email.local`,
-    username: `${emailPrefix}_${user.id.slice(0, 6)}`,
+    username: randomUsername(),
     display_name: displayName,
     avatar_url: avatarUrl,
     role: 'user',

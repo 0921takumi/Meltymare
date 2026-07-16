@@ -21,6 +21,11 @@ export default function ProfileEditPage() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
+  // v52: ID(username)はsignup直後はランダムな仮IDのため、本人が自由に変更できるようにする。
+  const [username, setUsername] = useState('')
+  const [usernameMsg, setUsernameMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [usernameLoading, setUsernameLoading] = useState(false)
+
   useEffect(() => {
     const init = async () => {
       const supabase = createClient()
@@ -34,6 +39,7 @@ export default function ProfileEditPage() {
         setTwitterUrl(data.twitter_url ?? '')
         setInstagramUrl(data.instagram_url ?? '')
         setTiktokUrl(data.tiktok_url ?? '')
+        setUsername(data.username ?? '')
       }
     }
     init()
@@ -44,6 +50,34 @@ export default function ProfileEditPage() {
     if (!file) return
     setAvatarFile(file)
     setAvatarPreview(URL.createObjectURL(file))
+  }
+
+  const handleUsernameChange = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setUsernameMsg(null)
+    if (username === profile?.username) {
+      setUsernameMsg({ type: 'err', text: '現在のIDと同じです' })
+      return
+    }
+    setUsernameLoading(true)
+    try {
+      const res = await fetch('/api/me/username', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setUsernameMsg({ type: 'err', text: j.message ?? 'IDの変更に失敗しました' })
+      } else {
+        setUsernameMsg({ type: 'ok', text: 'IDを変更しました' })
+        setProfile(p => p ? { ...p, username: j.username } : p)
+      }
+    } catch {
+      setUsernameMsg({ type: 'err', text: '通信エラーが発生しました' })
+    } finally {
+      setUsernameLoading(false)
+    }
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -104,6 +138,11 @@ export default function ProfileEditPage() {
 
   const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' as const }
   const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--mm-text-sub)' }
+  const msgStyle = (type: 'ok' | 'err'): React.CSSProperties => ({
+    fontSize: 13, padding: '10px 14px', borderRadius: 8, marginTop: 10,
+    color: type === 'ok' ? '#059669' : '#dc2626',
+    background: type === 'ok' ? '#ecfdf5' : '#fef2f2',
+  })
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>
@@ -137,6 +176,28 @@ export default function ProfileEditPage() {
             <div>
               <label style={labelStyle}>表示名 *</label>
               <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} required style={inputStyle} />
+            </div>
+
+            {/* bio より前に置くと保存ボタンの意味が混ざるため、ID変更は別フォーム(独立送信)にする */}
+            <div style={{ borderTop: '1px solid var(--mm-border)', paddingTop: 20 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, color: 'var(--mm-text)' }}>ID</p>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 10, lineHeight: 1.6 }}>
+                プロフィールURL（/creator/ID）に使われます。半角英数字と_のみ、3〜20文字。
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input type="text" value={username} onChange={e => setUsername(e.target.value.toLowerCase())}
+                  style={{ ...inputStyle, fontFamily: 'monospace' }} placeholder="your_id" maxLength={20} />
+                <button type="button" onClick={handleUsernameChange} disabled={usernameLoading || username === profile?.username}
+                  style={{
+                    background: 'var(--mm-ink)', color: 'white', padding: '0 18px', borderRadius: 8,
+                    fontWeight: 700, fontSize: 13, border: 'none', whiteSpace: 'nowrap',
+                    cursor: (usernameLoading || username === profile?.username) ? 'not-allowed' : 'pointer',
+                    opacity: (usernameLoading || username === profile?.username) ? 0.5 : 1,
+                  }}>
+                  {usernameLoading ? '変更中...' : 'ID変更'}
+                </button>
+              </div>
+              {usernameMsg && <p style={msgStyle(usernameMsg.type)}>{usernameMsg.text}</p>}
             </div>
 
             {/* bio */}
