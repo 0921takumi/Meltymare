@@ -19,6 +19,7 @@ import { NextResponse } from 'next/server'
 import { requireCreator } from '@/lib/auth'
 import { sanitizeText, sanitizeOptional } from '@/lib/sanitize'
 import { rateLimit } from '@/lib/rate-limit'
+import { FEATURES } from '@/lib/config'
 
 const UUID_RE = /^[0-9a-f-]{36}$/i
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
@@ -44,7 +45,19 @@ function sanitizeBenefits(input: unknown): string[] {
     .filter((b) => b.length > 0)
 }
 
+// v31: サブスク機能は Stripe Subscription 未統合のため Phase 2 送り(FEATURES.subscriptions=false)。
+// UI(/creator/plans)はproxy.tsのDISABLED_PREFIXESで塞がれ、/api/subscribeも503を返すが、
+// このAPIだけキルスイッチが無く、requireCreator()さえ通れば機能停止中でもプランの
+// 作成/編集/削除ができてしまっていた（/api/subscribeと同じ disabledResponse で統一）。
+function disabledResponse() {
+  return NextResponse.json(
+    { error: 'subscriptions_disabled', message: 'サブスクリプション機能は現在ご利用いただけません。' },
+    { status: 503 },
+  )
+}
+
 export async function POST(req: Request) {
+  if (!FEATURES.subscriptions) return disabledResponse()
   const ctx = await requireCreator()
   if (ctx instanceof NextResponse) return ctx
   const { supabase, user } = ctx
@@ -82,6 +95,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  if (!FEATURES.subscriptions) return disabledResponse()
   const ctx = await requireCreator()
   if (ctx instanceof NextResponse) return ctx
   const { supabase, user } = ctx
@@ -130,6 +144,7 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  if (!FEATURES.subscriptions) return disabledResponse()
   const ctx = await requireCreator()
   if (ctx instanceof NextResponse) return ctx
   const { supabase, user } = ctx

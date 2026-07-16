@@ -5,7 +5,8 @@ import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
-import { SERVICE_MODE } from '@/lib/config'
+import { SERVICE_MODE, FEATURES } from '@/lib/config'
+import { safeNext } from '@/lib/safe-next'
 import { Eye, EyeOff } from 'lucide-react'
 
 function passwordStrength(pw: string): { label: string; color: string; score: number } {
@@ -20,29 +21,63 @@ function passwordStrength(pw: string): { label: string; color: string; score: nu
   return { label: '強い', color: '#10b981', score: 5 }
 }
 
+/**
+ * パスワードが Supabase 側の要件を満たすか事前検証する。
+ * Supabase Auth のデフォルトは緩い(6文字以上)が、本番では強化設定が入ることが多く、
+ * その場合フォームは通ったのにサーバー到達時に「Password should contain...」で
+ * 弾かれてユーザーが「何がダメか分からない」体験になる。事前に同じ要件で止めて、
+ * 何が足りないかを具体的に伝える。
+ */
+function passwordRequirementMessage(pw: string): string | null {
+  if (pw.length < 8) return 'パスワードは8文字以上で入力してください。'
+  const missing: string[] = []
+  if (!/[a-z]/.test(pw)) missing.push('小文字')
+  if (!/[A-Z]/.test(pw)) missing.push('大文字')
+  if (!/[0-9]/.test(pw)) missing.push('数字')
+  if (!/[^A-Za-z0-9]/.test(pw)) missing.push('記号(例: ! @ # $)')
+  if (missing.length > 0) return `パスワードに「${missing.join('・')}」を含めてください。`
+  return null
+}
+
+/** 招待コードが最低限の形式(空でない・許容文字のみ)を満たすか、フォーム側で早期に判定する */
+function inviteCodeFormatError(codeRaw: string): string | null {
+  const code = codeRaw.trim().toUpperCase()
+  if (!code) return '招待コードを入力してください。'
+  // API 側の regex と揃える: MYF-XXXXXX 形式 or 単独の英数4-16文字
+  const ok = /^MYF-[A-Z2-9]{6}$/.test(code) || /^[A-Z0-9]{4,16}$/.test(code)
+  if (!ok) return '招待コードの形式が違います。半角英数字で、ハイフン以外の記号は使えません。'
+  return null
+}
+
 /** Supabase の生英語エラーを、ユーザーに伝わる日本語へ変換する */
 function signupErrorMessage(raw: string): string {
   const m = raw.toLowerCase()
-  if (m.includes('already registered') || m.includes('already been registered')) {
+  if (m.includes('already registered') || m.includes('already been registered') || m.includes('user already registered')) {
     return 'このメールアドレスはすでに登録されています。ログインをお試しください。'
   }
   if (m.includes('invalid') && m.includes('email')) {
     return 'メールアドレスの形式をご確認ください。'
   }
-  if (m.includes('rate limit') || m.includes('too many')) {
-    return 'しばらく時間をおいてから、もう一度お試しください。'
+  if (m.includes('email') && (m.includes('bounce') || m.includes('undeliverable'))) {
+    return 'このメールアドレスにメールを送れませんでした。別のアドレスをお試しください。'
+  }
+  if (m.includes('rate limit') || m.includes('too many') || m.includes('for security purposes')) {
+    return '短時間に登録が集中しています。少し(3〜5分)時間をおいてから、もう一度お試しください。'
   }
   if (m.includes('password')) {
     return 'パスワードは「大文字・小文字・数字・記号」をそれぞれ1つ以上含む8文字以上で設定してください。'
+  }
+  if (m.includes('signups') && m.includes('disabled')) {
+    return '現在、新規登録は一時的に停止しています。運営までお問い合わせください。'
   }
   return '登録できませんでした。お手数ですが、もう一度お試しください。'
 }
 
 function SignupForm() {
   const search = useSearchParams()
-  // ?next= はメール確認後の復帰先（open redirect 防止のため相対パスのみ許可）
-  const rawNext = search.get('next')
-  const validNext = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : null
+  // ?next= はメール確認後の復帰先。open redirect 防止のため
+  // lib/safe-next の共通チェック（callback/route.ts と同一ロジック）を使う
+  const validNext = safeNext(search.get('next'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -61,18 +96,32 @@ function SignupForm() {
     e.preventDefault()
     setError('')
     if (!agreed || !age18) { setError('利用規約と18歳以上の確認に同意してください'); return }
-    if (password.length < 8) { setError('パスワードは8文字以上で入力してください'); return }
+    // パスワード要件をフォーム側で先に確認（Supabase 到達前に「何が足りないか」を具体表示）
+    const pwErr = passwordRequirementMessage(password)
+    if (pwErr) { setError(pwErr); return }
+    // 招待コード（招待制ON時）の形式チェックもここで。fetch 前に弾く。
+    if (SERVICE_MODE.inviteOnly) {
+      const codeErr = inviteCodeFormatError(inviteCode)
+      if (codeErr) { setError(codeErr); return }
+    }
     setLoading(true)
 
-    // 招待コード検証 (招待制ON時)
+    // 招待コード検証 (招待制ON時)。API 側はセキュリティのためエラー詳細を返さないが、
+    // フロントでは 429/500/その他をユーザー向けに区別する。
     const verifyRes = await fetch('/api/invite/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: inviteCode }),
     })
-    const verify = await verifyRes.json()
+    const verify = await verifyRes.json().catch(() => ({ ok: false }))
     if (!verify.ok) {
-      setError(verify.error ?? '登録できません')
+      if (verifyRes.status === 429) {
+        setError('招待コードの確認が短時間に集中しました。1分ほど時間をおいてお試しください。')
+      } else if (verifyRes.status >= 500) {
+        setError('サーバーで問題が発生しました。少し時間をおいて再度お試しください。')
+      } else {
+        setError(verify.error ?? 'この招待コードは使用できません（無効・期限切れ・利用上限のいずれか）。運営までご連絡ください。')
+      }
       setLoading(false)
       return
     }
@@ -196,7 +245,8 @@ function SignupForm() {
                 </div>
               )}
               <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 6, lineHeight: 1.5 }}>
-                大文字・小文字・数字・記号をそれぞれ1つ以上含む8文字以上で設定してください。
+                大文字・小文字・数字・記号（! @ # $ 等）を<strong style={{ color: 'var(--mm-text-sub)' }}>すべて</strong>含む<strong style={{ color: 'var(--mm-text-sub)' }}>8文字以上</strong>で設定してください。<br />
+                例: <code style={{ background: 'var(--mm-bg)', padding: '1px 4px', borderRadius: 3, fontFamily: 'monospace' }}>MyFocus2026!</code>
               </p>
             </div>
             <div>
@@ -253,13 +303,17 @@ function SignupForm() {
             </p>
           </form>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 18px' }}>
-            <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
-            <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 600 }}>or</span>
-            <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
-          </div>
+          {FEATURES.googleAuth && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 18px' }}>
+                <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
+                <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 600 }}>or</span>
+                <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
+              </div>
 
-          <GoogleLoginButton next={validNext ?? undefined} inviteCode={inviteCode} requireInvite={SERVICE_MODE.inviteOnly} />
+              <GoogleLoginButton next={validNext ?? undefined} inviteCode={inviteCode} requireInvite={SERVICE_MODE.inviteOnly} />
+            </>
+          )}
 
           <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13, color: 'var(--mm-text-sub)' }}>
             すでにアカウントをお持ちの方は{' '}

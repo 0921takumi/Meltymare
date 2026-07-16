@@ -1,0 +1,31 @@
+-- ============================================================
+-- v37: v36 で入れた bday_insert ポリシーの不具合を修正
+--
+-- 【私(v36)が作り込んだ退行 — 実地検証で発見】
+--   v36 の bday_insert ポリシーは受信側クリエイターの
+--   role / accepts_birthday_messages / birthdate を EXISTS サブクエリで検証していたが、
+--   accepts_birthday_messages と birthdate は v22(profiles PII) で authenticated から
+--   **列単位 REVOKE** 済み。RLS ポリシーは書き込みを行う authenticated ロールの権限で
+--   評価されるため、これらの列を参照した瞬間 "permission denied for table profiles" となり、
+--   正規のバースデーメッセージ送信まで含めて **全ての insert が失敗** していた
+--   （実地検証: 正規の momo 宛送信が permission denied で失敗することを確認）。
+--
+-- 【方針】
+--   app/api/birthday-message/route.ts は既に service_role(admin) で受信側の
+--   role/accepts/birthdate/自分宛禁止 を検証しており、v37 で実 insert も admin に
+--   切り替えた（purchases/tips と同じく「業務ルール検証済みの書き込みは service_role に集約」）。
+--   よって authenticated からの直接 insert を許可する必要はない。deny-by-default に戻す。
+--   service_role は RLS を bypass するので正規フロー(API経由)は影響を受けない。
+--
+-- Supabase SQL Editor で実行してください。冪等。
+-- ============================================================
+
+drop policy if exists "bday_insert" on public.birthday_messages;
+-- authenticated 向けの insert ポリシーは作らない（= 直接 insert は拒否）。
+-- 書き込みは app/api/birthday-message/route.ts の service_role 経由のみ。
+
+-- 確認(必須):
+--   1) 一般ユーザーの実セッションで supabase.from('birthday_messages').insert({...}) が
+--      RLS で拒否されること（"new row violates row-level security policy"）。
+--   2) API 経由(POST /api/birthday-message)の正規送信は成功すること。
+-- ============================================================

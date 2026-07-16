@@ -1,36 +1,41 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { FINANCE } from '@/lib/config'
+import { fetchAllRows } from '@/lib/fetch-all'
 
 export default async function AdminSalesPage() {
   // v22: 購入者の email（PII）を含むため service_role で読む。
   // 認可は app/admin/layout.tsx が admin に限定済み。
   const admin = createAdminClient()
 
-  const { data: purchases } = await admin
+  // v42: fetchAllRows で PostgREST のデフォルト行数上限による無言の切り捨てを防止。
+  const purchases = await fetchAllRows((from, to) => admin
     .from('purchases')
     .select('*, content:contents(title, price, creator:profiles(display_name, fee_rate)), user:profiles(display_name, email)')
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
+    .range(from, to))
 
   // 手数料はコンテンツ代金のみにかかる。チップは手数料0%で全額クリエイターへ
+  // v42: fee_rate は購入完了時点のスナップショットを優先し、無い場合(旧データ)のみ現在の値。
   const getParts = (p: any) => {
     const contentPrice = p.content_price ?? p.amount ?? 0
     const tipAmount = p.tip_amount ?? 0
-    const feeRate = p.content?.creator?.fee_rate ?? 30
+    const feeRate = p.fee_rate ?? p.content?.creator?.fee_rate ?? FINANCE.defaultFeeRate
     const fee = Math.floor(contentPrice * feeRate / 100)
     const net = contentPrice - fee + tipAmount
     return { contentPrice, tipAmount, feeRate, fee, net }
   }
 
-  const totalContentSales = purchases?.reduce((sum, p) => sum + getParts(p).contentPrice, 0) ?? 0
-  const totalTipSales = purchases?.reduce((sum, p) => sum + getParts(p).tipAmount, 0) ?? 0
+  const totalContentSales = purchases.reduce((sum, p) => sum + getParts(p).contentPrice, 0)
+  const totalTipSales = purchases.reduce((sum, p) => sum + getParts(p).tipAmount, 0)
   const totalSales = totalContentSales + totalTipSales
-  const totalFee = purchases?.reduce((sum, p) => sum + getParts(p).fee, 0) ?? 0
+  const totalFee = purchases.reduce((sum, p) => sum + getParts(p).fee, 0)
   const totalNet = totalSales - totalFee
-  const tipCount = purchases?.filter(p => (p.tip_amount ?? 0) > 0).length ?? 0
+  const tipCount = purchases.filter(p => (p.tip_amount ?? 0) > 0).length
 
   // クリエイター別集計
   const byCreator: Record<string, { name: string; sales: number; tip: number; fee: number; net: number; count: number }> = {}
-  purchases?.forEach(p => {
+  purchases.forEach(p => {
     const name = p.content?.creator?.display_name ?? '不明'
     const parts = getParts(p)
     if (!byCreator[name]) byCreator[name] = { name, sales: 0, tip: 0, fee: 0, net: 0, count: 0 }

@@ -50,11 +50,15 @@ export async function POST(req: Request) {
   // 照会は service_role で行う。anon の server client だと RLS で 0 件になり、正しい
   // コードも「無効」と誤判定して招待制で誰も登録できなくなる（重大事故の修正）。
   const admin = createAdminClient()
-  const { data: invite } = await admin
+  const { data: invite, error } = await admin
     .from('invite_codes')
     .select('id, max_uses, used_count, expires_at, is_active')
     .eq('code', code)
     .maybeSingle()
+
+  if (error) {
+    console.error('[invite-verify] db error:', error)
+  }
 
   // 存在しない / 無効化 / 上限到達 / 期限切れ → すべて同じエラーメッセージで返す
   // （存在判定や状態の情報漏洩を防ぐ）

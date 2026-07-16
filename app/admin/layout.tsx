@@ -1,65 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import AdminShell, { type NavSection } from '@/components/admin/AdminShell'
-import {
-  LayoutDashboard, Users, ShoppingBag, TrendingUp, Wallet, Package,
-  MessageSquare, Image as ImageIcon, ShieldCheck, Radio, Sparkles, Gem, Gavel,
-  Flag, BarChart3, FileText,
-} from 'lucide-react'
+import AdminShell from '@/components/admin/AdminShell'
 
 /**
- * 管理画面 layout（認可ゲート + シェル組み立て）
+ * 管理画面 layout（認可ゲート）。
  *
- * このファイルは Server Component で認可だけ担当。
- * UI/モバイルドロワーは AdminShell に切り出して Client Component に。
+ * このファイルは Server Component で「認可」と「profile の取得」だけを担当。
+ * ナビ定義（lucide アイコン＝関数を含む）と UI/モバイルドロワーは Client Component の
+ * AdminShell 側に置く。Server→Client へ関数（コンポーネント）を props で渡すと
+ * Next.js 16 / React 19 では throw するため、SECTIONS は AdminShell 内に閉じている。
  */
-
-const SECTIONS: NavSection[] = [
-  {
-    title: 'Overview',
-    items: [
-      { href: '/admin',           icon: LayoutDashboard, label: 'ダッシュボード' },
-      { href: '/admin/analytics', icon: BarChart3,       label: '分析・KPI' },
-      { href: '/admin/audit',     icon: FileText,        label: '操作ログ' },
-    ],
-  },
-  {
-    title: 'Users',
-    items: [
-      { href: '/admin/users',         icon: Users,        label: 'ユーザー管理' },
-      { href: '/admin/creators',      icon: Package,      label: 'クリエイター' },
-      { href: '/admin/verifications', icon: ShieldCheck,  label: '本人確認審査' },
-    ],
-  },
-  {
-    title: 'Content',
-    items: [
-      { href: '/admin/contents',  icon: Package,    label: '商品管理・審査' },
-      { href: '/admin/lives',     icon: Radio,      label: 'ライブ配信' },
-      { href: '/admin/stories',   icon: Sparkles,   label: 'ストーリー' },
-      { href: '/admin/comments',  icon: Flag,       label: 'コメント・通報' },
-    ],
-  },
-  {
-    title: 'Business',
-    items: [
-      { href: '/admin/orders',        icon: ShoppingBag, label: '注文管理' },
-      { href: '/admin/sales',         icon: TrendingUp,  label: '売上管理' },
-      { href: '/admin/payouts',       icon: Wallet,      label: '振込管理' },
-      { href: '/admin/subscriptions', icon: Gem,         label: 'サブスク管理' },
-      { href: '/admin/auctions',      icon: Gavel,       label: 'オークション' },
-    ],
-  },
-  {
-    title: 'Operation',
-    items: [
-      { href: '/admin/banners',   icon: ImageIcon,     label: '特集バナー' },
-      { href: '/admin/invites',   icon: ShieldCheck,   label: '招待コード' },
-      { href: '/admin/inquiries', icon: MessageSquare, label: '問い合わせ' },
-    ],
-  },
-]
-
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -71,7 +21,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (profile?.role !== 'admin') redirect('/')
 
   return (
-    <AdminShell sections={SECTIONS} profile={profile}>
+    <AdminShell profile={profile}>
       {children}
     </AdminShell>
   )

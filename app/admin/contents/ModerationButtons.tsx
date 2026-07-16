@@ -14,6 +14,18 @@ export default function ModerationButtons({ contentId, currentStatus, isPublishe
     })
   }
 
+  const reject = () => {
+    // 監査で発覚: 却下理由の入力欄が無く、クリエイターに理由が一切伝わらなかった。
+    // 本人確認の却下（textarea付きモーダル）と同水準にする（軽量なprompt()で最小実装）。
+    const reason = window.prompt('却下理由を入力してください（クリエイターに表示されます）')
+    if (reason === null) return  // キャンセル
+    if (reason.trim().length < 3) { alert('却下理由を3文字以上入力してください'); return }
+    start(async () => {
+      const res = await moderateContent(contentId, 'reject', reason)
+      if ((res as { error?: string }).error) alert((res as { error: string }).error)
+    })
+  }
+
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       {currentStatus !== 'approved' && (
@@ -25,7 +37,7 @@ export default function ModerationButtons({ contentId, currentStatus, isPublishe
       )}
       {currentStatus !== 'rejected' && (
         <button
-          onClick={() => go('reject', '却下して非公開にします。よろしいですか？')}
+          onClick={reject}
           disabled={pending}
           style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: pending ? 'wait' : 'pointer' }}
         >✗ 却下</button>

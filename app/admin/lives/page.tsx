@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Radio, Eye } from 'lucide-react'
+import { FEATURES } from '@/lib/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +21,9 @@ interface Stream {
 }
 
 export default async function AdminLivesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  // ライブ機能は停止中(FEATURES.live=false)。停止中の管理UIは廃止API(410)を叩く操作を
+  // 含むため、機能が無効な間はダッシュボードへ退避する（機能復活時はフラグを戻すだけ）。
+  if (!FEATURES.live) redirect('/admin')
   const sp = await searchParams
   const supabase = await createClient()
   const status = sp.status ?? 'all'

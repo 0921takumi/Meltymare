@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { Search, AlertCircle } from 'lucide-react'
 import UserActions from './UserActions'
+import Avatar from '@/components/ui/Avatar'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,7 +53,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
     for (const p of purchases ?? []) {
       const s = purchaseStats.get(p.user_id) ?? { count: 0, total: 0 }
       s.count++
-      s.total += (p.amount ?? 0) + (p.tip_amount ?? 0)
+      s.total += (p.amount ?? 0)  // amount はチップ込みのため tip_amount を再加算しない
       purchaseStats.set(p.user_id, s)
     }
   }
@@ -113,12 +114,10 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 <tr key={u.id} style={{ opacity: u.is_suspended ? 0.55 : 1 }}>
                   <td data-label="ユーザー">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', flexShrink: 0 }}>
-                        {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                      </div>
+                      <Avatar src={u.avatar_url} name={u.display_name} size={32} />
                       <div style={{ minWidth: 0 }}>
                         <p style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180, color: 'var(--mm-ink)' }}>{u.display_name}</p>
-                        <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>@{u.username} · {u.email}</p>
+                        <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>@{u.username} · {u.email}</p>
                       </div>
                     </div>
                   </td>

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import PayoutStatusChanger from './PayoutStatusChanger'
 import { FINANCE } from '@/lib/config'
+import { fetchAllRows } from '@/lib/fetch-all'
 
 export default async function AdminPayoutsPage() {
   const supabase = await createClient()
@@ -15,20 +16,48 @@ export default async function AdminPayoutsPage() {
     .select('id, display_name, username, fee_rate, bank_name, bank_branch, bank_account_number, bank_account_holder')
     .eq('role', 'creator')
 
-  const { data: purchases } = await supabase
+  // v29: 既に振込済み(payout_id 設定済み)の購入は「振込予定」から除外する。
+  // これが無いと、振込完了後も同じ額がずっと未払いとして表示され続けてしまう。
+  // v42: fetchAllRows で PostgREST のデフォルト行数上限による無言の切り捨てを防止。
+  const purchases = await fetchAllRows((from, to) => supabase
     .from('purchases')
-    .select('amount, content:contents(creator_id, creator:profiles(fee_rate))')
+    .select('amount, content_price, tip_amount, fee_rate, content:contents(creator_id, creator:profiles(fee_rate))')
     .eq('status', 'completed')
+    .is('payout_id', null)
+    .range(from, to))
 
   // クリエイター別未払い集計
+  // 手数料はコンテンツ代金にのみかかる。チップ(tip_amount)は手数料0%で全額クリエイターへ。
+  // amount はチップ込みの最終額なので、amount だけで按分するとチップにも手数料がかかり
+  // creator が損をする（sales/page.tsx の getParts と同じ content_price/tip 分離計算に揃える）。
+  // v42: fee_rate は購入完了時点のスナップショットを優先し、無い場合(旧データ)のみ現在の値。
   const pendingByCreator: Record<string, { sales: number; net: number }> = {}
-  purchases?.forEach((p: any) => {
+  purchases.forEach((p: any) => {
     const creatorId = p.content?.creator_id
-    const feeRate = p.content?.creator?.fee_rate ?? FINANCE.defaultFeeRate
+    const feeRate = p.fee_rate ?? p.content?.creator?.fee_rate ?? FINANCE.defaultFeeRate
+    if (!creatorId) return
+    const contentPrice = p.content_price ?? p.amount ?? 0
+    const tip = p.tip_amount ?? 0
+    if (!pendingByCreator[creatorId]) pendingByCreator[creatorId] = { sales: 0, net: 0 }
+    pendingByCreator[creatorId].sales += contentPrice + tip
+    pendingByCreator[creatorId].net += (contentPrice - Math.floor(contentPrice * feeRate / 100)) + tip
+  })
+
+  // v40: 単発チップ(tipsテーブル)も未払い分を加算。手数料0%で全額クリエイターへ。
+  //   以前はここに一切計上されず、ファンから徴収したチップが誰にも振り込まれなかった。
+  const unpaidTips = await fetchAllRows((from, to) => supabase
+    .from('tips')
+    .select('creator_id, amount')
+    .eq('status', 'completed')
+    .is('payout_id', null)
+    .range(from, to))
+  unpaidTips.forEach((t: any) => {
+    const creatorId = t.creator_id
+    const amt = t.amount ?? 0
     if (!creatorId) return
     if (!pendingByCreator[creatorId]) pendingByCreator[creatorId] = { sales: 0, net: 0 }
-    pendingByCreator[creatorId].sales += p.amount
-    pendingByCreator[creatorId].net += Math.floor(p.amount * (1 - feeRate / 100))
+    pendingByCreator[creatorId].sales += amt
+    pendingByCreator[creatorId].net += amt  // チップは手数料0%
   })
 
   // 振込履歴

@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   const rl = await rateLimit({ key: `follow:${user.id}`, limit: 60, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
-  const { creator_id } = await req.json()
+  const { creator_id } = await req.json().catch(() => ({}))
   if (!creator_id || !UUID_RE.test(creator_id)) {
     return NextResponse.json({ error: 'creator_id required' }, { status: 400 })
   }
@@ -42,16 +42,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
-  // クリエイターへ通知
-  const { data: follower } = await supabase.from('profiles').select('display_name, username').eq('id', user.id).single()
+  // クリエイターへ通知。follow自体は上で成立済みなので、ここで例外を出して500にしない
+  // （.single()→.maybeSingle()）。通知insertのerrorも握り潰さずログに残す。
+  const { data: follower } = await supabase.from('profiles').select('display_name, username').eq('id', user.id).maybeSingle()
   const admin = createAdminClient()
-  await admin.from('notifications').insert({
+  const { error: notifErr } = await admin.from('notifications').insert({
     user_id: creator_id,
     type: 'follow',
     title: '新しいフォロワー',
     body: `${follower?.display_name ?? 'ファン'} さんがあなたをフォローしました`,
     link: follower?.username ? `/creator/${follower.username}` : '/creator/dashboard',
   })
+  if (notifErr) console.error('[follow] notification insert failed:', notifErr.message, 'creator:', creator_id)
 
   return NextResponse.json({ followed: true })
 }
@@ -64,7 +66,7 @@ export async function DELETE(req: NextRequest) {
   const rl = await rateLimit({ key: `follow:${user.id}`, limit: 60, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
-  const { creator_id } = await req.json()
+  const { creator_id } = await req.json().catch(() => ({}))
   if (!creator_id || !UUID_RE.test(creator_id)) {
     return NextResponse.json({ error: 'creator_id required' }, { status: 400 })
   }

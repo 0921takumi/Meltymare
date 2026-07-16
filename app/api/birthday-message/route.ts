@@ -56,8 +56,14 @@ export async function POST(req: Request) {
   if (!creator.accepts_birthday_messages) return NextResponse.json({ error: 'not_accepting' }, { status: 403 })
   if (!creator.birthdate) return NextResponse.json({ error: 'no_birthdate' }, { status: 400 })
 
+  // v37: insert は service_role(admin) で行う。birthday_messages の RLS を「本人であること」
+  // 以上に強めるには受信側クリエイターの role/accepts/birthdate を参照する必要があるが、
+  // それらは v22 で authenticated から列単位 REVOKE 済みのため、authenticated セッションの
+  // RLS ポリシー内から参照すると "permission denied for table profiles" になる。
+  // 業務ルール（自分宛禁止・受付クリエイターのみ）は上で service_role により検証済みなので、
+  // purchases/tips と同じく実書き込みを admin に集約し、authenticated 直 insert は封じる。
   const year = new Date().getFullYear()
-  const { error } = await supabase.from('birthday_messages').insert({
+  const { error } = await admin.from('birthday_messages').insert({
     creator_id: creatorId,
     user_id: user.id,
     message,
@@ -68,5 +74,18 @@ export async function POST(req: Request) {
     if (error.code === '23505') return NextResponse.json({ error: 'already_sent' }, { status: 409 })
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // 監査で発覚: バースデーメッセージがDBに保存されるだけで、通知も閲覧画面も一切無く、
+  // クリエイターが受け取った事実を知る手段が構造的に無かった（機能がブラックホール化）。
+  const { data: sender } = await supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
+  const { error: notifErr } = await admin.from('notifications').insert({
+    user_id: creatorId,
+    type: 'birthday_message',
+    title: 'バースデーメッセージが届きました 🎂',
+    body: `${sender?.display_name ?? 'ファン'} さんからメッセージが届きました`,
+    link: '/creator/dashboard',
+  })
+  if (notifErr) console.error('[birthday-message] notification insert failed:', notifErr.message)
+
   return NextResponse.json({ ok: true })
 }

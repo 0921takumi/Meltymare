@@ -15,11 +15,16 @@ export async function requireUser(): Promise<AuthContext | NextResponse> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single()
+
+  if (profileError) {
+    console.error('[auth] profile fetch failed:', profileError.message, 'user:', user.id)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
 
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 401 })
 

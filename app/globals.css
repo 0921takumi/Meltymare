@@ -751,6 +751,11 @@ body {
   to { opacity: 1; }
 }
 
+/* a11y: 管理画面の muted テキストは白地で約2.7:1 と AA(4.5:1) 未達。.admin-main 配下に限り
+ * 既存の濃いトークン値(#5c5048 = --mm-text-sub)へ寄せてコントラストを確保（公開サイト不変・新色なし）。
+ * 元の淡い見た目に戻したい場合はこの1行を削除するだけ。*/
+.admin-main { --mm-text-muted: #5c5048; }
+
 /* 管理画面のページラッパー（共通パディング） */
 .admin-page {
   padding: 28px 28px 60px;
@@ -838,6 +843,26 @@ body {
   }
 }
 
+/* 管理画面 共通 空状態（中央寄せ・アイコン淡色・余白統一）
+ * lives/contents など各ページでバラバラだった空状態をこの1クラスに集約。
+ * グリッドと併用する場合は「グリッド or .admin-empty」を排他レンダリングすること
+ * （空グリッドを先に描いてから下にメッセージ、の二重描画を防ぐ）。*/
+.admin-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 56px 20px;
+  text-align: center;
+  color: var(--mm-text-sub);
+  border: 1px solid var(--mm-border);
+  border-radius: 12px;
+  background: white;
+}
+.admin-empty svg { opacity: 0.35; }
+.admin-empty p { font-size: 13px; }
+
 /* フォームフィールド共通 */
 .admin-field {
   margin-bottom: 18px;
@@ -878,6 +903,73 @@ body {
   color: var(--mm-text-muted);
   margin-top: 4px;
   line-height: 1.6;
+}
+
+/* ─── Admin polish: カードの奥行きと触感（2026-06-24 UIブラッシュアップ） ───
+ * .mm-card / .admin-table-wrap はアプリ全体で使われるため、影とホバーは管理画面
+ * (.admin-main) 配下にだけ付与し、公開サイトの見た目は一切変えない。
+ * エディトリアル基調（紙＋温色）に合う「低く・柔らかい」影に留める。
+ */
+.admin-main .mm-card {
+  box-shadow: 0 1px 2px rgba(26, 20, 16, 0.04),
+              0 6px 16px -10px rgba(26, 20, 16, 0.12);
+  transition: box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease;
+}
+/* クリック可能なカード（Link/anchor の .mm-card）はホバーでわずかに浮く */
+.admin-main a.mm-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px -4px rgba(26, 20, 16, 0.08),
+              0 16px 30px -12px rgba(26, 20, 16, 0.18);
+  border-color: var(--mm-text-muted);
+}
+.admin-main a.mm-card:active { transform: translateY(0); }
+/* データテーブルの枠もカードと同じ奥行きに揃える */
+.admin-main .admin-table-wrap {
+  box-shadow: 0 1px 2px rgba(26, 20, 16, 0.04),
+              0 6px 16px -10px rgba(26, 20, 16, 0.12);
+}
+
+/* ─── Admin polish: サイドバーのナビ項目（ホバー反応の追加） ───
+ * 以前はインライン style だったため :hover が効かず、現在地以外はクリックするまで
+ * 無反応だった。クラス化して「ホバーで淡く明るくなる」触感を付与。
+ * 現在地（aria-current）の見た目は従来どおり（オレンジの左罫線＋淡いオレンジ地）。
+ */
+.admin-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 22px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.admin-nav-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  border-left-color: rgba(255, 255, 255, 0.22);
+}
+.admin-nav-link[aria-current="page"] {
+  color: #fff;
+  font-weight: 600;
+  background: rgba(211, 107, 36, 0.12);
+  border-left-color: var(--mm-primary);
+}
+
+/* 一覧/テーブル内の小型アクションボタンのタップ標的を確保（375px向け）
+ * 各行の操作ボタンは padding が小さく高さ ~28-34px しかなく、WCAG 2.5.5 の 44px 目安に
+ * 届かなかった。管理画面(.admin-main)配下の操作ボタンだけ最低高を底上げ（公開サイト非影響）。*/
+@media (max-width: 768px) {
+  .admin-main button,
+  .admin-main a.admin-btn,
+  .admin-main .admin-btn,
+  .admin-main form button {
+    min-height: 40px;
+  }
 }
 
 /* プライマリボタン */

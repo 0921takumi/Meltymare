@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Gavel, Clock } from 'lucide-react'
+import { FEATURES } from '@/lib/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +21,8 @@ interface AuctionRow {
 }
 
 export default async function AdminAuctionsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  // オークションは廃止(FEATURES.auctions=false、アンケート機能に置換)。死にUIへの到達を防いで退避。
+  if (!FEATURES.auctions) redirect('/admin')
   const sp = await searchParams
   const supabase = await createClient()
   const status = sp.status ?? 'all'

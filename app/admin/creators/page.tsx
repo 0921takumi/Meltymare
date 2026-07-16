@@ -64,7 +64,7 @@ export default async function AdminCreatorsPage() {
                     ¥{c.netAmount.toLocaleString()}
                   </td>
                   <td data-label="振込先" style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>
-                    {c.bank_name ? `${c.bank_name} ${c.bank_branch}` : <span style={{ color: '#f59e0b', fontWeight: 600 }}>未登録</span>}
+                    {c.bank_name ? `${c.bank_name} ${c.bank_branch ?? ''}`.trim() : <span style={{ color: '#f59e0b', fontWeight: 600 }}>未登録</span>}
                   </td>
                   <td data-label="操作">
                     <a href={`/admin/creators/${c.id}`} style={{ fontSize: 12, color: 'var(--mm-text)', fontWeight: 600, textDecoration: 'none', borderBottom: '1px solid var(--mm-ink)', paddingBottom: 1 }}>

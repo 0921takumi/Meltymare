@@ -53,7 +53,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
       )
     : orders
 
-  const totalAmount = filtered.reduce((s, o) => s + (o.amount ?? 0) + (o.tip_amount ?? 0), 0)
+  const totalAmount = filtered.reduce((s, o) => s + (o.amount ?? 0), 0)  // amount はチップ込み
 
   return (
     <div className="admin-page">
@@ -66,9 +66,10 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
           { key: 'all', label: 'すべて' },
           { key: 'completed', label: '決済完了' },
           { key: 'pending', label: '保留' },
+          { key: 'refunded', label: '返金済み' },
           { key: 'failed', label: '失敗' },
         ].map(t => (
-          <Link key={t.key} href={`/admin/orders?status=${t.key}${q ? `&q=${q}` : ''}`} style={{
+          <Link key={t.key} href={`/admin/orders?status=${t.key}${q ? `&q=${encodeURIComponent(q)}` : ''}`} style={{
             padding: '8px 16px', borderRadius: 999, fontSize: 12, fontWeight: 700,
             background: status === t.key ? 'var(--mm-primary)' : 'white',
             color: status === t.key ? 'white' : 'var(--mm-text-sub)',
@@ -121,14 +122,14 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
                   {o.creator && <Link href={`/creator/${o.creator.username}`} style={{ color: 'var(--mm-text-sub)', textDecoration: 'none' }}>@{o.creator.display_name}</Link>}
                 </td>
                 <td data-label="金額" className="num" style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>
-                  ¥{((o.amount ?? 0) + (o.tip_amount ?? 0)).toLocaleString()}
-                  {(o.tip_amount ?? 0) > 0 && <div style={{ fontSize: 10, color: 'var(--mm-primary)', fontWeight: 600 }}>+ Tip ¥{o.tip_amount?.toLocaleString()}</div>}
+                  ¥{(o.amount ?? 0).toLocaleString()}
+                  {(o.tip_amount ?? 0) > 0 && <div style={{ fontSize: 10, color: 'var(--mm-primary)', fontWeight: 600 }}>（内 Tip ¥{o.tip_amount?.toLocaleString()}）</div>}
                 </td>
                 <td data-label="決済">
                   <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
-                    background: o.status === 'completed' ? '#d1fae5' : o.status === 'pending' ? '#fef3c7' : '#fee2e2',
-                    color: o.status === 'completed' ? '#065f46' : o.status === 'pending' ? '#92400e' : '#991b1b',
-                  }}>{o.status === 'completed' ? '完了' : o.status === 'pending' ? '保留' : '失敗'}</span>
+                    background: o.status === 'completed' ? '#d1fae5' : o.status === 'pending' ? '#fef3c7' : o.status === 'refunded' ? '#ede9fe' : '#fee2e2',
+                    color: o.status === 'completed' ? '#065f46' : o.status === 'pending' ? '#92400e' : o.status === 'refunded' ? '#6d28d9' : '#991b1b',
+                  }}>{o.status === 'completed' ? '完了' : o.status === 'pending' ? '保留' : o.status === 'refunded' ? '返金済み' : '失敗'}</span>
                 </td>
                 <td data-label="納品">
                   {o.delivery_status === 'delivered' ? (
@@ -150,7 +151,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
       {totalPages > 1 && (
         <div style={{ display: 'flex', gap: 6, marginTop: 16, justifyContent: 'center' }}>
           {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 10).map(p => (
-            <Link key={p} href={`/admin/orders?status=${status}&page=${p}${q ? `&q=${q}` : ''}`} style={{
+            <Link key={p} href={`/admin/orders?status=${status}&page=${p}${q ? `&q=${encodeURIComponent(q)}` : ''}`} style={{
               padding: '6px 11px', fontSize: 12, borderRadius: 6,
               background: p === page ? 'var(--mm-primary)' : 'white',
               color: p === page ? 'white' : 'var(--mm-text-sub)',

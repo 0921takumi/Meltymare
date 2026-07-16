@@ -13,7 +13,7 @@
  *     - パスは常にサーバが「本人フォルダ」で生成するため、他人領域には書けない
  */
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireCreator } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 
@@ -21,9 +21,12 @@ const BUCKETS = new Set(['contents', 'thumbnails'])
 const EXT_RE = /^[a-z0-9]{1,5}$/
 
 export async function POST(req: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'ログインしてください' }, { status: 401 })
+  // v31: 'contents'バケットへの署名URL発行はクリエイター専用機能。以前は認証済みなら
+  // 誰でも(role='user'でも)発行できてしまい、RLSのrole欠落と合わせて「クリエイター未承認の
+  // まま出品」の入口の1つになっていたため requireCreator() に統一する。
+  const ctx = await requireCreator()
+  if (ctx instanceof NextResponse) return ctx
+  const { user } = ctx
 
   const rl = await rateLimit({ key: `upload-url:${user.id}`, limit: 30, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'リクエストが多すぎます。しばらくしてから再試行してください' }, { status: 429 })

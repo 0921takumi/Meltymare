@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { sanitizeText } from '@/lib/sanitize'
 
 export type VerificationAction = 'approve' | 'reject'
 
@@ -20,12 +21,23 @@ export async function reviewVerification(userId: string, action: VerificationAct
   if (action === 'approve') {
     patch.identity_status = 'approved'
     patch.identity_rejection_reason = null
+    // 実運用で発覚: 本人確認の承認は「role='user'をcreatorに昇格させる」処理を一切
+    // 伴っておらず、/admin/users の別ボタン(クリエイターに昇格)を admin が別途
+    // 手動で押さない限り、承認済みなのに商品登録・販売管理ページに一生アクセスできない
+    // 状態になっていた（実際にこれで詰まったクリエイターが出た）。
+    // 本人確認の承認＝クリエイターとして活動開始、という利用者側の期待に合わせ、
+    // role='user'のときだけ自動でcreatorに昇格させる（既にadminの場合は変更しない）。
+    const { data: target } = await supabase.from('profiles').select('role').eq('id', userId).single()
+    if (target?.role === 'user') patch.role = 'creator'
   } else if (action === 'reject') {
-    if (!rejectionReason || rejectionReason.trim().length < 3) {
+    // 他のadmin自由入力欄(suspended_reason/banner文言/invite note等)と同じくsanitizeText経由に統一
+    // （監査で発覚: ここだけ制御文字除去・文字数上限が無く、クリエイターへ通知される文面のため）
+    const reason = sanitizeText(rejectionReason, { maxLength: 500, allowNewlines: true })
+    if (reason.length < 3) {
       return { error: '却下理由を入力してください' }
     }
     patch.identity_status = 'rejected'
-    patch.identity_rejection_reason = rejectionReason.trim()
+    patch.identity_rejection_reason = reason
   }
 
   const { error } = await supabase.from('profiles').update(patch).eq('id', userId)

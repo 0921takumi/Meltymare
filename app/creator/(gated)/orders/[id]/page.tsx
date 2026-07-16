@@ -29,7 +29,9 @@ export default function DeliverOrderPage({ params }: { params: Promise<{ id: str
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
       const { data: prof } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
-      if (prof?.role !== 'creator') { router.push('/contents'); return }
+      // v31: proxy.tsのCREATOR_PREFIXESはcreator||adminを許可するが、ここはcreatorのみ弾いていた
+      // 不整合を他のクリエイター管理ページと同じパターンに統一。
+      if (prof?.role !== 'creator' && prof?.role !== 'admin') { router.push('/contents'); return }
       setProfile(prof)
 
       // v22: 購入者の email（PII）は authenticated では読めない。display_name は

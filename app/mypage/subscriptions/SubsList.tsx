@@ -39,6 +39,8 @@ export default function SubsList({ subs }: { subs: Sub[] }) {
       if (res.ok) {
         setItems(prev => prev.map(s => s.id === id ? { ...s, status: 'cancelled' as const, cancelled_at: new Date().toISOString() } : s))
         router.refresh()
+      } else {
+        alert('解約に失敗しました。時間をおいて再度お試しください。')
       }
     })
   }

@@ -16,6 +16,7 @@ export default function AccountSettingsForm({ email }: { email: string }) {
   const [pwLoading, setPwLoading] = useState(false)
 
   const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deletePw, setDeletePw] = useState('')
   const [deleteMsg, setDeleteMsg] = useState('')
   const [deleting, setDeleting] = useState(false)
 
@@ -72,17 +73,33 @@ export default function AccountSettingsForm({ email }: { email: string }) {
       setDeleteMsg('確認文字列が一致しません')
       return
     }
-    if (!confirm('本当にアカウントを削除しますか？この操作は取り消せません。')) return
+    if (!deletePw) {
+      setDeleteMsg('パスワードを入力してください')
+      return
+    }
+    if (!confirm('本当にアカウントを削除しますか？')) return
     setDeleting(true)
     setDeleteMsg('')
-    const res = await fetch('/api/account/delete', { method: 'POST' })
-    if (res.ok) {
-      const supabase = createClient()
-      await supabase.auth.signOut()
-      router.push('/?deleted=1')
-    } else {
-      const j = await res.json().catch(() => ({}))
-      setDeleteMsg(j.error ?? '削除に失敗しました')
+    try {
+      // 監査で発覚: このボタンはこれまでpasswordを一切送っておらず、APIの
+      // password_requiredチェックに毎回弾かれて退会機能自体が動作していなかった。
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: deletePw }),
+      })
+      if (res.ok) {
+        const supabase = createClient()
+        await supabase.auth.signOut()
+        router.push('/?deleted=1')
+      } else {
+        const j = await res.json().catch(() => ({}))
+        setDeleteMsg(j.error ?? '削除に失敗しました')
+      }
+    } catch (err) {
+      console.error(err)
+      setDeleteMsg('削除に失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
+    } finally {
       setDeleting(false)
     }
   }
@@ -142,18 +159,23 @@ export default function AccountSettingsForm({ email }: { email: string }) {
       <div className="mm-card" style={{ ...cardStyle, border: '1px solid #fecaca' }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10, color: '#dc2626' }}>アカウント削除</h2>
         <p style={{ fontSize: 13, color: 'var(--mm-text-sub)', lineHeight: 1.7, marginBottom: 14 }}>
-          アカウントを削除すると、プロフィール・フォロー・リクエスト情報が完全に削除されます。<br />
-          購入履歴は会計・法令上の理由で一定期間保持されます。<br />
-          <strong>この操作は取り消せません。</strong>
+          アカウントを削除すると、すぐにログインできなくなります。<br />
+          削除から1年以内であれば、再度ログインすることでアカウントを復元できます。<br />
+          1年以内に復元されなかった場合、購入履歴等の会計記録は個人情報を切り離した形で保持し、
+          フォロー・コメント等のデータは完全に削除されます。
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={labelStyle}>現在のパスワード</label>
+            <input type="password" value={deletePw} onChange={e => setDeletePw(e.target.value)} placeholder="パスワード" style={inputStyle} autoComplete="current-password" />
+          </div>
           <div>
             <label style={labelStyle}>確認のため「DELETE」と入力してください</label>
             <input type="text" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder="DELETE" style={inputStyle} />
           </div>
           {deleteMsg && <p style={{ fontSize: 13, color: '#dc2626' }}>{deleteMsg}</p>}
-          <button type="button" onClick={handleDelete} disabled={deleting || deleteConfirm !== 'DELETE'}
-            style={{ background: '#dc2626', color: 'white', padding: '10px 20px', borderRadius: 8, fontWeight: 700, fontSize: 14, border: 'none', cursor: (deleting || deleteConfirm !== 'DELETE') ? 'not-allowed' : 'pointer', alignSelf: 'flex-start', opacity: (deleting || deleteConfirm !== 'DELETE') ? 0.5 : 1 }}>
+          <button type="button" onClick={handleDelete} disabled={deleting || deleteConfirm !== 'DELETE' || !deletePw}
+            style={{ background: '#dc2626', color: 'white', padding: '10px 20px', borderRadius: 8, fontWeight: 700, fontSize: 14, border: 'none', cursor: (deleting || deleteConfirm !== 'DELETE' || !deletePw) ? 'not-allowed' : 'pointer', alignSelf: 'flex-start', opacity: (deleting || deleteConfirm !== 'DELETE' || !deletePw) ? 0.5 : 1 }}>
             {deleting ? '削除中...' : 'アカウントを削除'}
           </button>
         </div>

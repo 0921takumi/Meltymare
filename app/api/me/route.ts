@@ -34,6 +34,8 @@ export async function GET() {
     .eq('id', user.id)
     .single()
 
+  if (error) console.error('[api/me] profile fetch failed:', error.message, 'user:', user.id)
+
   if (error || !profile) {
     return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
   }

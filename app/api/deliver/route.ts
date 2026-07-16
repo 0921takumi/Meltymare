@@ -72,5 +72,9 @@ export async function POST(req: Request) {
     .eq('id', purchaseId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // 通知・メール送信は app/api/notify/delivery が別途担当する（既存の正規フロー、
+  // app/creator/orders/[id]/page.tsx がこのAPIの直後に呼ぶ設計）。ここで重複して
+  // 挿入しない。
+
   return NextResponse.json({ ok: true })
 }

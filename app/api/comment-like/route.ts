@@ -36,7 +36,11 @@ export async function POST(req: Request) {
     .maybeSingle()
 
   if (existing) {
-    await supabase.from('comment_likes').delete().eq('id', existing.id)
+    const { error: delErr } = await supabase.from('comment_likes').delete().eq('id', existing.id)
+    if (delErr) {
+      console.error('[comment-like] delete failed:', delErr.message)
+      return NextResponse.json({ error: delErr.message }, { status: 500 })
+    }
     return NextResponse.json({ ok: true, liked: false })
   } else {
     const { error } = await supabase.from('comment_likes').insert({ comment_id: commentId, user_id: user.id })

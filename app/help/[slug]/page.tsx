@@ -11,6 +11,7 @@ import {
   Settings, RotateCcw, Shield, HelpCircle, BarChart3,
 } from 'lucide-react'
 import { HELP_CATEGORIES, AUDIENCE_LABELS, getCategory } from '@/lib/help-content'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
   UserPlus, ShoppingBag, Download, Heart, Gavel, Radio,
@@ -43,7 +44,7 @@ export default async function HelpCategoryPage({ params }: { params: Promise<{ s
   if (user) {
     const { data } = await supabase
       .from('profiles')
-      .select('display_name, username, role, avatar_url, identity_status')
+      .select(PROFILE_PUBLIC_SELECT)
       .eq('id', user.id)
       .single()
     profile = data

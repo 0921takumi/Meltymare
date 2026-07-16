@@ -1,8 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
-import { ShieldCheck, AlertTriangle, Clock, CheckCircle2, XCircle } from 'lucide-react'
+import { ShieldCheck, AlertTriangle } from 'lucide-react'
 import ReviewPanel from './ReviewPanel'
+import { calcAgeJST } from '@/lib/age'
+import Avatar from '@/components/ui/Avatar'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,6 @@ export default async function AdminVerificationsPage({
   searchParams: Promise<{ filter?: string }>
 }) {
   const { filter = 'pending' } = await searchParams
-  const supabase = await createClient()
   // v22: 本人確認書類URL / 生年月日 / 却下理由（PII）は service_role で読む。
   // 認可は app/admin/layout.tsx が admin に限定済み。
   const admin = createAdminClient()
@@ -37,7 +37,10 @@ export default async function AdminVerificationsPage({
 
   const { data: profiles } = await query
 
-  const { data: allForCount } = await supabase.from('profiles').select('identity_status').in('identity_status', ['pending', 'approved', 'rejected'])
+  // 一覧と同じ admin(service_role) で集計する。anon クライアントだと profiles の
+  // identity_* に対する RLS で他ユーザー行が読めず、件数が過少（=実際は pending があるのに 0）
+  // になりタブ件数・SLAバナーが一覧と食い違うため。
+  const { data: allForCount } = await admin.from('profiles').select('identity_status').in('identity_status', ['pending', 'approved', 'rejected'])
   const counts: Record<string, number> = { pending: 0, approved: 0, rejected: 0 }
   ;(allForCount ?? []).forEach((p: any) => { if (p.identity_status in counts) counts[p.identity_status] += 1 })
 
@@ -107,25 +110,14 @@ export default async function AdminVerificationsPage({
             const submittedAt = p.identity_submitted_at ? new Date(p.identity_submitted_at).getTime() : 0
             const ageHours = submittedAt ? Math.floor((now - submittedAt) / (1000 * 60 * 60)) : 0
             const overdue = status === 'pending' && ageHours > 48
-            const birthdate = p.birthdate ? new Date(p.birthdate) : null
-            let age: number | null = null
-            if (birthdate) {
-              age = new Date().getFullYear() - birthdate.getFullYear()
-              const m = new Date().getMonth() - birthdate.getMonth()
-              if (m < 0 || (m === 0 && new Date().getDate() < birthdate.getDate())) age--
-            }
+            const age = calcAgeJST(p.birthdate)
             return (
               <div key={p.id} className="mm-card" style={{
                 padding: '14px 16px',
                 border: overdue ? '2px solid #dc2626' : '1px solid var(--mm-border)',
               }}>
                 <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 10 }}>
-                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--mm-bg)', overflow: 'hidden', flexShrink: 0 }}>
-                    {p.avatar_url
-                      ? <img src={p.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--mm-text-muted)' }}>?</div>
-                    }
-                  </div>
+                  <Avatar src={p.avatar_url} name={p.display_name ?? p.username} size={48} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                       <span style={{ background: meta.bg, color: meta.color, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>

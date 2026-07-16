@@ -13,15 +13,25 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { cleanEnv } from '@/lib/config'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { escapeHtml } from '@/lib/sanitize'
 
-// apiVersion を明示固定（SDK更新時の挙動変化で決済不整合になるのを防ぐ）
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-03-25.dahlia' })
+// apiVersion を明示固定（SDK更新時の挙動変化で決済不整合になるのを防ぐ）。
+// Vercel Dashboard 経由のペーストでBOM/改行が混入すると署名検証(webhooks.constructEvent)や
+// APIキー自体が全滅するため cleanEnv で正規化する。
+const stripe = new Stripe(cleanEnv(process.env.STRIPE_SECRET_KEY), { apiVersion: '2026-03-25.dahlia' })
 
 // Webhook 用 Service Role クライアント（RLSバイパス、サーバー内のみで使用）
 // 命名: @supabase/ssr の createServerClient と紛らわしいので createServiceClient で別名 import している。
 const supabase = createAdminClient()
+
+// 監査で発覚: 従来は理由を問わず常に200を返しており、Supabaseの瞬断等の一時障害で
+// purchases/tips の lookup・update が失敗しても Stripe が再送せず、課金済みなのに
+// 永久に pending のまま取り残される恐れがあった。DB例外はこの型で投げ、恒久的な
+// 業務条件（対応行が本当に存在しない等）とは別扱いにして 500 を返し Stripe の
+// 自動リトライ（最大3日）に委ねる。
+class TransientWebhookError extends Error {}
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -30,7 +40,7 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event
   try {
-    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!)
+    event = stripe.webhooks.constructEvent(body, sig, cleanEnv(process.env.STRIPE_WEBHOOK_SECRET))
   } catch (err) {
     console.error('[webhook] signature verification failed:', err)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
@@ -56,9 +66,12 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error('[webhook] handler error:', err)
-    // 内部エラーで 500 を返すと Stripe は最大3日間再試行する。
-    // 一時的なエラーなら望ましいが、ロジックバグだと無限ループになる。
-    // ここではログに残しつつ 200 を返し、別途運用監視で拾う方針。
+    if (err instanceof TransientWebhookError) {
+      // DB一時障害の疑い。500 を返して Stripe の自動リトライに委ねる
+      // （恒久的なロジックエラーでここに来ないよう、各ハンドラ側で条件を絞ってある）。
+      return NextResponse.json({ error: 'internal error, retry requested' }, { status: 500 })
+    }
+    // それ以外（未知の例外）は無限リトライ化を避けるため 200 のまま。ログで拾う。
   }
 
   return NextResponse.json({ ok: true })
@@ -94,8 +107,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       .or(orFilter)
       .maybeSingle()
 
-    if (lookupErr || !tip) {
-      console.warn('[webhook] no tip for session:', sessionId, 'pi:', paymentIntentId)
+    if (lookupErr) throw new TransientWebhookError(`tip lookup failed: ${lookupErr.message}`)
+    if (!tip) {
+      // 対応行が本当に存在しない＝孤児課金（旧pending行がリトライ購入で上書きされ
+      // 参照不能になったケース等）。DB障害ではないので監査ログに記録して200で終える。
+      console.error('[webhook] ORPHAN TIP CHARGE: no tip for session:', sessionId, 'pi:', paymentIntentId)
+      const { error: orphanErr } = await supabase.from('audit_logs').insert({
+        action: 'payment.orphan_charge',
+        target_type: 'stripe_session',
+        metadata: { kind: 'tip', stripe_session_id: sessionId, stripe_payment_intent_id: paymentIntentId, amount: session.amount_total },
+      })
+      if (orphanErr) console.error('[webhook] audit_logs insert failed:', orphanErr.message)
       return
     }
 
@@ -107,7 +129,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
     // status を pending → completed。
     // payment_intent_id も実値で上書きしておく（後続イベントの照合用）。
-    const { error: updErr } = await supabase
+    // .select()で0行更新（並行webhook/リプレイで先に確定済み）を検知し、通知/監査ログの
+    // 二重発生を防ぐ（purchase側は既にこのパターン、tips側だけ抜けていた）。
+    const { data: updatedTip, error: updErr } = await supabase
       .from('tips')
       .update({
         status: 'completed',
@@ -115,15 +139,32 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       })
       .eq('id', tip.id)
       .eq('status', 'pending')  // 楽観ロック
+      .select('id')
+      .maybeSingle()
 
-    if (updErr) {
-      console.error('[webhook] update tip failed:', updErr)
+    if (updErr) throw new TransientWebhookError(`update tip failed: ${updErr.message}`)
+    if (!updatedTip) {
+      console.log('[webhook] tip already completed by concurrent webhook, skipping:', tip.id)
       return
     }
 
     // 金額は **Stripe イベントオブジェクト** から取る（署名検証済みのため改竄不可）。
     // metadata.tip_amount を信用しない（冒頭の設計方針に従う）。
     const tipAmount = session.amount_total ?? tip.amount ?? 0
+
+    // 防御的: purchase側と同じ乖離検知をチップにも揃える（監査で発見: チップだけ
+    // この監視が抜けており、tips.amount算出ロジックにバグが混入しても気づく手段が無かった）。
+    if (session.amount_total != null && tip.amount != null && session.amount_total !== tip.amount) {
+      console.error(`[webhook] tip amount mismatch tip=${tip.id} db=${tip.amount} stripe=${session.amount_total}`)
+      const { error: mismatchErr } = await supabase.from('audit_logs').insert({
+        actor_id: tip.user_id,
+        action: 'tip.amount_mismatch',
+        target_type: 'tip',
+        target_id: tip.id,
+        metadata: { db_amount: tip.amount, stripe_amount: session.amount_total, stripe_session_id: session.id },
+      })
+      if (mismatchErr) console.error('[webhook] audit_logs insert failed:', mismatchErr.message)
+    }
 
     // クリエイターに通知（display_name は HTML 不使用だが念のため）
     const { data: sender } = await supabase
@@ -132,16 +173,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       .eq('id', tip.user_id)
       .single()
 
-    await supabase.from('notifications').insert({
+    const { error: tipNotifErr } = await supabase.from('notifications').insert({
       user_id: tip.creator_id,
       type: 'tip',
       title: 'チップを受け取りました 🎁',
       body: `${sender?.display_name ?? 'ファン'} さんから ¥${Number(tipAmount).toLocaleString()} のチップ`,
       link: '/creator/dashboard',
     })
+    if (tipNotifErr) console.error('[webhook] tip notification insert failed:', tipNotifErr.message, 'tip:', tip.id)
 
     // 監査ログ（purchase と同じ粒度で残す）
-    await supabase.from('audit_logs').insert({
+    const { error: auditErr } = await supabase.from('audit_logs').insert({
       actor_id: tip.user_id,
       action: 'tip.completed',
       target_type: 'tip',
@@ -153,6 +195,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         stripe_payment_intent_id: paymentIntentId,
       },
     })
+    if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
 
     return
   }
@@ -178,8 +221,19 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     .or(orFilter)
     .maybeSingle()
 
-  if (lookupErr || !purchase) {
-    console.warn('[webhook] no purchase for session:', sessionId, 'pi:', paymentIntentId)
+  if (lookupErr) throw new TransientWebhookError(`purchase lookup failed: ${lookupErr.message}`)
+  if (!purchase) {
+    // 対応行が本当に存在しない＝孤児課金。/api/purchase の再購入導線が旧pending行の
+    // stripe_payment_intent_id を新セッションIDで上書きしてしまい、旧セッションが
+    // 後から支払われるとここに来る（v41で購入側に失効処理を追加、これは検知側）。
+    // DB障害ではないので監査ログに記録して200で終える（Stripeへ再送させない）。
+    console.error('[webhook] ORPHAN PURCHASE CHARGE: no purchase for session:', sessionId, 'pi:', paymentIntentId)
+    const { error: orphanErr } = await supabase.from('audit_logs').insert({
+      action: 'payment.orphan_charge',
+      target_type: 'stripe_session',
+      metadata: { kind: 'purchase', stripe_session_id: sessionId, stripe_payment_intent_id: paymentIntentId, amount: session.amount_total, metadata_content_id: metadata.content_id ?? null },
+    })
+    if (orphanErr) console.error('[webhook] audit_logs insert failed:', orphanErr.message)
     return
   }
 
@@ -189,6 +243,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return
   }
 
+  // v42: 手数料率はクリエイターの「現在」の値ではなく、購入完了時点の値をスナップショットする。
+  // 後日adminが手数料率を変更しても、過去の確定売上の手数料が遡って変わらないようにするため。
+  const { data: contentRow } = await supabase
+    .from('contents')
+    .select('creator_id, creator:profiles(fee_rate)')
+    .eq('id', purchase.content_id)
+    .maybeSingle()
+  const feeRateSnapshot = (contentRow as unknown as { creator: { fee_rate: number } | null } | null)?.creator?.fee_rate ?? null
+
   // status を pending → completed。
   // 同時に stripe_payment_intent_id を実際の payment_intent に更新しておく
   // （charge.refunded ハンドラが payment_intent で逆引きするため）。
@@ -196,6 +259,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     .from('purchases')
     .update({
       status: 'completed',
+      fee_rate: feeRateSnapshot,
       ...(paymentIntentId ? { stripe_payment_intent_id: paymentIntentId } : {}),
     })
     .eq('id', purchase.id)
@@ -203,10 +267,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     .select('id')
     .maybeSingle()
 
-  if (updErr) {
-    console.error('[webhook] update purchase failed:', updErr)
-    return
-  }
+  if (updErr) throw new TransientWebhookError(`update purchase failed: ${updErr.message}`)
   // 0行更新 = 別の webhook が先に completed 化済み。sold_count/通知/メールを二重に
   // 走らせないため、ここで終了する（charge.refunded ハンドラと同じ 0 行検知パターンに統一）。
   if (!updatedPurchase) {
@@ -219,17 +280,32 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // 競合等）を監査ログに残して可視化する。決済確定自体は止めない（既に課金済みのため）。
   if (session.amount_total != null && purchase.amount != null && session.amount_total !== purchase.amount) {
     console.error(`[webhook] amount mismatch purchase=${purchase.id} db=${purchase.amount} stripe=${session.amount_total}`)
-    await supabase.from('audit_logs').insert({
+    const { error: auditErr } = await supabase.from('audit_logs').insert({
       actor_id: purchase.user_id,
       action: 'purchase.amount_mismatch',
       target_type: 'purchase',
       target_id: purchase.id,
       metadata: { db_amount: purchase.amount, stripe_amount: session.amount_total, stripe_session_id: session.id },
     })
+    if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
   }
 
-  // sold_count インクリメント
-  await supabase.rpc('increment_sold_count', { content_id: purchase.content_id })
+  // sold_count インクリメント（v27でCAS化: stock_limit超過なら加算せず false を返す）。
+  // 決済は完了済みなので、超過時は監査ログに残して手動返金運用で拾う（サイレント超過防止）。
+  const { data: soldOk, error: soldErr } = await supabase.rpc('increment_sold_count', { content_id: purchase.content_id })
+  if (soldErr) {
+    console.error('[webhook] increment_sold_count failed:', soldErr.message, 'purchase:', purchase.id)
+  } else if (soldOk === false) {
+    console.error('[webhook] OVERSTOCK: 在庫上限超過の販売。要手動返金。purchase:', purchase.id, 'content:', purchase.content_id)
+    const { error: auditErr } = await supabase.from('audit_logs').insert({
+      actor_id: purchase.user_id,
+      action: 'purchase.overstock',
+      target_type: 'purchase',
+      target_id: purchase.id,
+      metadata: { content_id: purchase.content_id },
+    })
+    if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
+  }
 
   // クーポン使用回数インクリメント（v15 以降 CAS 化、戻り値 boolean）。
   // false の場合は並列 webhook で他の購入が先に上限に到達した可能性。
@@ -241,18 +317,19 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       console.warn('[webhook] increment_coupon_used failed:', cpErr.message)
     } else if (incOk === false) {
       console.warn('[webhook] coupon already at max_uses, no-op:', purchase.coupon_id)
-      await supabase.from('audit_logs').insert({
+      const { error: auditErr } = await supabase.from('audit_logs').insert({
         actor_id: purchase.user_id,
         action: 'coupon.max_uses_overrun',
         target_type: 'coupon',
         target_id: purchase.coupon_id,
         metadata: { purchase_id: purchase.id },
       })
+      if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
     }
   }
 
   // 監査ログ
-  await supabase.from('audit_logs').insert({
+  const { error: auditErr } = await supabase.from('audit_logs').insert({
     actor_id: purchase.user_id,
     action: 'purchase.completed',
     target_type: 'purchase',
@@ -264,6 +341,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       stripe_payment_intent_id: paymentIntentId,
     },
   })
+  if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
 
   // 購入完了メール
   await sendPurchaseEmail(purchase.user_id, purchase.content_id, purchase.id)
@@ -308,10 +386,67 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
 
   const { data: purchase } = await supabase
     .from('purchases')
-    .select('id, user_id, content_id, status')
+    .select('id, user_id, content_id, status, amount, content_price, tip_amount, payout_id')
     .eq('stripe_payment_intent_id', paymentIntentId)
     .maybeSingle()
-  if (!purchase) return
+  if (!purchase) {
+    // 監査で発覚: charge.refunded は purchases しか見ておらず、tips（単発チップ、
+    // 独自の Checkout Session/PaymentIntent を持つ）を返金してもここでは何も処理されず、
+    // tips.status が completed のまま残り、通知も監査ログも一切残らない状態だった。
+    const { data: tip } = await supabase
+      .from('tips')
+      .select('id, user_id, creator_id, status, amount, payout_id')
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .maybeSingle()
+    if (tip) await handleTipRefunded(tip, charge, paymentIntentId)
+    return
+  }
+
+  // v36: 部分返金(amount_refunded < amount)は「購入自体は生きている」ケースのため、
+  // 全額返金と同じ扱いで status を refunded にして購入コンテンツへのアクセスを
+  // 丸ごと剥奪してしまうと、少額の一部返金を受けただけの正規購入者からコンテンツが
+  // 見えなくなる過剰な副作用になる。全額返金の場合のみ以降の失効処理に進む。
+  //
+  // v47で発覚: 部分返金時にaudit_logsへ記録するだけでpurchasesの金額を一切減額して
+  // おらず、既にクリエイターへの振込対象(payout_id is null)に集計されたままだった。
+  // Stripeから実際に入金された額（charge.amount - amount_refunded）に合わせて
+  // amount/content_price/tip_amountを按分減額し、以後の振込集計(admin/payouts・
+  // creator/dashboard)に正しく反映されるようにする。既に振込済み(payout_id設定済み)の
+  // 場合は事後精算が必要なため、金額は減額せず監査ログのみ残して運営に気づかせる。
+  if (charge.amount_refunded < charge.amount) {
+    console.log('[webhook] partial refund, purchase access retained:', purchase.id, 'refunded:', charge.amount_refunded, '/', charge.amount)
+
+    if (purchase.payout_id == null && charge.amount > 0) {
+      const remainingRatio = Math.max(0, charge.amount - charge.amount_refunded) / charge.amount
+      const newAmount = Math.floor((purchase.amount ?? 0) * remainingRatio)
+      const newContentPrice = Math.floor((purchase.content_price ?? purchase.amount ?? 0) * remainingRatio)
+      const newTipAmount = Math.floor((purchase.tip_amount ?? 0) * remainingRatio)
+      const { error: adjustErr } = await supabase
+        .from('purchases')
+        .update({ amount: newAmount, content_price: newContentPrice, tip_amount: newTipAmount })
+        .eq('id', purchase.id)
+        .eq('status', 'completed')
+      if (adjustErr) console.error('[webhook] partial refund amount adjustment failed:', adjustErr.message, 'purchase:', purchase.id)
+    } else if (purchase.payout_id != null) {
+      console.error('[webhook] PARTIAL REFUND ON ALREADY-PAID-OUT PURCHASE: 事後精算が必要。purchase:', purchase.id, 'payout:', purchase.payout_id)
+    }
+
+    const { error: auditErr } = await supabase.from('audit_logs').insert({
+      actor_id: purchase.user_id,
+      action: 'purchase.partial_refund',
+      target_type: 'purchase',
+      target_id: purchase.id,
+      metadata: {
+        stripe_charge_id: charge.id,
+        stripe_payment_intent_id: paymentIntentId,
+        refund_amount: charge.amount_refunded,
+        charge_amount: charge.amount,
+        already_paid_out: purchase.payout_id != null,
+      },
+    })
+    if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
+    return
+  }
 
   // 状態遷移は completed → refunded のみ許可。
   // 並列 webhook で順序逆転（refunded が先に到着 → 後から completed が上書き）した場合、
@@ -335,23 +470,13 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   }
 
   // 返金確定後、sold_count を1戻す（限定枠 stock_limit の永久目減り＝SOLD OUT 固着を防ぐ）。
-  // 返金は低頻度のため read-modify-write で十分（atomic な decrement RPC 化は将来課題）。
-  // status='completed'→'refunded' の楽観ロックを1回通った時のみ到達するので二重デクリメントは無い。
-  const { data: refundedContent } = await supabase
-    .from('contents')
-    .select('sold_count')
-    .eq('id', purchase.content_id)
-    .maybeSingle()
-  if (refundedContent && typeof refundedContent.sold_count === 'number' && refundedContent.sold_count > 0) {
-    const { error: decErr } = await supabase
-      .from('contents')
-      .update({ sold_count: refundedContent.sold_count - 1 })
-      .eq('id', purchase.content_id)
-    if (decErr) console.warn('[webhook] refund sold_count decrement failed:', decErr.message)
-  }
+  // v36: read-then-write だと並行返金でロストアップデートが起こり得るため、
+  // increment_sold_count と対になる decrement_sold_count RPC でアトミックに行う。
+  const { error: decErr } = await supabase.rpc('decrement_sold_count', { content_id: purchase.content_id })
+  if (decErr) console.warn('[webhook] refund sold_count decrement failed:', decErr.message)
 
   // 監査ログ
-  await supabase.from('audit_logs').insert({
+  const { error: auditErr } = await supabase.from('audit_logs').insert({
     actor_id: purchase.user_id,
     action: 'purchase.refunded',
     target_type: 'purchase',
@@ -362,23 +487,112 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       refund_amount: charge.amount_refunded,
     },
   })
+  if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
 
   // 返金通知（旧実装には無かった。ユーザーが返金に気づけないと信用毀損につながるため追加）。
   // content 削除と並走しても通知が落ちないよう .maybeSingle()（title は ?? でフォールバック）。
   const { data: content } = await supabase
     .from('contents')
-    .select('title')
+    .select('title, creator_id')
     .eq('id', purchase.content_id)
     .maybeSingle()
 
+  const refundYen = Math.round(charge.amount_refunded).toLocaleString()
   const { error: refundNotifErr } = await supabase.from('notifications').insert({
     user_id: purchase.user_id,
     type: 'refund',
     title: 'ご返金が完了しました',
-    body: `${content?.title ?? 'コンテンツ'} のご購入を返金しました。Stripe からの返金処理は数営業日以内にご利用カードに反映されます。`,
+    body: `${content?.title ?? 'コンテンツ'} のご購入(¥${refundYen})を返金しました。Stripe からの返金処理は数営業日以内にご利用カードに反映されます。`,
     link: '/mypage',
   })
   if (refundNotifErr) console.error('[webhook] refund notification insert failed:', refundNotifErr.message, 'purchase:', purchase.id)
+
+  // v47で発覚: 返金通知が買い手にしか届かず、クリエイターは自分の売上が減った理由を
+  // 知る手段が無かった（sold_countの変化から間接的に気づくのみ）。
+  if (content?.creator_id) {
+    const { error: creatorRefundNotifErr } = await supabase.from('notifications').insert({
+      user_id: content.creator_id,
+      type: 'refund',
+      title: '返金が行われました',
+      body: `${content.title ?? 'コンテンツ'} の購入(¥${refundYen})が返金され、売上から差し引かれました。`,
+      link: '/creator/dashboard',
+    })
+    if (creatorRefundNotifErr) console.error('[webhook] creator refund notification insert failed:', creatorRefundNotifErr.message, 'purchase:', purchase.id)
+  }
+}
+
+// ─── チップの返金処理（purchasesと違いsold_count/content access等の副作用は無い）───
+async function handleTipRefunded(
+  tip: { id: string; user_id: string; creator_id: string; status: string; amount?: number; payout_id?: string | null },
+  charge: Stripe.Charge,
+  paymentIntentId: string,
+) {
+  if (charge.amount_refunded < charge.amount) {
+    console.log('[webhook] tip partial refund, no status change:', tip.id, 'refunded:', charge.amount_refunded, '/', charge.amount)
+
+    // v47: purchases側と同じく、部分返金分をtips.amountに反映する（未精算の場合のみ）。
+    if ((tip.payout_id ?? null) == null && charge.amount > 0) {
+      const remainingRatio = Math.max(0, charge.amount - charge.amount_refunded) / charge.amount
+      const newAmount = Math.floor((tip.amount ?? 0) * remainingRatio)
+      const { error: adjustErr } = await supabase.from('tips').update({ amount: newAmount }).eq('id', tip.id).eq('status', 'completed')
+      if (adjustErr) console.error('[webhook] tip partial refund amount adjustment failed:', adjustErr.message, 'tip:', tip.id)
+    } else if ((tip.payout_id ?? null) != null) {
+      console.error('[webhook] PARTIAL REFUND ON ALREADY-PAID-OUT TIP: 事後精算が必要。tip:', tip.id, 'payout:', tip.payout_id)
+    }
+
+    const { error: auditErr } = await supabase.from('audit_logs').insert({
+      actor_id: tip.user_id,
+      action: 'tip.partial_refund',
+      target_type: 'tip',
+      target_id: tip.id,
+      metadata: { stripe_charge_id: charge.id, stripe_payment_intent_id: paymentIntentId, refund_amount: charge.amount_refunded, charge_amount: charge.amount, already_paid_out: (tip.payout_id ?? null) != null },
+    })
+    if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
+    return
+  }
+
+  const { data: updated, error: updErr } = await supabase
+    .from('tips')
+    .update({ status: 'refunded' })
+    .eq('id', tip.id)
+    .eq('status', 'completed')  // 楽観ロック + ホワイトリスト
+    .select('id')
+    .maybeSingle()
+
+  if (updErr) { console.error('[webhook] tip refund update failed:', updErr); return }
+  if (!updated) {
+    console.log('[webhook] tip refund skipped (not in completed state):', tip.id, 'current:', tip.status)
+    return
+  }
+
+  const { error: auditErr } = await supabase.from('audit_logs').insert({
+    actor_id: tip.user_id,
+    action: 'tip.refunded',
+    target_type: 'tip',
+    target_id: tip.id,
+    metadata: { stripe_charge_id: charge.id, stripe_payment_intent_id: paymentIntentId, refund_amount: charge.amount_refunded },
+  })
+  if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
+
+  const tipRefundYen = Math.round(charge.amount_refunded).toLocaleString()
+  const { error: refundNotifErr } = await supabase.from('notifications').insert({
+    user_id: tip.user_id,
+    type: 'refund',
+    title: 'チップのご返金が完了しました',
+    body: `お送りいただいたチップ(¥${tipRefundYen})を返金しました。Stripe からの返金処理は数営業日以内にご利用カードに反映されます。`,
+    link: '/mypage',
+  })
+  if (refundNotifErr) console.error('[webhook] tip refund notification insert failed:', refundNotifErr.message, 'tip:', tip.id)
+
+  // v47: クリエイターへの返金通知が無く、チップ売上が減った理由を知る手段が無かった。
+  const { error: creatorTipRefundNotifErr } = await supabase.from('notifications').insert({
+    user_id: tip.creator_id,
+    type: 'refund',
+    title: 'チップの返金が行われました',
+    body: `受け取ったチップ(¥${tipRefundYen})が返金され、売上から差し引かれました。`,
+    link: '/creator/dashboard',
+  })
+  if (creatorTipRefundNotifErr) console.error('[webhook] creator tip refund notification insert failed:', creatorTipRefundNotifErr.message, 'tip:', tip.id)
 }
 
 // ─── メール送信ヘルパ ─────────────────────────────────
@@ -470,9 +684,12 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
     if (!email) return
 
     const resendKey = process.env.RESEND_API_KEY
-    if (!resendKey) return
+    if (!resendKey) {
+      console.error('[email] RESEND_API_KEY not set, skipping email', 'userId:', userId, 'purchaseId:', _purchaseId)
+      return
+    }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
+    const appUrl = cleanEnv(process.env.NEXT_PUBLIC_APP_URL) || 'https://my-focus.jp'
     const creator = content.creator as { display_name?: string } | null
 
     // ⚠️ HTMLメールはReactではないので {} の自動エスケープが効かない。
@@ -488,7 +705,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
       ctaUrl: `${appUrl}/mypage`,
     })
 
-    await fetch('https://api.resend.com/emails', {
+    const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${resendKey}`,
@@ -501,6 +718,9 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
         html,
       }),
     })
+    if (!res.ok) {
+      console.error('[email] Resend API error', res.status, await res.text().catch(() => ''))
+    }
   } catch (e) {
     console.error('Purchase email error:', e)
   }
@@ -521,10 +741,13 @@ export async function sendDeliveryEmail(purchaseId: string) {
 
     const { data: userProfile } = await supabase.from('profiles').select('display_name').eq('id', purchase.user_id).single()
     const resendKey = process.env.RESEND_API_KEY
-    if (!resendKey) return
+    if (!resendKey) {
+      console.error('[email] RESEND_API_KEY not set, skipping email', 'userId:', purchase.user_id, 'purchaseId:', purchaseId)
+      return
+    }
 
     const content = purchase.content as { title?: string; creator?: { display_name?: string } } | null
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
+    const appUrl = cleanEnv(process.env.NEXT_PUBLIC_APP_URL) || 'https://my-focus.jp'
 
     // ⚠️ HTMLメールはReactではないので {} の自動エスケープが効かない。escapeHtml 必須。
     const html = brandedEmail({
@@ -538,7 +761,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
       ctaColor: BRAND.primary,  // 納品メールはオレンジCTAで気分を上げる
     })
 
-    await fetch('https://api.resend.com/emails', {
+    const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${resendKey}`,
@@ -551,6 +774,9 @@ export async function sendDeliveryEmail(purchaseId: string) {
         html,
       }),
     })
+    if (!res.ok) {
+      console.error('[email] Resend API error', res.status, await res.text().catch(() => ''))
+    }
   } catch (e) {
     console.error('Delivery email error:', e)
   }

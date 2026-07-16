@@ -45,12 +45,23 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     profile = data
   }
 
-  const { data: content } = await supabase
+  const CONTENT_SELECT = '*, creator:profiles(id, display_name, username, avatar_url, bio, twitter_url, instagram_url, tiktok_url)'
+  let { data: content } = await supabase
     .from('contents')
-    .select('*, creator:profiles(id, display_name, username, avatar_url, bio, twitter_url, instagram_url, tiktok_url)')
+    .select(CONTENT_SELECT)
     .eq('id', id)
     .eq('is_published', true)
-    .single()
+    .maybeSingle()
+
+  if (!content) {
+    // 監査で発覚: is_published=true固定のため、管理者が審査前(pending/rejected)の
+    // コンテンツをプレビューしようとすると常に404になり、中身を見ずに承認/却下ボタンを
+    // 押すしかない状態だった。RLS(v27/v31)は既に「本人(creator)は自分の全status閲覧可、
+    // adminは全件閲覧可」を保証しているため、is_publishedで縛らずに再試行するだけでよい
+    // （無関係な訪問者は同じクエリでもRLSにより0件になるため安全）。
+    const { data: fallback } = await supabase.from('contents').select(CONTENT_SELECT).eq('id', id).maybeSingle()
+    content = fallback
+  }
 
   if (!content) return notFound()
 
@@ -70,9 +81,10 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     deliveryStatus = (purchase as any)?.delivery_status ?? 'pending'
 
     if (isPurchased && deliveryStatus === 'delivered' && (purchase as any)?.delivered_file_url) {
-      const { data: urlData } = await supabase.storage
+      const { data: urlData, error: signedUrlErr } = await supabase.storage
         .from('deliveries')
         .createSignedUrl((purchase as any).delivered_file_url, 3600)
+      if (signedUrlErr) console.error('[contents/[id]] createSignedUrl failed:', signedUrlErr.message)
       downloadUrl = urlData?.signedUrl ?? null
     }
   }
@@ -106,11 +118,18 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     .order('created_at', { ascending: false })
 
   // コメント取得 + いいね集計
-  const { data: commentsData } = await supabase
+  // 監査で発覚: is_hidden=false固定フィルタのため、通報により非表示化された自分の
+  // コメントが投稿者本人からも完全に消え、非表示になった事実に気づく手段が無かった。
+  // RLS(comments_select)は元々「is_hidden=false OR 本人」を許可する設計なので、
+  // アプリ側もそれに合わせて自分の分だけは非表示でも取得する。
+  let commentsQuery = supabase
     .from('content_comments')
-    .select('id, body, created_at, user_id, user:profiles!content_comments_user_id_fkey(id, display_name, avatar_url, username)')
+    .select('id, body, created_at, user_id, is_hidden, user:profiles!content_comments_user_id_fkey(id, display_name, avatar_url, username)')
     .eq('content_id', id)
-    .eq('is_hidden', false)
+  commentsQuery = user
+    ? commentsQuery.or(`is_hidden.eq.false,user_id.eq.${user.id}`)
+    : commentsQuery.eq('is_hidden', false)
+  const { data: commentsData } = await commentsQuery
     .order('created_at', { ascending: false })
     .limit(50)
 
@@ -131,6 +150,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     user: (c.user as unknown as CommentItem['user']) ?? null,
     likes: likesByComment.get(c.id) ?? 0,
     liked_by_me: likedByMe.has(c.id),
+    is_hidden: (c as unknown as { is_hidden?: boolean }).is_hidden ?? false,
   }))
 
   let myReview: any = null

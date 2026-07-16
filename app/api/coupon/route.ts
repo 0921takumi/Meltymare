@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
   const rawCode = req.nextUrl.searchParams.get('code') ?? ''
   const code = sanitizeText(rawCode, { maxLength: 40, allowNewlines: false }).toUpperCase()
   const price = parseInt(req.nextUrl.searchParams.get('price') ?? '0', 10)
+  const contentId = req.nextUrl.searchParams.get('content_id') ?? ''
+  const UUID_RE = /^[0-9a-f-]{36}$/i
   if (!code) return NextResponse.json({ error: 'code required' }, { status: 400 })
   if (!Number.isFinite(price) || price < 0 || price > 10_000_000) {
     return NextResponse.json({ error: 'invalid price' }, { status: 400 })
@@ -35,6 +37,18 @@ export async function GET(req: NextRequest) {
   }
   if (price < (coupon.min_amount ?? 0)) {
     return NextResponse.json({ error: `¥${coupon.min_amount?.toLocaleString()}以上のご購入から使用できます` }, { status: 400 })
+  }
+  // 監査で発覚: creator_id の紐付けを一切確認していなかったため、他クリエイター専用の
+  // クーポンでもここでは「適用成功」と表示され、実際の購入(/api/purchase)で初めて
+  // 期限切れ/上限到達を騙る汎用エラーで弾かれ、ユーザーが混乱していた。
+  if (coupon.creator_id) {
+    if (!contentId || !UUID_RE.test(contentId)) {
+      return NextResponse.json({ error: 'このクーポンは指定のクリエイター専用です' }, { status: 400 })
+    }
+    const { data: content } = await supabase.from('contents').select('creator_id').eq('id', contentId).maybeSingle()
+    if (!content || content.creator_id !== coupon.creator_id) {
+      return NextResponse.json({ error: 'このクーポンは別のクリエイター専用のため、こちらの商品には使用できません' }, { status: 400 })
+    }
   }
 
   const discount = coupon.discount_type === 'percent'
@@ -60,7 +74,7 @@ export async function POST(req: NextRequest) {
   const rl = await rateLimit({ key: `coupon-post:${user.id}`, limit: 10, windowSec: 60 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
-  const body = await req.json()
+  const body = await req.json().catch(() => ({}))
   const code = sanitizeText(body.code, { maxLength: 40, allowNewlines: false }).toUpperCase()
   const discount_type = body.discount_type
   const discount_value = parseInt(body.discount_value, 10)
@@ -101,9 +115,11 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/coupon?id=XXX
 export async function DELETE(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // v31: 同ファイル内のPOSTはrequireCreator()なのに、DELETEだけ認証チェックのみで
+  // role再検証をしていなかった不整合を統一する。
+  const ctx = await requireCreator()
+  if (ctx instanceof NextResponse) return ctx
+  const { supabase, user } = ctx
 
   const id = req.nextUrl.searchParams.get('id')
   if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {

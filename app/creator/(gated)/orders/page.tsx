@@ -11,14 +11,9 @@ export default async function CreatorOrdersPage() {
   if (!user) redirect('/auth/login')
 
   const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
-  if (profile?.role !== 'creator') redirect('/contents')
-
-  const { data: purchases } = await supabase
-    .from('purchases')
-    .select('*, content:contents(id, title, thumbnail_url, price), buyer:profiles!purchases_user_id_fkey(id, display_name)')
-    .eq('contents.creator_id', user.id)
-    .eq('status', 'completed')
-    .order('created_at', { ascending: false })
+  // v31: proxy.tsのCREATOR_PREFIXESはcreator||adminを許可するが、ここはcreatorのみ弾いていた
+  // 不整合を他のクリエイター管理ページと同じパターンに統一。
+  if (profile?.role !== 'creator' && profile?.role !== 'admin') redirect('/contents')
 
   // creator_idでフィルタ（joinが効かない場合のフォールバック）
   const myContentIds = await supabase

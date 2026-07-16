@@ -29,10 +29,43 @@ export default function UpdatePasswordPage() {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true)
-      else setError('リンクの有効期限が切れています。パスワード再設定を再度お試しください。')
-    })
+    let cancelled = false
+
+    const establishSession = async () => {
+      // 1) 既にセッションがあればOK（detectSessionInUrl が hash/code を自動処理済みのケース）
+      const { data: s0 } = await supabase.auth.getSession()
+      if (s0.session) { if (!cancelled) setReady(true); return }
+
+      // 2) URL に ?code=（PKCE）がある場合は明示的に交換する
+      const url = new URL(window.location.href)
+      const code = url.searchParams.get('code')
+      if (code) {
+        const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
+        if (!exErr) { if (!cancelled) setReady(true); return }
+      }
+
+      // 3) URL に token_hash + type=recovery がある場合は verifyOtp（端末をまたいでも成立する）
+      const tokenHash = url.searchParams.get('token_hash')
+      const type = url.searchParams.get('type')
+      if (tokenHash && type === 'recovery') {
+        const { error: otpErr } = await supabase.auth.verifyOtp({ type: 'recovery', token_hash: tokenHash })
+        if (!otpErr) { if (!cancelled) setReady(true); return }
+      }
+
+      // 4) detectSessionInUrl の処理が一瞬遅れる場合に備え、短時間だけ再確認する
+      for (let i = 0; i < 6 && !cancelled; i++) {
+        await new Promise(r => setTimeout(r, 400))
+        const { data } = await supabase.auth.getSession()
+        if (data.session) { if (!cancelled) setReady(true); return }
+      }
+
+      if (!cancelled) {
+        setError('パスワード再設定リンクが無効か、有効期限が切れています。メールのリンクは、届いてから早めに、同じ端末・同じブラウザで開いてください。うまくいかない場合はもう一度「パスワードを忘れた方」からやり直してください。')
+      }
+    }
+
+    establishSession()
+    return () => { cancelled = true }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {

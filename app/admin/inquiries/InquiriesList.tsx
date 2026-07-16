@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { updateInquiryStatus } from './actions'
 
 const CATEGORY_LABELS: Record<string, string> = {
   general: '一般',
@@ -45,16 +45,10 @@ export default function InquiriesList({ messages, currentStatus }: { messages: I
 
   const updateStatus = async (id: string, newStatus: string) => {
     setSaving(true)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('contact_messages')
-      .update({ status: newStatus, admin_note: adminNote })
-      .eq('id', id)
+    const result = await updateInquiryStatus(id, newStatus, adminNote)
     setSaving(false)
-    if (error) {
-      // admin_note 列が無い(v21未適用)・RLS 等で 0 行更新になった場合に、
-      // 「保存できたように見えて実は未反映」のサイレント失敗を防ぐ。
-      window.alert(`更新に失敗しました: ${error.message}`)
+    if (result.error) {
+      window.alert(`更新に失敗しました: ${result.error}`)
       return
     }
     setSelected(null)
@@ -128,7 +122,7 @@ export default function InquiriesList({ messages, currentStatus }: { messages: I
               <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }}>×</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 8, fontSize: 13, marginBottom: 16 }}>
-              <div style={{ color: 'var(--mm-text-muted)' }}>カテゴリ</div><div>{CATEGORY_LABELS[selected.category]}</div>
+              <div style={{ color: 'var(--mm-text-muted)' }}>カテゴリ</div><div>{CATEGORY_LABELS[selected.category] ?? selected.category}</div>
               <div style={{ color: 'var(--mm-text-muted)' }}>送信者</div><div>{selected.name}</div>
               <div style={{ color: 'var(--mm-text-muted)' }}>メール</div><div><a href={`mailto:${selected.email}`} style={{ color: 'var(--mm-primary)' }}>{selected.email}</a></div>
               <div style={{ color: 'var(--mm-text-muted)' }}>日時</div><div>{new Date(selected.created_at).toLocaleString('ja-JP')}</div>

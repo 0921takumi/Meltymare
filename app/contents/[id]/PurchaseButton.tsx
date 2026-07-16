@@ -101,10 +101,14 @@ export default function PurchaseButton({ contentId, price, isPurchased, delivery
     setCouponError('')
     setCouponData(null)
     try {
-      const res = await fetch(`/api/coupon?code=${encodeURIComponent(couponCode.trim())}&price=${price}`)
+      // 監査で発覚: content_idを渡していなかったため、他クリエイター専用クーポンでも
+      // ここでは「成功」表示になり、購入直前に初めて(誤解を招く汎用エラー文で)弾かれていた。
+      const res = await fetch(`/api/coupon?code=${encodeURIComponent(couponCode.trim())}&price=${price}&content_id=${encodeURIComponent(contentId)}`)
       const data = await res.json()
       if (!res.ok) { setCouponError(data.error); return }
       setCouponData(data)
+    } catch {
+      setCouponError('クーポンの確認に失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
     } finally {
       setCouponLoading(false)
     }

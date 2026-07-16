@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   if (ctx instanceof NextResponse) return ctx
   const { supabase } = ctx
 
-  const body = await req.json()
+  const body = await req.json().catch(() => ({}))
   const title = sanitizeText(body.title, { maxLength: 200 })
   if (!title) return NextResponse.json({ error: 'title required' }, { status: 400 })
 
@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest) {
   if (ctx instanceof NextResponse) return ctx
   const { supabase } = ctx
 
-  const body = await req.json()
+  const body = await req.json().catch(() => ({}))
   if (!body.id || !UUID_RE.test(body.id)) {
     return NextResponse.json({ error: 'id required' }, { status: 400 })
   }

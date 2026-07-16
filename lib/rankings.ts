@@ -1,4 +1,14 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { fetchAllRows } from '@/lib/fetch-all'
+
+// 監査で発覚: この一連のランキング集計はセッションクライアント(createClient())で
+// purchasesを読んでいたが、purchases のRLSは「自分の購入」「自分がクリエイターの
+// コンテンツへの購入」「admin」しか許可しないため、閲覧者自身が絡まない集計
+// （例: 他人のプロフィールを見た訪問者から見た「推されランキング」「あなたのファン順位」）
+// はほぼ常に空/nullになっていた。ここは公開ランキング・自分自身の集計のみを扱う
+// （呼び出し元は全て「自分の値」または「意図的に公開するランキング」用途、生の個別
+// 購入明細は返さず集計値のみを返す設計）ため、admin(service_role) で集計する。
+const createClient = async () => createAdminClient()
 
 export type Period = 'weekly' | 'monthly' | 'all'
 
@@ -32,15 +42,16 @@ export async function topCreators(period: Period, limit = 20): Promise<CreatorRa
 
   if (!creators) return []
 
-  let purchasesQuery = supabase
-    .from('purchases')
-    .select('amount, content:contents!inner(creator_id)')
-    .eq('status', 'completed')
-  if (since) purchasesQuery = purchasesQuery.gte('created_at', since.toISOString())
-  const { data: purchases } = await purchasesQuery
+  // v42: fetchAllRows で PostgREST のデフォルト行数上限による無言の切り捨てを防止
+  // （人気クリエイターの流入で1000件超になり得るため、ランキングの正確性に直結する）。
+  const purchases = await fetchAllRows((from, to) => {
+    let q = supabase.from('purchases').select('amount, content:contents!inner(creator_id)').eq('status', 'completed')
+    if (since) q = q.gte('created_at', since.toISOString())
+    return q.range(from, to)
+  })
 
   const salesByCreator = new Map<string, { sales: number; purchases: number }>()
-  for (const p of (purchases ?? []) as unknown as { amount: number; content: { creator_id: string } }[]) {
+  for (const p of purchases as unknown as { amount: number; content: { creator_id: string } }[]) {
     const cid = p.content?.creator_id
     if (!cid) continue
     const s = salesByCreator.get(cid) ?? { sales: 0, purchases: 0 }
@@ -72,25 +83,19 @@ export async function trendingCreators(limit = 10): Promise<CreatorRankRow[]> {
   const d1 = new Date(now); d1.setDate(d1.getDate() - 1)
   const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
 
-  const { data: p1 } = await supabase
-    .from('purchases')
-    .select('content:contents!inner(creator_id)')
-    .eq('status', 'completed')
-    .gte('created_at', d1.toISOString())
+  const p1 = await fetchAllRows((from, to) => supabase
+    .from('purchases').select('content:contents!inner(creator_id)').eq('status', 'completed').gte('created_at', d1.toISOString()).range(from, to))
 
-  const { data: p7 } = await supabase
-    .from('purchases')
-    .select('content:contents!inner(creator_id)')
-    .eq('status', 'completed')
-    .gte('created_at', d7.toISOString())
+  const p7 = await fetchAllRows((from, to) => supabase
+    .from('purchases').select('content:contents!inner(creator_id)').eq('status', 'completed').gte('created_at', d7.toISOString()).range(from, to))
 
   const count24h = new Map<string, number>()
   const count7d = new Map<string, number>()
-  for (const p of (p1 ?? []) as unknown as { content: { creator_id: string } }[]) {
+  for (const p of p1 as unknown as { content: { creator_id: string } }[]) {
     const cid = p.content?.creator_id
     if (cid) count24h.set(cid, (count24h.get(cid) ?? 0) + 1)
   }
-  for (const p of (p7 ?? []) as unknown as { content: { creator_id: string } }[]) {
+  for (const p of p7 as unknown as { content: { creator_id: string } }[]) {
     const cid = p.content?.creator_id
     if (cid) count7d.set(cid, (count7d.get(cid) ?? 0) + 1)
   }
@@ -114,14 +119,18 @@ export async function trendingCreators(limit = 10): Promise<CreatorRankRow[]> {
 
 export async function topFans(creatorId: string, limit = 10) {
   const supabase = await createClient()
-  const { data: purchases } = await supabase
+  // v42: userRankForCreator が limit=10000 で呼ぶため、人気クリエイター(まさに移籍予定の
+  // 「ナンバーワン」が該当し得る)ほどfetchAllRowsが無いと1000件で打ち切られ、
+  // 「あなたのファン順位」が不正確になる。
+  const purchases = await fetchAllRows((from, to) => supabase
     .from('purchases')
     .select('user_id, amount, tip_amount, content:contents!inner(creator_id)')
     .eq('status', 'completed')
     .eq('content.creator_id', creatorId)
+    .range(from, to))
 
   const totalByUser = new Map<string, { total: number; count: number }>()
-  for (const p of (purchases ?? []) as unknown as { user_id: string; amount: number; tip_amount?: number }[]) {
+  for (const p of purchases as unknown as { user_id: string; amount: number; tip_amount?: number }[]) {
     const uid = p.user_id
     const t = totalByUser.get(uid) ?? { total: 0, count: 0 }
     t.total += (p.amount ?? 0)
@@ -145,13 +154,14 @@ export async function topFans(creatorId: string, limit = 10) {
 
 export async function userTotalSupport(userId: string): Promise<{ total: number; count: number; creators: number }> {
   const supabase = await createClient()
-  const { data: purchases } = await supabase
+  const purchases = await fetchAllRows((from, to) => supabase
     .from('purchases')
     .select('amount, tip_amount, content:contents!inner(creator_id)')
     .eq('user_id', userId)
     .eq('status', 'completed')
+    .range(from, to))
 
-  const rows = (purchases ?? []) as unknown as { amount: number; tip_amount?: number; content: { creator_id: string } }[]
+  const rows = purchases as unknown as { amount: number; tip_amount?: number; content: { creator_id: string } }[]
   const total = rows.reduce((s, r) => s + (r.amount ?? 0), 0)
   const creatorSet = new Set<string>()
   for (const r of rows) if (r.content?.creator_id) creatorSet.add(r.content.creator_id)

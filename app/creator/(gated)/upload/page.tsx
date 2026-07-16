@@ -28,6 +28,8 @@ function UploadForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [recentUploads, setRecentUploads] = useState<number>(0)
+  const [originalReviewStatus, setOriginalReviewStatus] = useState<string | null>(null)
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -35,6 +37,10 @@ function UploadForm() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
       const { data } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
+      // v31: 他のクリエイター管理ページ(coupons/blocks/polls/live/stories等)は全てページ内でも
+      // role チェックを持つ多層防御になっているが、このページだけ proxy.ts のゲート一本に
+      // 頼っていた不整合を解消（RLS側のrole検証(v31 migration)と合わせた多層防御）。
+      if (data?.role !== 'creator' && data?.role !== 'admin') { router.push('/contents'); return }
       setProfile(data)
 
       // 24時間以内のアップロード数取得
@@ -56,6 +62,8 @@ function UploadForm() {
           setContentType(content.content_type)
           setIsPublished(content.is_published)
           setTags(Array.isArray(content.tags) ? content.tags : [])
+          setOriginalReviewStatus(content.review_status ?? null)
+          setRejectionReason(content.rejection_reason ?? null)
         }
       }
     }
@@ -135,6 +143,36 @@ function UploadForm() {
       if (isEdit) {
         const { error: updErr } = await supabase.from('contents').update(payload).eq('id', editId)
         if (updErr) throw updErr
+
+        // v28: review_status/is_published はDB側のトリガーで保護されているため、
+        // 上の update に is_published:true を含めても却下済みコンテンツは公開されない
+        // （旧値のまま据え置かれる）。却下済みの内容を直して再審査してもらう場合は
+        // 専用RPC経由で明示的に pending へ戻し、AI審査を再トリガーする。
+        // 監査で発覚(1): 以前は「ファイルを差し替えた場合のみ」再審査していたため、タイトル文言等
+        // ファイル以外の修正では resubmit が一切呼ばれず rejected のまま無期限にロックされていた。
+        // ファイル変更の有無に関わらず、却下済みを編集して保存した時点で常に再審査する。
+        // 監査で発覚(2): 承認済みコンテンツのサムネイルだけを差し替えても再審査が一切
+        // 走らず、無審査の画像がそのまま即座に公開され続けていた。承認済みコンテンツで
+        // 新しいサムネイルをアップロードした場合も再審査の対象に含める
+        // （resubmit_content_for_review はv47でapproved始点にも対応済み）。
+        const needsReReview = editId && (
+          originalReviewStatus === 'rejected' ||
+          (originalReviewStatus === 'approved' && !!thumbnailUrl)
+        )
+        if (needsReReview) {
+          const { data: resubmitted } = await supabase.rpc('resubmit_content_for_review', { p_content_id: editId })
+          if (resubmitted === true) {
+            try {
+              await fetch('/api/moderate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content_id: editId }),
+              })
+            } catch (modErr) {
+              console.warn('moderation re-trigger failed:', modErr)
+            }
+          }
+        }
       } else {
         // 24時間以内のアップロード上限チェック
         const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
@@ -196,6 +234,16 @@ function UploadForm() {
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 24px' }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>{isEdit ? 'コンテンツ編集' : 'コンテンツ追加'}</h1>
 
+        {isEdit && originalReviewStatus === 'rejected' && (
+          <div style={{ marginBottom: 18, padding: '14px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, color: '#991b1b', lineHeight: 1.7 }}>
+            <strong>⚠️ このコンテンツは却下されました</strong>
+            {rejectionReason && (
+              <p style={{ marginTop: 6 }}><strong>却下理由:</strong> {rejectionReason}</p>
+            )}
+            <p style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>内容を修正して保存すると、自動的に再審査されます。</p>
+          </div>
+        )}
+
         {!isEdit && (
           <div style={{
             marginBottom: 18, padding: '10px 14px',
@@ -244,13 +292,18 @@ function UploadForm() {
               <label style={labelStyle}>種別 *</label>
               <div style={{ display: 'flex', gap: 12 }}>
                 {(['image', 'video'] as const).map(t => (
-                  <button key={t} type="button" onClick={() => setContentType(t)}
-                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', border: `2px solid ${contentType === t ? 'var(--mm-primary)' : 'var(--mm-border)'}`, borderRadius: 8, background: contentType === t ? 'var(--mm-primary-light)' : 'white', fontWeight: 600, fontSize: 14, cursor: 'pointer', color: contentType === t ? 'var(--mm-primary)' : 'var(--mm-text-sub)' }}>
+                  <button key={t} type="button" disabled={isEdit} onClick={() => !isEdit && setContentType(t)}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', border: `2px solid ${contentType === t ? 'var(--mm-primary)' : 'var(--mm-border)'}`, borderRadius: 8, background: contentType === t ? 'var(--mm-primary-light)' : 'white', fontWeight: 600, fontSize: 14, cursor: isEdit ? 'not-allowed' : 'pointer', color: contentType === t ? 'var(--mm-primary)' : 'var(--mm-text-sub)', opacity: isEdit && contentType !== t ? 0.5 : 1 }}>
                     {t === 'image' ? <ImageIcon size={16} /> : <VideoIcon size={16} />}
                     {t === 'image' ? '画像' : '動画'}
                   </button>
                 ))}
               </div>
+              {isEdit && (
+                <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 4 }}>
+                  種別は編集画面ではファイル本体を差し替えられないため変更できません
+                </p>
+              )}
             </div>
 
             <div>

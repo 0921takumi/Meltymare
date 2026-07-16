@@ -54,10 +54,19 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'cannot_change_own_role' }, { status: 400 })
     }
     // 対象が既に admin の場合も API では変更不可（admin の降格を防ぐ）
-    const { data: target } = await supabase.from('profiles').select('role').eq('id', id).maybeSingle()
+    const { data: target } = await supabase.from('profiles').select('role, identity_status').eq('id', id).maybeSingle()
     if (target?.role === 'admin') {
       return NextResponse.json(
         { error: 'cannot_demote_admin', detail: 'admin の降格は SQL 経由で実施してください' },
+        { status: 403 }
+      )
+    }
+    // 監査で発覚: role='creator'への昇格が本人確認(identity_status)を一切確認せずに
+    // 実行できてしまい、身分証未提出のユーザーでも即座に出品・販売できる状態だった
+    // （本人確認・年齢確認プロセスの管理者版バイパス。v46で直した「承認→自動昇格」の逆方向）。
+    if (role === 'creator' && target?.identity_status !== 'approved') {
+      return NextResponse.json(
+        { error: 'identity_not_approved', detail: '本人確認が承認されていないユーザーはクリエイターにできません。先に本人確認ページで承認してください' },
         { status: 403 }
       )
     }

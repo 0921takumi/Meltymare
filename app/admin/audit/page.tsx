@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { FileText } from 'lucide-react'
+import Avatar from '@/components/ui/Avatar'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,11 +20,12 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   user_unsuspend:      { label: '凍結解除',          color: '#059669' },
   role_change:         { label: 'ロール変更',        color: '#7c3aed' },
   inquiry_update:      { label: '問い合わせ更新',    color: '#2563eb' },
-  story_delete:        { label: 'ストーリー削除',    color: '#dc2626' },
-  live_force_stop:     { label: 'ライブ強制停止',    color: '#dc2626' },
   comment_report_hide: { label: 'コメント非表示化',  color: '#dc2626' },
   comment_report_dismiss:{ label: '通報却下',         color: '#6b7280' },
   comment_report_resolve:{ label: '通報対応済',       color: '#059669' },
+  content_approve:     { label: 'コンテンツ承認',      color: '#059669' },
+  content_reject:      { label: 'コンテンツ却下',      color: '#dc2626' },
+  content_unpublish:   { label: 'コンテンツ非公開化',  color: '#6b7280' },
 }
 
 export default async function AdminAuditPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
@@ -81,9 +83,7 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
                     </td>
                     <td data-label="管理者">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', flexShrink: 0 }}>
-                          {r.admin?.avatar_url ? <img src={r.admin.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                        </div>
+                        <Avatar src={r.admin?.avatar_url} name={r.admin?.display_name} size={24} />
                         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--mm-ink)' }}>{r.admin?.display_name ?? '—'}</span>
                       </div>
                     </td>

@@ -14,7 +14,9 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
 
   const { data: messages } = await q.limit(200)
 
-  const { data: counts } = await supabase.from('contact_messages').select('status')
+  // ヘッダの件数集計。Supabase デフォルト1000行上限での過少カウントを緩和。
+  // 規模拡大時は status 別の count クエリ（head:true）に切り替えること。
+  const { data: counts } = await supabase.from('contact_messages').select('status').limit(10000)
   const countBy = (s: string) => counts?.filter((m: { status: string }) => m.status === s).length ?? 0
 
   return (

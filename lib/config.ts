@@ -64,7 +64,7 @@ export const CONTENT_GUIDELINES = {
 // ─── 機能フラグ ──────────────────────────
 // 機能の表示/停止を一元管理。false にすると関連UI・ルートが全面的に無効化される。
 // （ナビ非表示・ルートはトップへリダイレクト・プロフィールの該当セクション非表示・ヘルプ項目除外）
-export const FEATURES: { stories: boolean; live: boolean; auctions: boolean; subscriptions: boolean } = {
+export const FEATURES: { stories: boolean; live: boolean; auctions: boolean; subscriptions: boolean; googleAuth: boolean } = {
   /** ストーリーズ（24時間限定投稿） */
   stories: false,
   /** ライブ配信 */
@@ -78,6 +78,26 @@ export const FEATURES: { stories: boolean; live: boolean; auctions: boolean; sub
    *    現状は /api/subscribe が 503 を返し、関連UIも非表示にする。
    */
   subscriptions: false,
+  /**
+   * Google ログイン（OAuth）
+   * 🚨 false: Supabase の Authentication で Google プロバイダが未有効化のため、
+   *    「Googleで続ける」を押すと 400 (provider is not enabled) になる。実ユーザーが
+   *    踏む地雷になるためUIごと非表示にしている。有効化するには
+   *    Supabase Dashboard の Authentication → Providers → Google を設定
+   *    （Google Cloud の OAuth クライアントID/シークレットが必要）した上で true にする。
+   */
+  googleAuth: false,
+}
+
+/**
+ * 環境変数の値を「そのまま比較」できる形に正規化する。
+ * Vercel Dashboard で env をペーストすると、BOM(U+FEFF) や末尾の CR/LF/空白が
+ * 一緒に取り込まれることがあり、`process.env.X === 'true'` が false になる事故が起きる
+ * （実例: 2026-07 に本番 NEXT_PUBLIC_MYFOCUS_INVITE_ONLY に BOM 混入で招待制が
+ *  事実上 OFF 判定になっていた）。ここで先頭 BOM と ASCII 空白/改行を除去する。
+ */
+export function cleanEnv(v: string | undefined | null): string {
+  return (v ?? '').replace(/^﻿/, '').trim()
 }
 
 // ─── サービスモード ──────────────────────────
@@ -87,12 +107,12 @@ export const SERVICE_MODE = {
    * 「Googleで続ける」前に招待コード入力を強制する必要があるため。
    * サーバ側（/api/invite/verify・/auth/callback）も同じ値を参照する。 */
   inviteOnly:
-    process.env.NEXT_PUBLIC_MYFOCUS_INVITE_ONLY === 'true'
-    || process.env.MYFOCUS_INVITE_ONLY === 'true',
+    cleanEnv(process.env.NEXT_PUBLIC_MYFOCUS_INVITE_ONLY) === 'true'
+    || cleanEnv(process.env.MYFOCUS_INVITE_ONLY) === 'true',
   /** ベータ表記を表示 */
-  showBetaBadge: process.env.MYFOCUS_BETA_MODE !== 'false',
+  showBetaBadge: cleanEnv(process.env.MYFOCUS_BETA_MODE) !== 'false',
   /** メンテナンスモード */
-  maintenance: process.env.MYFOCUS_MAINTENANCE === 'true',
+  maintenance: cleanEnv(process.env.MYFOCUS_MAINTENANCE) === 'true',
 } as const
 
 // ─── メール送信元 ──────────────────────────

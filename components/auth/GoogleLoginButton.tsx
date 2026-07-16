@@ -22,7 +22,7 @@ export default function GoogleLoginButton({ next, inviteCode, requireInvite }: {
     setLoading(true)
     // OAuth リダイレクトを跨いで招待コードを /auth/callback へ届ける（10分で失効）
     if (code) {
-      document.cookie = `myf_invite=${encodeURIComponent(code)}; path=/; max-age=600; SameSite=Lax`
+      document.cookie = `myf_invite=${encodeURIComponent(code)}; path=/; max-age=600; SameSite=Lax; Secure`
     }
     const supabase = createClient()
     const redirectTo = `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`

@@ -19,6 +19,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 
 const UUID_RE = /^[0-9a-f-]{36}$/i
@@ -66,25 +67,51 @@ export async function DELETE(req: Request) {
   // 冪等: 既に cancelled なら no-op
   if (sub.status === 'cancelled') return NextResponse.json({ ok: true })
 
-  const { error } = await supabase
+  // 監査で発覚: この update は session client(authenticated)で行っており、
+  // .select()が無いため0行更新（RLSに阻まれた/並行キャンセル）でもerrorがnullで
+  // 「解約成功」に見えてしまっていた。行数を明示チェックし、更新できた時だけ
+  // デクリメント・監査ログを実行する。
+  const { data: updated, error } = await supabase
     .from('subscriptions')
     .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
     .eq('id', id)
     .eq('status', 'active')  // 楽観ロック: 並列キャンセルで二重デクリメント防止
+    .select('id')
+    .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!updated) return NextResponse.json({ ok: true }) // 既に他リクエストでcancelled済み・冪等
 
-  // member_count を atomic にデクリメント（v16 RPC、0 未満にならないように clamp 済み）
-  const { error: decErr } = await supabase.rpc('decrement_member_count', { plan_id: sub.plan_id })
+  // 監査で発覚: decrement_member_count/increment_member_count は所有権チェックが
+  // 一切ないRPCで、authenticatedロールに実行権限が付与されたままだった。
+  // 直接 supabase.rpc('decrement_member_count', {plan_id: 任意}) を呼べば、
+  // 購読していないユーザーでも任意プランの会員数を荒らせる状態だったため、
+  // 実書き込みは admin(service_role) に集約する（対応するREVOKEは別SQLで実行）。
+  const admin = createAdminClient()
+  const { error: decErr } = await admin.rpc('decrement_member_count', { plan_id: sub.plan_id })
   if (decErr) console.warn('[subscribe] decrement_member_count failed:', decErr.message)
 
   // 監査ログ（ユーザー自身のアクションとして記録）
-  await supabase.from('audit_logs').insert({
+  await admin.from('audit_logs').insert({
     actor_id: user.id,
     action: 'subscription.cancelled',
     target_type: 'subscription',
     target_id: id,
     metadata: { plan_id: sub.plan_id },
   })
+
+  // 監査で発覚: 解約がクリエイターに一切通知されず、会員が減ったことに気づく手段が
+  // 無かった（decrement_member_countで数字が動くのみ）。
+  const { data: plan } = await admin.from('subscription_plans').select('creator_id, name').eq('id', sub.plan_id).maybeSingle()
+  if (plan?.creator_id) {
+    const { error: cancelNotifErr } = await admin.from('notifications').insert({
+      user_id: plan.creator_id,
+      type: 'subscription',
+      title: '会員が解約しました',
+      body: `${plan.name ?? 'プラン'} の会員が解約しました`,
+      link: '/creator/dashboard',
+    })
+    if (cancelNotifErr) console.error('[subscribe] creator cancel notification insert failed:', cancelNotifErr.message)
+  }
 
   return NextResponse.json({ ok: true })
 }

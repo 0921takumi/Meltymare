@@ -3,9 +3,10 @@ import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
+import { cleanEnv } from '@/lib/config'
 
 // apiVersion を明示固定（SDK更新時の挙動変化で決済不整合になるのを防ぐ）
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-03-25.dahlia' })
+const stripe = new Stripe(cleanEnv(process.env.STRIPE_SECRET_KEY), { apiVersion: '2026-03-25.dahlia' })
 
 // purchases の書き込み（insert/update）は RLS 上 Service Role に限定されているため、
 // サーバー側で認可済みの purchase レコード操作には admin クライアントを使う。
@@ -107,7 +108,7 @@ export async function POST(req: NextRequest) {
     // 発生する。in-flight の pending がある間は新規 Checkout を作らせないことで session.id 上書きを防ぐ。
     const { data: pendingRow } = await admin
       .from('purchases')
-      .select('id, created_at')
+      .select('id, created_at, stripe_payment_intent_id')
       .eq('user_id', user.id)
       .eq('content_id', contentId)
       .eq('status', 'pending')
@@ -119,6 +120,19 @@ export async function POST(req: NextRequest) {
           { error: '購入処理中です。少し時間をおいてから再度お試しください' },
           { status: 409 },
         )
+      }
+      // 5分経過後は新規Checkoutの作成を許可するが、下の upsert が
+      // stripe_payment_intent_id を新セッションIDで上書きすると旧セッションが
+      // 参照不能なまま最大24時間支払い可能な状態で残ってしまう（孤児化＝課金されても
+      // 購入記録に反映されない/理論上の二重課金）。新規作成前に旧セッションを明示的に
+      // 失効させる（cs_ で始まる = まだ session.id のまま。pi_ 保存済みなら
+      // 決済がある程度進行しているため expire を試みず、そのまま新規作成に進む）。
+      if (pendingRow.stripe_payment_intent_id?.startsWith('cs_')) {
+        try {
+          await stripe.checkout.sessions.expire(pendingRow.stripe_payment_intent_id)
+        } catch (e) {
+          console.warn('[purchase] failed to expire stale checkout session (may already be expired/completed):', e)
+        }
       }
     }
 
@@ -149,7 +163,17 @@ export async function POST(req: NextRequest) {
             : coupon.discount_value
           discountAmount = Math.min(discountAmount, content.price)
           appliedCouponId = coupon.id
+        } else {
+          return NextResponse.json(
+            { error: 'クーポンの適用に失敗しました。有効期限切れまたは使用上限に達した可能性があります' },
+            { status: 400 },
+          )
         }
+      } else {
+        return NextResponse.json(
+          { error: 'クーポンの適用に失敗しました。有効期限切れまたは使用上限に達した可能性があります' },
+          { status: 400 },
+        )
       }
     }
 
@@ -162,47 +186,33 @@ export async function POST(req: NextRequest) {
 
     // 無料（割引100% かつ チップなし）の場合は直接完了
     if (finalPrice === 0) {
-      // ⭐️ 無料確定の前にクーポンの used_count を CAS でインクリメントする。
-      //   false（max_uses 到達）なら 100%off クーポンが無料取得の抜け道になるため購入を弾く。
-      //   webhook を経由しない無料経路では、ここが唯一の used_count 整合点。
-      if (appliedCouponId) {
-        const { data: incOk, error: cpErr } = await admin.rpc('increment_coupon_used', { coupon_id: appliedCouponId })
-        if (cpErr) {
-          console.error('[purchase] free increment_coupon_used failed:', cpErr.message)
-          return NextResponse.json({ error: 'クーポンの適用に失敗しました。時間をおいて再度お試しください' }, { status: 500 })
-        }
-        if (incOk === false) {
-          return NextResponse.json({ error: 'クーポンが使用上限に達しました' }, { status: 400 })
-        }
-      }
-
-      // upsert: 過去に pending 行があっても (user_id, content_id) で更新（重複制約回避）
-      // 書き込みは admin（Service Role）。RLS で purchases の update が制限されているため。
-      const { error: freeErr } = await admin.from('purchases').upsert({
-        user_id: user.id,
-        content_id: contentId,
-        amount: 0,
-        content_price: 0,
-        tip_amount: 0,
-        tip_percent: 0,
-        original_amount: content.price,
-        discount_amount: discountAmount,
-        coupon_id: appliedCouponId,
-        // 並列で同時に複数の無料purchaseが作られた際の payment_intent_id 衝突を避ける。
-        // (user_id, content_id) ユニーク制約で実質的にレコード自体は重複しないが、
-        // stripe_payment_intent_id 側にも index/制約が将来追加されたときの安全側。
-        stripe_payment_intent_id: `free_${user.id}_${contentId}_${Date.now()}`,
-        status: 'completed',
-        delivery_status: 'pending',
-      }, { onConflict: 'user_id,content_id' })
+      // ⭐️ v30: クーポン消費(CAS)と購入レコード確定を1つのDB関数(complete_free_purchase)で
+      //   原子的に行う。以前は「クーポン消費 → 別リクエストでupsert」の2ステップで、
+      //   upsertが失敗するとクーポンだけ消費済みで購入が成立しない不整合が起き得た。
+      //   1つの関数呼び出しに閉じ込めることで、途中失敗時は全体がロールバックされる。
+      const stripePaymentIntentId = `free_${user.id}_${contentId}_${Date.now()}`
+      const { data: freeOk, error: freeErr } = await admin.rpc('complete_free_purchase', {
+        p_user_id: user.id,
+        p_content_id: contentId,
+        p_coupon_id: appliedCouponId,
+        p_original_amount: content.price,
+        p_discount_amount: discountAmount,
+        p_stripe_payment_intent_id: stripePaymentIntentId,
+      })
       if (freeErr) {
-        console.error('[purchase] free upsert failed:', freeErr)
-        return NextResponse.json({ error: `購入記録の作成に失敗しました: ${freeErr.message}` }, { status: 500 })
+        console.error('[purchase] complete_free_purchase failed:', freeErr.message)
+        return NextResponse.json({ error: '購入処理に失敗しました。時間をおいて再度お試しください' }, { status: 500 })
+      }
+      if (freeOk === false) {
+        // クーポン上限到達（100%off クーポンの無料取得の抜け道になるため購入を弾く）
+        return NextResponse.json({ error: 'クーポンが使用上限に達しました' }, { status: 400 })
       }
 
-      // sold_count 更新（admin: contents更新はcreator/admin限定のため）
-      const { error: scErr } = await admin.rpc('increment_sold_count', { content_id: contentId })
+      // sold_count 更新（admin: contents更新はcreator/admin限定のため）。
+      // v27でCAS化: stock_limit超過なら false。無料経路の超過は監査ログで可視化。
+      const { data: scOk, error: scErr } = await admin.rpc('increment_sold_count', { content_id: contentId })
       if (scErr) console.warn('[purchase] free increment_sold_count failed:', scErr.message)
+      else if (scOk === false) console.error('[purchase] free OVERSTOCK: 在庫上限超過。content:', contentId, 'user:', user.id)
 
       return NextResponse.json({ checkoutUrl: `${appUrl}/purchase/success` })
     }
@@ -226,6 +236,12 @@ export async function POST(req: NextRequest) {
       mode: 'payment',
       success_url: `${appUrl}/purchase/success`,
       cancel_url: `${appUrl}/contents/${contentId}`,
+      // Stripeのデフォルト24時間有効を短縮（孤児セッションが長時間支払い可能なままになるのを防ぐ）。
+      // 30分はStripeが許容する最短値だが、ここでの Date.now() 取得から実際に
+      // Stripe側でセッションが作成されるまでのネットワーク遅延（数百ms〜）があるため、
+      // ぴったり30分だと「作成時刻からの30分未満」判定でStripeにINVALID_REQUESTとして
+      // 拒否されることがある（実際に発生・再現済み）。安全マージンを載せて35分にする。
+      expires_at: Math.floor(Date.now() / 1000) + 35 * 60,
       metadata: {
         content_id: contentId,
         user_id: user.id,

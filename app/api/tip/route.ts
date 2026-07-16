@@ -3,9 +3,10 @@ import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimit } from '@/lib/rate-limit'
 import { sanitizeOptional } from '@/lib/sanitize'
+import { cleanEnv } from '@/lib/config'
 
 // apiVersion を明示固定（SDK更新時の挙動変化で決済不整合になるのを防ぐ）
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-03-25.dahlia' })
+const stripe = new Stripe(cleanEnv(process.env.STRIPE_SECRET_KEY), { apiVersion: '2026-03-25.dahlia' })
 
 const PRESET_AMOUNTS = [300, 500, 1000, 3000, 5000, 10000]
 const MIN_AMOUNT = 100
@@ -49,7 +50,9 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
     if (!creator) return NextResponse.json({ error: 'クリエイターが見つかりません' }, { status: 404 })
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp'
+    // Stripe Checkout の success/cancel_url は invalid URL(末尾 BOM/CRLF 混入)を Stripe 側で
+    // 弾かれるため、cleanEnv で必ず正規化してから使う。
+    const appUrl = cleanEnv(process.env.NEXT_PUBLIC_APP_URL) || 'https://my-focus.jp'
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],

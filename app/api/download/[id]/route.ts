@@ -38,11 +38,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   // 署名URLの有効期限。大容量動画でもDL完了まで失効しないよう 3600 秒（1時間）を確保
   // （商品詳細ページの配信URL発行と同値に統一）。
-  const { data: urlData } = await supabase.storage
+  const { data: urlData, error: signErr } = await supabase.storage
     .from('deliveries')
     .createSignedUrl(purchase.delivered_file_url, 3600, { download: true })
 
-  if (!urlData?.signedUrl) {
+  if (signErr || !urlData?.signedUrl) {
+    console.error('[download] createSignedUrl failed:', signErr?.message)
     return NextResponse.json({ error: 'Failed to generate download URL' }, { status: 500 })
   }
 

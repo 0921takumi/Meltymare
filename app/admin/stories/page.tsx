@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import StoryDeleteButton from './StoryDeleteButton'
 import { Sparkles, Eye } from 'lucide-react'
+import { FEATURES } from '@/lib/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +19,9 @@ interface StoryRow {
 }
 
 export default async function AdminStoriesPage() {
+  // ストーリー機能は停止中(FEATURES.stories=false)。停止中の管理UIは廃止API(410)を叩く
+  // 削除操作を含むため、機能が無効な間はダッシュボードへ退避する。
+  if (!FEATURES.stories) redirect('/admin')
   const supabase = await createClient()
 
   const { data } = await supabase

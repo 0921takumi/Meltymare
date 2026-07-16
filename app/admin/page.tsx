@@ -3,10 +3,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import {
   TrendingUp, Users, ShoppingBag, Wallet, Package, MessageSquare, AlertTriangle,
-  ShieldCheck, Radio, Sparkles, Gem, Gavel, Cake, ArrowRight, Activity,
+  ShieldCheck, Gem, Cake, ArrowRight, Activity,
   Flag, Bell,
 } from 'lucide-react'
 import { FINANCE } from '@/lib/config'
+import Avatar from '@/components/ui/Avatar'
+import { fetchAllRows } from '@/lib/fetch-all'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,51 +27,49 @@ export default async function AdminDashboard() {
   const [
     { count: totalUsers },
     { count: totalCreators },
-    { data: allPurchases },
-    { data: monthPurchases },
-    { data: dailyPurchases },
     { count: totalContents },
     { count: pendingContents },
     { count: pendingVerifications },
     { count: openInquiries },
     { count: urgentInquiries },
     { count: pendingReports },
-    { count: liveStreams },
-    { count: openAuctions },
     { count: activeSubscriptions },
-    { count: storiesCount },
     { data: recentPurchases },
     { data: recentSignups },
-    { data: pendingPayouts },
   ] = await Promise.all([
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'user'),
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'creator'),
-    supabase.from('purchases').select('amount, tip_amount, created_at').eq('status', 'completed'),
-    supabase.from('purchases').select('amount, tip_amount').eq('status', 'completed').gte('created_at', startOfMonth),
-    supabase.from('purchases').select('amount, tip_amount, created_at').eq('status', 'completed').gte('created_at', last30),
     supabase.from('contents').select('*', { count: 'exact', head: true }).eq('is_published', true),
     supabase.from('contents').select('*', { count: 'exact', head: true }).eq('is_published', false),
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('identity_status', 'pending'),
     supabase.from('inquiries').select('*', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('inquiries').select('*', { count: 'exact', head: true }).eq('status', 'open').eq('priority', 'urgent'),
     supabase.from('comment_reports').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('live_streams').select('*', { count: 'exact', head: true }).eq('status', 'live'),
-    supabase.from('request_auctions').select('*', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('subscriptions').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-    supabase.from('stories').select('*', { count: 'exact', head: true }).gt('expires_at', new Date().toISOString()),
     admin.from('purchases')
       .select('id, amount, created_at, content:contents(title, price), user:profiles!purchases_user_id_fkey(display_name, email, avatar_url)')
       .eq('status', 'completed').order('created_at', { ascending: false }).limit(8),
     admin.from('profiles').select('id, display_name, email, role, avatar_url, created_at').order('created_at', { ascending: false }).limit(5),
-    supabase.from('purchases').select('amount, tip_amount').eq('status', 'completed').is('payout_id', null),
   ])
 
-  const totalSales = (allPurchases ?? []).reduce((s, p) => s + (p.amount ?? 0) + (p.tip_amount ?? 0), 0)
+  // v42: fetchAllRows で PostgREST のデフォルト行数上限による無言の切り捨てを防止
+  // （売上・KPI集計は全件が前提のため、1000件超で過少表示になるのを防ぐ）。
+  const [allPurchases, monthPurchases, dailyPurchases, pendingPayouts] = await Promise.all([
+    fetchAllRows((from, to) => supabase.from('purchases').select('amount, tip_amount, created_at').eq('status', 'completed').range(from, to)),
+    fetchAllRows((from, to) => supabase.from('purchases').select('amount, tip_amount').eq('status', 'completed').gte('created_at', startOfMonth).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('purchases').select('amount, tip_amount, created_at').eq('status', 'completed').gte('created_at', last30).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('purchases').select('amount, content_price, tip_amount, fee_rate, content:contents(creator:profiles(fee_rate))').eq('status', 'completed').is('payout_id', null).range(from, to)),
+  ])
+
+  // purchases.amount は既に content_price + tip_amount（purchase/route.ts参照）。
+  // よって売上合計は amount をそのまま足す。以前は amount + tip_amount としており
+  // チップを二重計上していた（admin/sales・admin/payouts の正しい集計と食い違っていた）。
+  const totalSales = (allPurchases ?? []).reduce((s, p) => s + (p.amount ?? 0), 0)
   const totalOrders = allPurchases?.length ?? 0
-  const monthSales = (monthPurchases ?? []).reduce((s, p) => s + (p.amount ?? 0) + (p.tip_amount ?? 0), 0)
+  const monthSales = (monthPurchases ?? []).reduce((s, p) => s + (p.amount ?? 0), 0)
   const monthOrders = monthPurchases?.length ?? 0
   const aov = monthOrders > 0 ? Math.round(monthSales / monthOrders) : 0
-  const last7Sales = (dailyPurchases ?? []).filter(p => p.created_at >= last7).reduce((s, p) => s + (p.amount ?? 0) + (p.tip_amount ?? 0), 0)
+  const last7Sales = (dailyPurchases ?? []).filter(p => p.created_at >= last7).reduce((s, p) => s + (p.amount ?? 0), 0)
   const last24hOrders = (dailyPurchases ?? []).filter(p => p.created_at >= last24h).length
 
   // 過去30日のデイリー売上 (グラフ用)
@@ -82,13 +82,23 @@ export default async function AdminDashboard() {
   for (const p of dailyPurchases ?? []) {
     const k = p.created_at.slice(0, 10)
     const d = days.find(x => x.key === k)
-    if (d) d.amount += (p.amount ?? 0) + (p.tip_amount ?? 0)
+    if (d) d.amount += (p.amount ?? 0)
   }
   const maxDaily = Math.max(1, ...days.map(d => d.amount))
 
-  const pendingPayoutAmount = (pendingPayouts ?? []).reduce((s, p) => s + (p.amount ?? 0) + (p.tip_amount ?? 0), 0)
-  const platformShare = Math.round(pendingPayoutAmount * FINANCE.defaultFeeRate / 100)
-  const creatorShare = pendingPayoutAmount - platformShare
+  // 未払振込見込み: admin/payouts と同じく「手数料はコンテンツ代金のみ・チップは手数料0%で全額
+  // クリエイターへ」の計算に揃える。以前は amount+tip の二重計上額に一律20%を掛けており、
+  // チップにも手数料をかけた上で二重計上する二重の誤りだった。
+  let creatorShare = 0
+  let pendingPayoutAmount = 0
+  for (const p of (pendingPayouts ?? []) as any[]) {
+    const contentPrice = p.content_price ?? p.amount ?? 0
+    const tip = p.tip_amount ?? 0
+    const feeRate = p.fee_rate ?? p.content?.creator?.fee_rate ?? FINANCE.defaultFeeRate
+    pendingPayoutAmount += contentPrice + tip
+    creatorShare += (contentPrice - Math.floor(contentPrice * feeRate / 100)) + tip
+  }
+  const platformShare = pendingPayoutAmount - creatorShare
 
   // アラート
   const alerts: { kind: 'urgent' | 'warn' | 'info'; label: string; count?: number; href: string }[] = []
@@ -154,10 +164,7 @@ export default async function AdminDashboard() {
         <MiniKpi icon={Package} label="クリエイター" value={`${totalCreators ?? 0}`} href="/admin/creators" />
         <MiniKpi icon={ShieldCheck} label="本人確認待ち" value={`${pendingVerifications ?? 0}`} href="/admin/verifications" warn={(pendingVerifications ?? 0) > 0} />
         <MiniKpi icon={Package} label="公開コンテンツ" value={`${totalContents ?? 0}`} href="/admin/contents" />
-        <MiniKpi icon={Radio} label="ライブ配信中" value={`${liveStreams ?? 0}`} href="/admin/lives" highlight={(liveStreams ?? 0) > 0} />
-        <MiniKpi icon={Gavel} label="受付中オークション" value={`${openAuctions ?? 0}`} href="/admin/auctions" />
         <MiniKpi icon={Gem} label="サブスク加入" value={`${activeSubscriptions ?? 0}`} href="/admin/subscriptions" />
-        <MiniKpi icon={Sparkles} label="公開ストーリー" value={`${storiesCount ?? 0}`} href="/admin/stories" />
         <MiniKpi icon={Flag} label="通報" value={`${pendingReports ?? 0}`} href="/admin/comments" warn={(pendingReports ?? 0) > 0} />
         <MiniKpi icon={MessageSquare} label="未対応問合せ" value={`${openInquiries ?? 0}`} href="/admin/inquiries" warn={(openInquiries ?? 0) > 0} />
       </div>
@@ -201,9 +208,7 @@ export default async function AdminDashboard() {
                 const content = (p as { content: { title?: string } | null }).content
                 return (
                   <div key={p.id} style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--mm-border)' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', flexShrink: 0 }}>
-                      {buyer?.avatar_url ? <img src={buyer.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                    </div>
+                    <Avatar src={buyer?.avatar_url} name={buyer?.display_name} size={32} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{buyer?.display_name ?? '—'}</p>
                       <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{content?.title ?? '—'}</p>
@@ -224,9 +229,7 @@ export default async function AdminDashboard() {
           </div>
           {recentSignups?.map(u => (
             <div key={u.id} style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--mm-border)' }}>
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', flexShrink: 0 }}>
-                {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-              </div>
+              <Avatar src={u.avatar_url} name={u.display_name} size={32} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.display_name}</p>
                 <p style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>
@@ -257,8 +260,8 @@ function KpiCard({ icon: Icon, label, value, sub, color, bg }: { icon: React.Com
         </div>
         <span style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 600 }}>{label}</span>
       </div>
-      <p style={{ fontSize: 22, fontWeight: 700, color }}>{value}</p>
-      {sub && <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>{sub}</p>}
+      <p className="font-serif-display" style={{ fontSize: 30, fontWeight: 600, color, lineHeight: 1, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+      {sub && <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 6 }}>{sub}</p>}
     </div>
   )
 }

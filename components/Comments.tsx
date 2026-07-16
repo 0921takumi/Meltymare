@@ -11,6 +11,10 @@ export interface CommentItem {
   likes: number
   liked_by_me: boolean
   replies?: CommentItem[]
+  /** 通報により非表示化されたか。本人にだけ表示され、その旨を明示する（監査で発覚:
+   *  以前はis_hidden=false固定フィルタのため、非表示になったことに投稿者自身も
+   *  気づけなかった） */
+  is_hidden?: boolean
 }
 
 interface Props {
@@ -125,8 +129,14 @@ export default function Comments({ contentId, comments: initial, currentUserId }
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <p style={{ fontSize: 13, fontWeight: 700 }}>{c.user?.display_name ?? '不明'}</p>
                   <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>{new Date(c.created_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                  {c.is_hidden && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', background: '#fef2f2', padding: '1px 8px', borderRadius: 999 }}>非表示中</span>
+                  )}
                 </div>
-                <p style={{ fontSize: 13, marginTop: 4, color: 'var(--mm-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{c.body}</p>
+                <p style={{ fontSize: 13, marginTop: 4, color: c.is_hidden ? 'var(--mm-text-muted)' : 'var(--mm-text)', textDecoration: c.is_hidden ? 'line-through' : 'none', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{c.body}</p>
+                {c.is_hidden && (
+                  <p style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }}>このコメントは通報により非表示になっています（あなたにのみ表示）</p>
+                )}
                 <div style={{ display: 'flex', gap: 14, marginTop: 6 }}>
                   <button
                     onClick={() => toggleLike(c.id)}

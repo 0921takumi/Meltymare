@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { TrendingUp, Users, Package, Crown, Trophy } from 'lucide-react'
+import Avatar from '@/components/ui/Avatar'
+import { fetchAllRows } from '@/lib/fetch-all'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,8 +11,13 @@ export default async function AdminAnalyticsPage() {
   const last90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
   const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
-  const [{ data: purchases90 }, { data: signups90 }, { data: contents90 }, { data: topCreators }, { data: topContents }, { data: topFans }] = await Promise.all([
-    supabase.from('purchases').select('amount, tip_amount, created_at, content:contents!inner(creator_id)').eq('status', 'completed').gte('created_at', last90.toISOString()),
+  // v42: fetchAllRows で PostgREST のデフォルト行数上限による無言の切り捨てを防止。
+  const purchases90Promise = fetchAllRows((from, to) => supabase
+    .from('purchases').select('amount, tip_amount, created_at, content:contents!inner(creator_id)')
+    .eq('status', 'completed').gte('created_at', last90.toISOString()).range(from, to))
+
+  const [purchases90, { data: signups90 }, { data: contents90 }, { data: topCreators }, { data: topContents }, { data: topFans }] = await Promise.all([
+    purchases90Promise,
     supabase.from('profiles').select('created_at, role').gte('created_at', last90.toISOString()),
     supabase.from('contents').select('created_at, is_published').gte('created_at', last90.toISOString()),
     supabase.from('profiles').select('id, display_name, username, avatar_url').eq('role', 'creator'),
@@ -35,7 +42,7 @@ export default async function AdminAnalyticsPage() {
   type PRow = { amount?: number; tip_amount?: number; created_at: string; content?: { creator_id?: string } }
   for (const p of (purchases90 ?? []) as PRow[]) {
     const w = weeks.find(x => x.key === weekKey(p.created_at))
-    if (w) { w.sales += (p.amount ?? 0) + (p.tip_amount ?? 0); w.orders++ }
+    if (w) { w.sales += (p.amount ?? 0); w.orders++ }
   }
   for (const s of signups90 ?? []) {
     const w = weeks.find(x => x.key === weekKey(s.created_at))
@@ -54,7 +61,7 @@ export default async function AdminAnalyticsPage() {
     const cid = p.content?.creator_id
     if (!cid) continue
     const v = salesByCreator.get(cid) ?? { amount: 0, orders: 0 }
-    v.amount += (p.amount ?? 0) + (p.tip_amount ?? 0)
+    v.amount += (p.amount ?? 0)
     v.orders++
     salesByCreator.set(cid, v)
   }
@@ -66,9 +73,10 @@ export default async function AdminAnalyticsPage() {
 
   // ファン別購入額
   const supportByUser = new Map<string, number>()
-  const { data: allPurchases } = await supabase.from('purchases').select('user_id, amount, tip_amount').eq('status', 'completed')
-  for (const p of allPurchases ?? []) {
-    supportByUser.set(p.user_id, (supportByUser.get(p.user_id) ?? 0) + (p.amount ?? 0) + (p.tip_amount ?? 0))
+  const allPurchases = await fetchAllRows((from, to) => supabase
+    .from('purchases').select('user_id, amount, tip_amount').eq('status', 'completed').range(from, to))
+  for (const p of allPurchases) {
+    supportByUser.set(p.user_id, (supportByUser.get(p.user_id) ?? 0) + (p.amount ?? 0))
   }
   const fanRanking = (topFans ?? []).map(u => ({ ...u, total: supportByUser.get(u.id) ?? 0 })).sort((a, b) => b.total - a.total).slice(0, 10)
 
@@ -86,21 +94,21 @@ export default async function AdminAnalyticsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 26 }}>
         <div className="mm-card" style={{ padding: 18 }}>
           <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 700 }}>90日売上</p>
-          <p style={{ fontSize: 22, fontWeight: 700, color: '#059669' }}>¥{total90Sales.toLocaleString()}</p>
-          <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>30日: ¥{total30Sales.toLocaleString()}</p>
+          <p className="font-serif-display" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', color: '#059669' }}>¥{total90Sales.toLocaleString()}</p>
+          <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 6 }}>30日: ¥{total30Sales.toLocaleString()}</p>
         </div>
         <div className="mm-card" style={{ padding: 18 }}>
           <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 700 }}>90日新規登録</p>
-          <p style={{ fontSize: 22, fontWeight: 700, color: 'var(--mm-primary)' }}>{total90Signups}</p>
-          <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>30日: {total30Signups}</p>
+          <p className="font-serif-display" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', color: 'var(--mm-primary)' }}>{total90Signups}</p>
+          <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 6 }}>30日: {total30Signups}</p>
         </div>
         <div className="mm-card" style={{ padding: 18 }}>
           <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 700 }}>新規コンテンツ</p>
-          <p style={{ fontSize: 22, fontWeight: 700, color: '#7c3aed' }}>{contents90?.length ?? 0}</p>
+          <p className="font-serif-display" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', color: '#7c3aed' }}>{contents90?.length ?? 0}</p>
         </div>
         <div className="mm-card" style={{ padding: 18 }}>
           <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 700 }}>稼働中クリエイター</p>
-          <p style={{ fontSize: 22, fontWeight: 700, color: '#f59e0b' }}>{salesByCreator.size}</p>
+          <p className="font-serif-display" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', color: '#f59e0b' }}>{salesByCreator.size}</p>
           <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>過去90日に売上あり</p>
         </div>
       </div>
@@ -130,9 +138,7 @@ export default async function AdminAnalyticsPage() {
             {creatorRanking.map((c, i) => (
               <Link key={c.id} href={`/creator/${c.username}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < creatorRanking.length - 1 ? '1px solid var(--mm-border)' : 'none', textDecoration: 'none' }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: i < 3 ? '#f59e0b' : 'var(--mm-text-muted)', width: 24, textAlign: 'center' }}>{i + 1}</span>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden' }}>
-                  {c.avatar_url ? <img src={c.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                </div>
+                <Avatar src={c.avatar_url} name={c.display_name} size={32} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 12, fontWeight: 700 }}>{c.display_name}</p>
                   <p style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>{c.orders}件購入</p>
@@ -150,9 +156,7 @@ export default async function AdminAnalyticsPage() {
             {fanRanking.map((u, i) => (
               <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < fanRanking.length - 1 ? '1px solid var(--mm-border)' : 'none' }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: i < 3 ? '#a855f7' : 'var(--mm-text-muted)', width: 24, textAlign: 'center' }}>{i + 1}</span>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden' }}>
-                  {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                </div>
+                <Avatar src={u.avatar_url} name={u.display_name} size={32} />
                 <p style={{ fontSize: 12, fontWeight: 700, flex: 1 }}>{u.display_name}</p>
                 <p style={{ fontSize: 13, fontWeight: 700, color: '#a855f7' }}>¥{u.total.toLocaleString()}</p>
               </div>

@@ -5,6 +5,8 @@ import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
+import { FEATURES } from '@/lib/config'
+import { safeNext } from '@/lib/safe-next'
 import { Eye, EyeOff } from 'lucide-react'
 
 function LoginForm() {
@@ -13,9 +15,8 @@ function LoginForm() {
   const initialError = search.get('error') ?? ''
   const notice = search.get('notice') ?? ''
   // ?next= で元のページ（商品詳細など）へ戻す。open redirect 防止のため
-  // 「/ 始まりかつ // 始まりでない」相対パスのみ許可する
-  const rawNext = search.get('next')
-  const validNext = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : null
+  // lib/safe-next の共通チェック（callback/route.ts と同一ロジック）を使う
+  const validNext = safeNext(search.get('next'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -117,13 +118,17 @@ function LoginForm() {
             </div>
           </form>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 18px' }}>
-            <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
-            <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 600 }}>or</span>
-            <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
-          </div>
+          {FEATURES.googleAuth && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 18px' }}>
+                <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
+                <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 600 }}>or</span>
+                <span style={{ flex: 1, height: 1, background: 'var(--mm-border)' }} />
+              </div>
 
-          <GoogleLoginButton next={validNext ?? undefined} />
+              <GoogleLoginButton next={validNext ?? undefined} />
+            </>
+          )}
 
           <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13, color: 'var(--mm-text-sub)' }}>
             アカウントがない方は{' '}

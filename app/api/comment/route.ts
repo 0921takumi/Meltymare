@@ -51,7 +51,7 @@ export async function POST(req: Request) {
   // 対象コンテンツの存在 + 公開 + approved を確認
   const { data: content } = await supabase
     .from('contents')
-    .select('id, is_published, review_status')
+    .select('id, is_published, review_status, creator_id, title')
     .eq('id', contentId)
     .maybeSingle()
   if (!content || !content.is_published || content.review_status !== 'approved') {
@@ -60,15 +60,17 @@ export async function POST(req: Request) {
 
   // 親コメントを指定する場合、同じ content_id 配下のコメントであることを検証
   // （別コンテンツのコメントを親に指定して妙なツリーを作るのを防ぐ）
+  let parentAuthorId: string | null = null
   if (parentId) {
     const { data: parent } = await supabase
       .from('content_comments')
-      .select('id, content_id')
+      .select('id, content_id, user_id')
       .eq('id', parentId)
       .maybeSingle()
     if (!parent || parent.content_id !== contentId) {
       return NextResponse.json({ error: 'invalid_parent' }, { status: 400 })
     }
+    parentAuthorId = parent.user_id
   }
 
   const { data: inserted, error } = await supabase
@@ -77,6 +79,32 @@ export async function POST(req: Request) {
     .select('id, body, created_at')
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // 監査で発覚: 新着コメント・返信がどちらも通知されず、クリエイター・親コメント投稿者は
+  // 自分からコンテンツ詳細ページを開かない限りコメントが付いたことに気づけなかった。
+  const { data: commenter } = await supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
+  const commenterName = commenter?.display_name ?? 'ファン'
+  if (content.creator_id && content.creator_id !== user.id) {
+    const { error: creatorNotifErr } = await supabase.from('notifications').insert({
+      user_id: content.creator_id,
+      type: 'comment',
+      title: '新しいコメントが届きました',
+      body: `${commenterName} さんが「${content.title}」にコメントしました`,
+      link: `/contents/${contentId}`,
+    })
+    if (creatorNotifErr) console.error('[comment] creator notification insert failed:', creatorNotifErr.message)
+  }
+  if (parentAuthorId && parentAuthorId !== user.id && parentAuthorId !== content.creator_id) {
+    const { error: replyNotifErr } = await supabase.from('notifications').insert({
+      user_id: parentAuthorId,
+      type: 'comment',
+      title: 'コメントに返信が届きました',
+      body: `${commenterName} さんがあなたのコメントに返信しました`,
+      link: `/contents/${contentId}`,
+    })
+    if (replyNotifErr) console.error('[comment] reply notification insert failed:', replyNotifErr.message)
+  }
+
   return NextResponse.json({ ok: true, comment: inserted })
 }
 

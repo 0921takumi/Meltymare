@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { escapeHtml, sanitizeText } from '@/lib/sanitize'
+import { cleanEnv } from '@/lib/config'
 
 const supabase = createAdminClient()
 
@@ -59,13 +60,13 @@ export async function POST(req: NextRequest) {
     }
 
     // メール通知（RESEND_API_KEYがあれば）
-    const resendKey = process.env.RESEND_API_KEY
+    const resendKey = cleanEnv(process.env.RESEND_API_KEY)
     const adminEmail = process.env.ADMIN_NOTIFY_EMAIL ?? 'info@my-focus.jp'
     const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'My Focus <noreply@my-focus.jp>'
 
     if (resendKey) {
       // 管理者への通知
-      await fetch('https://api.resend.com/emails', {
+      const adminRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,9 +89,10 @@ export async function POST(req: NextRequest) {
           `,
         }),
       }).catch((e) => console.error('Admin notify email error:', e))
+      if (adminRes && !adminRes.ok) console.error('[contact] Resend error', adminRes.status, await adminRes.text().catch(() => ''))
 
       // ユーザーへの受付確認
-      await fetch('https://api.resend.com/emails', {
+      const userRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -115,6 +117,9 @@ export async function POST(req: NextRequest) {
           `,
         }),
       }).catch((e) => console.error('User confirmation email error:', e))
+      if (userRes && !userRes.ok) console.error('[contact] Resend error', userRes.status, await userRes.text().catch(() => ''))
+    } else {
+      console.error('[contact] RESEND_API_KEY not set; notification/confirmation emails skipped for inquiry from:', email)
     }
 
     return NextResponse.json({ ok: true })

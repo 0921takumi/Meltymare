@@ -62,36 +62,50 @@ export async function POST(req: NextRequest) {
       // 動画は当面、人力レビュー必須
       result = await moderateVideo()
     } else {
-      // 画像系: サムネイル URL を判定対象に
-      // file_url は Supabase Storage の path（private bucket）なので、署名URLを発行
-      let urlToCheck = content.thumbnail_url
-      if (!urlToCheck && content.file_url) {
+      // 監査で発覚: 従来はサムネイルがあればサムネイルしか審査しておらず、実際に
+      // 販売される本体ファイル(file_url)が一度も AI 審査を通らずに承認され得た
+      // （サムネだけ無害にして本体に違反コンテンツを仕込む抜け道）。
+      // 本体は必ず審査し、サムネイルがあれば併せて審査して、より厳しい判定を採用する。
+      let fileUrlToCheck: string | undefined
+      if (content.file_url) {
         const { data: signed } = await supabase.storage
           .from('contents')
           .createSignedUrl(content.file_url, 120)  // 2分有効
-        urlToCheck = signed?.signedUrl
+        fileUrlToCheck = signed?.signedUrl
       }
-      if (!urlToCheck) {
+      if (!fileUrlToCheck) {
         return NextResponse.json({ error: 'No image URL to moderate' }, { status: 400 })
       }
-      result = await moderateImage(urlToCheck)
+      const fileResult = await moderateImage(fileUrlToCheck)
+
+      if (content.thumbnail_url) {
+        const thumbResult = await moderateImage(content.thumbnail_url)
+        const severity: Record<string, number> = { rejected: 2, pending: 1, approved: 0, skip: 0 }
+        result = severity[thumbResult.verdict] > severity[fileResult.verdict] ? thumbResult : fileResult
+      } else {
+        result = fileResult
+      }
     }
 
     // 結果を DB に反映
     const newStatus = result.verdict === 'skip' ? 'pending' : result.verdict
-    const updatePayload: { review_status: string; is_published?: boolean } = {
-      review_status: newStatus,
-    }
-    if (newStatus === 'rejected') {
-      updatePayload.is_published = false
-    }
-    const { error: uErr } = await supabase
-      .from('contents')
-      .update(updatePayload)
-      .eq('id', content_id)
+    // v28: review_status/is_published はクリエイター本人の直接updateでは書き換えられない
+    // よう BEFORE UPDATE トリガーで保護されている。正規の確定は submit_moderation_result()
+    // 経由のみ（内部で auth.uid() による所有権 + review_status='pending' の楽観ロックを
+    // 検証する。並列モデレーション(同一コンテンツへの同時リクエスト)で後勝ち上書きが
+    // 起きるのを防ぐのも同じ仕組み）。
+    const { data: updated, error: uErr } = await supabase.rpc('submit_moderation_result', {
+      p_content_id: content_id,
+      p_new_status: newStatus,
+      p_rejection_reason: newStatus === 'rejected' ? (result.reason ?? 'AI審査により却下されました') : null,
+    })
     if (uErr) {
-      console.error('[moderate] update error:', uErr)
+      console.error('[moderate] rpc error:', uErr)
       return NextResponse.json({ error: 'Failed to update content' }, { status: 500 })
+    }
+    if (updated !== true) {
+      // 並列リクエストが先に確定済み（既に pending ではない）
+      return NextResponse.json({ error: 'Already moderated' }, { status: 409 })
     }
 
     // 監査ログ

@@ -3,6 +3,7 @@ import Footer from '@/components/layout/Footer'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import {
   LifeBuoy, ChevronRight, MessageCircle,
   UserPlus, ShoppingBag, Download, Heart, Gavel, Radio,
@@ -32,7 +33,7 @@ export default async function HelpHomePage() {
   if (user) {
     const { data } = await supabase
       .from('profiles')
-      .select('display_name, username, role, avatar_url, identity_status')
+      .select(PROFILE_PUBLIC_SELECT)
       .eq('id', user.id)
       .single()
     profile = data

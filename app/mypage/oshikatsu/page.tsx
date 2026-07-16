@@ -85,7 +85,7 @@ export default async function OshikatsuPage() {
     const k = monthKey(p.created_at)
     const m = months.find(x => x.key === k)
     if (m) {
-      m.amount += (p.amount ?? 0) + (p.tip_amount ?? 0)
+      m.amount += (p.amount ?? 0)
       m.count += 1
     }
   }
@@ -116,14 +116,14 @@ export default async function OshikatsuPage() {
     if (!c) continue
     const existing = oshiMap.get(c.id)
     if (existing) {
-      existing.spent += (p.amount ?? 0) + (p.tip_amount ?? 0)
+      existing.spent += (p.amount ?? 0)
       existing.items += 1
     } else {
       oshiMap.set(c.id, {
         creator: c as NonNullable<FollowRow['creator']>,
         followedAt: null,
         days: 0,
-        spent: (p.amount ?? 0) + (p.tip_amount ?? 0),
+        spent: (p.amount ?? 0),
         items: 1,
       })
     }

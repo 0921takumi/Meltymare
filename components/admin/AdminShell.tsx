@@ -16,18 +16,73 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Menu, X, ChevronRight } from 'lucide-react'
+import {
+  Menu, X, ChevronRight,
+  LayoutDashboard, Users, ShoppingBag, TrendingUp, Wallet, Package,
+  MessageSquare, Image as ImageIcon, ShieldCheck, Gem,
+  Flag, BarChart3, FileText,
+} from 'lucide-react'
 
 export interface NavItem { href: string; icon: React.ComponentType<{ size?: number }>; label: string; badge?: number }
 export interface NavSection { title: string; items: NavItem[] }
 
+/**
+ * 管理画面ナビ定義。
+ *
+ * ⚠️ ここ（Client Component 側）に置くこと。lucide のアイコンは「関数（コンポーネント）」
+ *    なので、Server Component から props で渡すと Next.js 16 / React 19 では
+ *    「Functions cannot be passed directly to Client Components」で throw する。
+ *    （旧 Next では通っていたが 16 でハードエラー化。AGENTS.md 参照）
+ */
+const SECTIONS: NavSection[] = [
+  {
+    title: 'Overview',
+    items: [
+      { href: '/admin',           icon: LayoutDashboard, label: 'ダッシュボード' },
+      { href: '/admin/analytics', icon: BarChart3,       label: '分析・KPI' },
+      { href: '/admin/audit',     icon: FileText,        label: '操作ログ' },
+    ],
+  },
+  {
+    title: 'Users',
+    items: [
+      { href: '/admin/users',         icon: Users,        label: 'ユーザー管理' },
+      { href: '/admin/creators',      icon: Package,      label: 'クリエイター' },
+      { href: '/admin/verifications', icon: ShieldCheck,  label: '本人確認審査' },
+    ],
+  },
+  {
+    title: 'Content',
+    items: [
+      { href: '/admin/contents',  icon: Package,    label: '商品管理・審査' },
+      { href: '/admin/comments',  icon: Flag,       label: 'コメント・通報' },
+    ],
+  },
+  {
+    title: 'Business',
+    items: [
+      { href: '/admin/orders',        icon: ShoppingBag, label: '注文管理' },
+      { href: '/admin/sales',         icon: TrendingUp,  label: '売上管理' },
+      { href: '/admin/payouts',       icon: Wallet,      label: '振込管理' },
+      { href: '/admin/subscriptions', icon: Gem,         label: 'サブスク管理' },
+    ],
+  },
+  {
+    title: 'Operation',
+    items: [
+      { href: '/admin/banners',   icon: ImageIcon,     label: '特集バナー' },
+      { href: '/admin/invites',   icon: ShieldCheck,   label: '招待コード' },
+      { href: '/admin/inquiries', icon: MessageSquare, label: '問い合わせ' },
+    ],
+  },
+]
+
 interface AdminShellProps {
-  sections: NavSection[]
   profile: { display_name?: string | null; avatar_url?: string | null } | null
   children: React.ReactNode
 }
 
-export default function AdminShell({ sections, profile, children }: AdminShellProps) {
+export default function AdminShell({ profile, children }: AdminShellProps) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -111,7 +166,7 @@ export default function AdminShell({ sections, profile, children }: AdminShellPr
 
         {/* ナビ本体 */}
         <nav style={{ padding: '12px 0', flex: 1, overflowY: 'auto' }}>
-          {sections.map(section => (
+          {SECTIONS.map(section => (
             <div key={section.title} style={{ marginBottom: 6 }}>
               <p style={{
                 padding: '12px 22px 6px',
@@ -125,17 +180,7 @@ export default function AdminShell({ sections, profile, children }: AdminShellPr
                     key={href}
                     href={href}
                     aria-current={active ? 'page' : undefined}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 11,
-                      padding: '9px 22px',
-                      fontSize: 13,
-                      color: active ? 'white' : 'rgba(255,255,255,0.72)',
-                      textDecoration: 'none',
-                      borderLeft: `2px solid ${active ? 'var(--mm-primary)' : 'transparent'}`,
-                      background: active ? 'rgba(211, 107, 36, 0.12)' : 'transparent',
-                      fontWeight: active ? 600 : 500,
-                      transition: 'color 0.15s, background 0.15s, border-color 0.15s',
-                    }}>
+                    className="admin-nav-link">
                     <Icon size={15} />
                     <span style={{ flex: 1 }}>{label}</span>
                     {badge !== undefined && badge > 0 && (

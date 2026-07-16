@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { Gem, Users, TrendingUp } from 'lucide-react'
+import Avatar from '@/components/ui/Avatar'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,7 +42,9 @@ export default async function AdminSubscriptionsPage() {
       .select('id, status, started_at, current_period_end, user:profiles!subscriptions_user_id_fkey(display_name, email, avatar_url), creator:profiles!subscriptions_creator_id_fkey(display_name, username), plan:subscription_plans(name, monthly_price)')
       .eq('status', 'active')
       .order('started_at', { ascending: false }).limit(30),
-    supabase.from('subscriptions').select('plan_id, status, plan:subscription_plans(monthly_price)'),
+    // MRR/churn 用に全件取得。Supabase デフォルト1000行上限での頭打ち(過少MRR)を緩和。
+    // 加入が数千規模になったら DB 側の集計(RPC)に寄せること。
+    supabase.from('subscriptions').select('plan_id, status, plan:subscription_plans(monthly_price)').limit(10000),
   ])
 
   const plans = (plansData ?? []) as unknown as PlanRow[]
@@ -73,7 +76,7 @@ export default async function AdminSubscriptionsPage() {
             <TrendingUp size={14} color="#a855f7" />
             <span style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 600 }}>MRR (月次経常収益)</span>
           </div>
-          <p style={{ fontSize: 22, fontWeight: 700, color: '#a855f7' }}>¥{mrr.toLocaleString()}</p>
+          <p className="font-serif-display" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', color: '#a855f7' }}>¥{mrr.toLocaleString()}</p>
           <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>年換算 ¥{(mrr * 12).toLocaleString()}</p>
         </div>
         <div className="mm-card" style={{ padding: 18, borderLeft: '4px solid var(--mm-primary)' }}>
@@ -81,14 +84,14 @@ export default async function AdminSubscriptionsPage() {
             <Users size={14} color="var(--mm-primary)" />
             <span style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 600 }}>アクティブ加入</span>
           </div>
-          <p style={{ fontSize: 22, fontWeight: 700, color: 'var(--mm-primary)' }}>{activeCount}件</p>
+          <p className="font-serif-display" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', color: 'var(--mm-primary)' }}>{activeCount}件</p>
           <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>解約済 {cancelledCount}件</p>
         </div>
         <div className="mm-card" style={{ padding: 18, borderLeft: '4px solid #dc2626' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 600 }}>Churn Rate</span>
           </div>
-          <p style={{ fontSize: 22, fontWeight: 700, color: '#dc2626' }}>{churnRate}%</p>
+          <p className="font-serif-display" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', color: '#dc2626' }}>{churnRate}%</p>
           <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>累計解約率</p>
         </div>
         <div className="mm-card" style={{ padding: 18, borderLeft: '4px solid #f59e0b' }}>
@@ -96,7 +99,7 @@ export default async function AdminSubscriptionsPage() {
             <Gem size={14} color="#f59e0b" />
             <span style={{ fontSize: 11, color: 'var(--mm-text-muted)', fontWeight: 600 }}>稼働中プラン</span>
           </div>
-          <p style={{ fontSize: 22, fontWeight: 700, color: '#f59e0b' }}>{plans.filter(p => p.is_active).length}</p>
+          <p className="font-serif-display" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', color: '#f59e0b' }}>{plans.filter(p => p.is_active).length}</p>
           <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 4 }}>{plans.length} 全プラン</p>
         </div>
       </div>
@@ -125,9 +128,7 @@ export default async function AdminSubscriptionsPage() {
                 <td data-label="#" className="num" style={{ fontWeight: 700, color: 'var(--mm-text-muted)' }}>{i + 1}</td>
                 <td data-label="クリエイター">
                   <Link href={`/creator/${p.creator?.username}`} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'var(--mm-ink)' }}>
-                    <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', background: 'var(--mm-primary-light)', flexShrink: 0 }}>
-                      {p.creator?.avatar_url ? <img src={p.creator.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                    </div>
+                    <Avatar src={p.creator?.avatar_url} name={p.creator?.display_name} size={26} />
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{p.creator?.display_name}</span>
                   </Link>
                 </td>
@@ -154,12 +155,10 @@ export default async function AdminSubscriptionsPage() {
       <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 12, overflow: 'hidden' }}>
         {recentSubs.map((s, i) => (
           <div key={s.id} style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: i < recentSubs.length - 1 ? '1px solid var(--mm-border)' : 'none' }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--mm-primary-light)', overflow: 'hidden', flexShrink: 0 }}>
-              {s.user?.avatar_url ? <img src={s.user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-            </div>
+            <Avatar src={s.user?.avatar_url} name={s.user?.display_name} size={32} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--mm-ink)' }}>{s.user?.display_name} <span style={{ color: 'var(--mm-text-muted)' }}>→</span> {s.creator?.display_name}</p>
-              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 2 }}>{s.plan?.name} · ¥{s.plan?.monthly_price.toLocaleString()}/月 · {new Date(s.started_at).toLocaleDateString('ja-JP')}</p>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 2 }}>{s.plan?.name} · ¥{(s.plan?.monthly_price ?? 0).toLocaleString()}/月 · {new Date(s.started_at).toLocaleDateString('ja-JP')}</p>
             </div>
           </div>
         ))}

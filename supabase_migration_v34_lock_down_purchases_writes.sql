@@ -1,0 +1,47 @@
+-- ============================================================
+-- v34: 🔴🔴🔴 最重要修正 — purchases テーブルへの直接書き込みを完全に封鎖
+--
+-- 発見した脆弱性（今回の一連の調査の中で最も深刻）:
+--   app/api/purchase/route.ts の冒頭コメントには
+--   「purchases の書き込み（insert/update）は RLS 上 Service Role に限定されているため、
+--    サーバー側で認可済みの purchase レコード操作には admin クライアントを使う」
+--   と明記されており、実際にアプリのコードは purchases への insert/upsert/update を
+--   全て admin(service_role) クライアント経由でしか行っていない（grep で確認済み、
+--   app/ 配下に authenticated クライアントからの書き込みは一切無い）。
+--
+--   しかし実際に生きていた purchases_insert ポリシー（lib/supabase/schema.sql、
+--   一度も上書きされず現在に至る）は
+--     with check (user_id = auth.uid())
+--   という「本人であること」しかチェックしておらず、status・amount には
+--   一切の制約が無かった。purchases_update ポリシーはそもそも存在しなかった
+--   （通常はdeny-by-defaultで安全なはずだが、insert側が致命的に緩かった）。
+--
+--   実地攻撃で確認した実害:
+--     role='user' の一般ユーザーが supabase.from('purchases').insert({
+--       user_id: 自分, content_id: 任意, amount: 0, status: 'completed', ...
+--     }) をブラウザから直接呼ぶだけで、Stripe決済・complete_free_purchase・
+--     webhook・審査、何も経由せずに任意の有料コンテンツ(確認時¥50,000)を
+--     完全にタダで「購入完了」にできてしまった。
+--
+--   これは今回一連で修正した v30(complete_free_purchase の実行権限)・v32 を
+--   実質的に無意味にしかねないレベルの根本的な抜け道だった（RPCを塞いでも
+--   テーブルに直接書き込めれば同じ結果になるため）。
+--
+-- 方針:
+--   purchases への insert を許可する authenticated 向けポリシーを完全に削除する。
+--   update ポリシーはそもそも存在しないため対応不要（deny-by-defaultで安全）。
+--   service_role は RLS を bypass するため、admin クライアント経由の正規フロー
+--   （Stripe Checkout作成前のpending行作成、webhook確定、complete_free_purchase等）は
+--   一切影響を受けない。select（自分の購入履歴閲覧）ポリシーはそのまま維持する。
+--
+-- Supabase SQL Editor で実行してください。冪等。
+-- ============================================================
+
+drop policy if exists "purchases_insert" on public.purchases;
+
+-- 確認(任意):
+--   role='user' の一般アカウントの実セッションで
+--   supabase.from('purchases').insert({...}) を試みると
+--   "new row violates row-level security policy" になること
+--   （app/api/purchase/route.ts 経由の正規の購入フローは admin クライアントを
+--    使うため今まで通り動作する）。

@@ -1,10 +1,12 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function FeeRateEditor({ creatorId, currentRate }: { creatorId: string; currentRate: number }) {
   const [rate, setRate] = useState(currentRate)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const router = useRouter()
 
   const save = async () => {
     setSaving(true)
@@ -17,6 +19,7 @@ export default function FeeRateEditor({ creatorId, currentRate }: { creatorId: s
     setSaving(false)
     if (res.ok) {
       setEditing(false)
+      router.refresh()  // 親の手数料額/振込予定額を新レートで再計算させる
     } else {
       setRate(currentRate)
       alert('手数料率の更新に失敗しました')

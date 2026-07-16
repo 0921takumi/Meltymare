@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { isAdult } from '@/lib/age'
 import Header from '@/components/layout/Header'
 import { ShieldCheck, Upload, AlertCircle, CheckCircle2, Clock, XCircle, FileText, User } from 'lucide-react'
 
@@ -52,16 +53,9 @@ export default function CreatorVerificationPage() {
     return null
   }
 
-  const ageOk = (b: string) => {
-    if (!b) return false
-    const d = new Date(b)
-    if (Number.isNaN(d.getTime())) return false
-    const now = new Date()
-    let age = now.getFullYear() - d.getFullYear()
-    const m = now.getMonth() - d.getMonth()
-    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--
-    return age >= 18
-  }
+  // 表示(admin)と登録ゲートで年齢ロジックを分岐させないため lib/age の唯一の判定経路を使う。
+  // (旧実装は new Date(UTC) × ローカルTZ getter の混在で JST境界に1日ズレ → @legal×@security GO で是正)
+  const ageOk = (b: string) => isAdult(b)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

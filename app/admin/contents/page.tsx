@@ -88,9 +88,9 @@ export default async function AdminContentsPage({
       </div>
 
       {!contents || contents.length === 0 ? (
-        <div className="mm-card" style={{ padding: 48, textAlign: 'center', color: 'var(--mm-text-muted)' }}>
-          <Package size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
-          <p style={{ fontSize: 14 }}>該当するコンテンツはありません</p>
+        <div className="admin-empty">
+          <Package size={40} />
+          <p>該当するコンテンツはありません</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -140,7 +140,9 @@ export default async function AdminContentsPage({
                   </div>
                   <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 3, wordBreak: 'break-word' }}>{c.title}</p>
                   <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 6 }}>
-                    by <Link href={`/creator/${c.creator?.username}`} style={{ color: 'var(--mm-primary)' }}>{c.creator?.display_name}</Link>
+                    by {c.creator?.username
+                      ? <Link href={`/creator/${c.creator.username}`} style={{ color: 'var(--mm-primary)' }}>{c.creator.display_name ?? c.creator.username}</Link>
+                      : <span style={{ color: 'var(--mm-text-muted)' }}>{c.creator?.display_name ?? '(不明)'}</span>}
                     <span style={{ margin: '0 6px' }}>·</span>
                     ¥{c.price?.toLocaleString()}
                     <span style={{ margin: '0 6px' }}>·</span>

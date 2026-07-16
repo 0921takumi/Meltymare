@@ -74,6 +74,8 @@ export default function ReviewSection({ contentId, reviews, canReview, existingR
         }
         return [data, ...prev]
       })
+    } catch {
+      setError('レビューの送信に失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
     } finally {
       setSubmitting(false)
     }
