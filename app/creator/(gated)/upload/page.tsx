@@ -102,7 +102,11 @@ function UploadForm() {
         return j as { path: string; token: string; publicUrl?: string }
       }
 
-      if (contentFile) {
+      // 依頼で発覚: 本体ファイルとサムネイルは互いに無関係な独立したアップロードなのに
+      // 直列(await→await)で行っており、特に動画本体+サムネイルの両方を選んだ場合に
+      // 保存が体感で遅くなっていた。互いを待たずに並行してアップロードする。
+      const uploadContentFile = async (): Promise<string | null> => {
+        if (!contentFile) return null
         const v = validateUpload(contentFile, contentType)
         if (!v.ok) throw new Error(v.error)
         // 画像のみ EXIF 除去（動画はそのまま）
@@ -112,10 +116,11 @@ function UploadForm() {
         const { error: upErr } = await supabase.storage.from('contents')
           .uploadToSignedUrl(signed.path, signed.token, safeFile, { contentType: safeFile.type })
         if (upErr) throw upErr
-        fileUrl = signed.path
+        return signed.path
       }
 
-      if (thumbnailFile) {
+      const uploadThumbnailFile = async (): Promise<string | null> => {
+        if (!thumbnailFile) return null
         const v = validateUpload(thumbnailFile, 'image')
         if (!v.ok) throw new Error(v.error)
         // サムネイルも EXIF 除去
@@ -125,8 +130,12 @@ function UploadForm() {
         const { error: upErr } = await supabase.storage.from('thumbnails')
           .uploadToSignedUrl(signed.path, signed.token, safeThumb, { contentType: safeThumb.type })
         if (upErr) throw upErr
-        thumbnailUrl = signed.publicUrl ?? supabase.storage.from('thumbnails').getPublicUrl(signed.path).data.publicUrl
+        return signed.publicUrl ?? supabase.storage.from('thumbnails').getPublicUrl(signed.path).data.publicUrl
       }
+
+      const [uploadedFileUrl, uploadedThumbnailUrl] = await Promise.all([uploadContentFile(), uploadThumbnailFile()])
+      if (uploadedFileUrl) fileUrl = uploadedFileUrl
+      if (uploadedThumbnailUrl) thumbnailUrl = uploadedThumbnailUrl
 
       const payload: any = {
         title,
@@ -162,15 +171,15 @@ function UploadForm() {
         if (needsReReview) {
           const { data: resubmitted } = await supabase.rpc('resubmit_content_for_review', { p_content_id: editId })
           if (resubmitted === true) {
-            try {
-              await fetch('/api/moderate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content_id: editId }),
-              })
-            } catch (modErr) {
-              console.warn('moderation re-trigger failed:', modErr)
-            }
+            // 依頼で発覚: 保存が遅いという報告の主因がここだった。AI審査(AWS Rekognitionへの
+            // 実ファイル取得+検出)は数秒かかるが、コメントにある通り「失敗しても投稿自体は
+            // 成功する」設計なのに await で保存完了(画面遷移)をブロックしていた。
+            // fire-and-forgetにして、審査はバックグラウンドで進めながら即座に遷移する。
+            fetch('/api/moderate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content_id: editId }),
+            }).catch(modErr => console.warn('moderation re-trigger failed:', modErr))
           }
         }
       } else {
@@ -197,17 +206,15 @@ function UploadForm() {
           .single()
         if (insErr) throw insErr
 
-        // AI 審査をトリガー（失敗しても投稿自体は成功。後で管理画面から再実行可）
+        // AI 審査をトリガー（失敗しても投稿自体は成功。後で管理画面から再実行可）。
+        // 依頼で発覚: ここも await していたため、数秒かかるAI審査の完了を待ってから
+        // でないと画面遷移せず「保存が遅い」の主因になっていた。fire-and-forgetにする。
         if (inserted?.id) {
-          try {
-            await fetch('/api/moderate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ content_id: inserted.id }),
-            })
-          } catch (modErr) {
-            console.warn('moderation trigger failed:', modErr)
-          }
+          fetch('/api/moderate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content_id: inserted.id }),
+          }).catch(modErr => console.warn('moderation trigger failed:', modErr))
         }
       }
 

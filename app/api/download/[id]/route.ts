@@ -12,18 +12,21 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const rl = await rateLimit({ key: `download:${user.id}`, limit: 30, windowSec: 60 })
+  // 依頼で発覚: ダウンロードが遅いという報告の一因。レート制限チェックと購入レコード
+  // 検証は互いに無関係なのに直列(await→await)で行っており、リダイレクト発行前に
+  // 無駄な待ち時間が積み重なっていた。並行して実行する。
+  const [rl, { data: purchase, error: purchaseError }] = await Promise.all([
+    rateLimit({ key: `download:${user.id}`, limit: 30, windowSec: 60 }),
+    supabase
+      .from('purchases')
+      .select('id, user_id, delivery_status, delivered_file_url')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .eq('status', 'completed')
+      .eq('delivery_status', 'delivered')
+      .maybeSingle(),
+  ])
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
-
-  // 購入レコードを検証（自分の購入かつ納品済み）
-  const { data: purchase, error: purchaseError } = await supabase
-    .from('purchases')
-    .select('id, user_id, delivery_status, delivered_file_url')
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .eq('status', 'completed')
-    .eq('delivery_status', 'delivered')
-    .maybeSingle()
 
   // DB 障害を「購入なし(404)」と誤魔化さない。障害は 503 で表面化させ、運用が
   // 「お金を払ったのにDLできない」を障害として検知できるようにする（サイレント劣化防止）。

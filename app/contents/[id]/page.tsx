@@ -40,19 +40,18 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
-  let profile = null
-  if (user) {
-    const { data } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
-    profile = data
-  }
 
   const CONTENT_SELECT = '*, creator:profiles(id, display_name, username, avatar_url, bio, twitter_url, instagram_url, tiktok_url)'
-  let { data: content } = await supabase
-    .from('contents')
-    .select(CONTENT_SELECT)
-    .eq('id', id)
-    .eq('is_published', true)
-    .maybeSingle()
+  // 依頼で発覚(表示が遅い): 自分のプロフィール取得と本体コンテンツ取得は互いに無関係
+  // なのに直列で行っていた。並行して取得する。
+  const [profileResult, contentResult] = await Promise.all([
+    user
+      ? supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
+      : Promise.resolve({ data: null }),
+    supabase.from('contents').select(CONTENT_SELECT).eq('id', id).eq('is_published', true).maybeSingle(),
+  ])
+  const profile = profileResult.data
+  let content = contentResult.data
 
   if (!content) {
     // 監査で発覚: is_published=true固定のため、管理者が審査前(pending/rejected)の
@@ -73,35 +72,48 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   // 他人の行のPII列のため service_role(admin) で読む。
   const isOwner = !!user && user.id === (content as { creator_id: string }).creator_id
   const isAdminViewer = profile?.role === 'admin'
-  if (!isOwner && !isAdminViewer) {
-    const admin = createAdminClient()
-    const { data: creatorStatus } = await admin
-      .from('profiles')
-      .select('is_suspended, deleted_at')
-      .eq('id', (content as { creator_id: string }).creator_id)
-      .maybeSingle()
-    if (creatorStatus?.is_suspended || creatorStatus?.deleted_at) return notFound()
-  }
 
-  // 購入済みチェック
+  // 依頼で発覚(表示が遅い): ここから先の凍結チェック・購入済みチェック・関連コンテンツ・
+  // 購入済みIDリスト・レビュー取得は互いに無関係なのに直列(await→await→…)で行っており、
+  // ページ表示のたびに待ち時間が積み重なっていた。互いを待たずに並行して取得する。
+  const [creatorStatus, purchaseRow, relatedResult, purchasedIdsResult, reviewsResult] = await Promise.all([
+    (!isOwner && !isAdminViewer)
+      ? createAdminClient().from('profiles').select('is_suspended, deleted_at').eq('id', (content as { creator_id: string }).creator_id).maybeSingle().then(r => r.data)
+      : Promise.resolve(null),
+    user
+      ? supabase.from('purchases').select('*').eq('user_id', user.id).eq('content_id', id).eq('status', 'completed').single().then(r => r.data)
+      : Promise.resolve(null),
+    supabase
+      .from('contents')
+      // v49: select('*') だと file_url（購入者しかDLしてはいけない実ファイルの保管パス）まで
+      // 取得され、ContentCard('use client')に丸ごと渡すことでRSCペイロードに乗って
+      // 未購入の訪問者のブラウザにまで送られていた（ContentCard自体はfile_urlを一切
+      // 使っていない＝完全に不要な露出）。ContentCardが実際に使う列だけを明示selectする。
+      .select(CONTENT_CARD_WITH_CREATOR_SELECT)
+      .eq('creator_id', content.creator_id)
+      .eq('is_published', true)
+      .neq('id', id)
+      .order('created_at', { ascending: false })
+      .limit(4),
+    user
+      ? supabase.from('purchases').select('content_id').eq('user_id', user.id).eq('status', 'completed')
+      : Promise.resolve({ data: null }),
+    supabase.from('reviews').select('*, user:profiles(display_name)').eq('content_id', id).order('created_at', { ascending: false }),
+  ])
+  if (creatorStatus?.is_suspended || creatorStatus?.deleted_at) return notFound()
+
+  // 購入済みチェック（本体） + 納品済みならDLリンクの署名URL発行（購入判定に依存するため直列）
   let isPurchased = false
   let deliveryStatus: 'pending' | 'delivered' | null = null
   let downloadUrl = null
   if (user) {
-    const { data: purchase } = await supabase
-      .from('purchases')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('content_id', id)
-      .eq('status', 'completed')
-      .single()
-    isPurchased = !!purchase
-    deliveryStatus = (purchase as any)?.delivery_status ?? 'pending'
+    isPurchased = !!purchaseRow
+    deliveryStatus = (purchaseRow as any)?.delivery_status ?? 'pending'
 
-    if (isPurchased && deliveryStatus === 'delivered' && (purchase as any)?.delivered_file_url) {
+    if (isPurchased && deliveryStatus === 'delivered' && (purchaseRow as any)?.delivered_file_url) {
       const { data: urlData, error: signedUrlErr } = await supabase.storage
         .from('deliveries')
-        .createSignedUrl((purchase as any).delivered_file_url, 3600)
+        .createSignedUrl((purchaseRow as any).delivered_file_url, 3600)
       if (signedUrlErr) console.error('[contents/[id]] createSignedUrl failed:', signedUrlErr.message)
       downloadUrl = urlData?.signedUrl ?? null
     }
@@ -109,35 +121,9 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
 
   const isSoldOut = content.stock_limit != null && content.sold_count >= content.stock_limit
 
-  // 同クリエイターの他コンテンツ（最大4件）
-  // v49: select('*') だと file_url（購入者しかDLしてはいけない実ファイルの保管パス）まで
-  // 取得され、ContentCard('use client')に丸ごと渡すことでRSCペイロードに乗って
-  // 未購入の訪問者のブラウザにまで送られていた（ContentCard自体はfile_urlを一切
-  // 使っていない＝完全に不要な露出）。ContentCardが実際に使う列だけを明示selectする。
-  const { data: relatedContents } = await supabase
-    .from('contents')
-    .select(CONTENT_CARD_WITH_CREATOR_SELECT)
-    .eq('creator_id', content.creator_id)
-    .eq('is_published', true)
-    .neq('id', id)
-    .order('created_at', { ascending: false })
-    .limit(4)
-
-  // 購入済みIDリスト（関連コンテンツ用）
-  let purchasedIds: string[] = []
-  if (user) {
-    const { data: allPurchases } = await supabase
-      .from('purchases').select('content_id')
-      .eq('user_id', user.id).eq('status', 'completed')
-    purchasedIds = allPurchases?.map(p => p.content_id) ?? []
-  }
-
-  // レビュー取得
-  const { data: reviews } = await supabase
-    .from('reviews')
-    .select('*, user:profiles(display_name)')
-    .eq('content_id', id)
-    .order('created_at', { ascending: false })
+  const relatedContents = relatedResult.data
+  const purchasedIds = (purchasedIdsResult.data ?? []).map((p: { content_id: string }) => p.content_id)
+  const reviews = reviewsResult.data
 
   // 依頼で削除: コンテンツ詳細ページのコメント機能（★評価つきレビュー機能とは別枠）。
 
