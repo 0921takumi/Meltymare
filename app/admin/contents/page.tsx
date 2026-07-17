@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, XCircle, Clock, Package } from 'lucide-react'
 import ModerationButtons from './ModerationButtons'
@@ -31,6 +32,21 @@ export default async function AdminContentsPage({
   }
 
   const { data: contents } = await query
+
+  // 監査で発覚(実際にサポート報告あり): プレビュー(サムネイル)を設定せずに投稿された
+  // コンテンツは、この画面がthumbnail_urlしか表示していなかったため、管理者が中身を
+  // 一切見られないまま審査（承認/却下判断）せざるを得なかった。thumbnail_urlが無い場合は
+  // 本体ファイル(file_url、非公開バケット)の署名付きURLを発行してプレビュー代わりに表示する。
+  const admin = createAdminClient()
+  const fileSignedUrls = new Map<string, string>()
+  await Promise.all(
+    (contents ?? [])
+      .filter((c: any) => !c.thumbnail_url && c.file_url)
+      .map(async (c: any) => {
+        const { data: signed } = await admin.storage.from('contents').createSignedUrl(c.file_url, 600)
+        if (signed?.signedUrl) fileSignedUrls.set(c.id, signed.signedUrl)
+      })
+  )
 
   const counts: Record<string, number> = { pending: 0, approved: 0, rejected: 0 }
   const { data: allForCount } = await supabase.from('contents').select('review_status')
@@ -107,10 +123,14 @@ export default async function AdminContentsPage({
                 display: 'flex', gap: 14, alignItems: 'flex-start',
                 border: overdue ? '2px solid #dc2626' : '1px solid var(--mm-border)',
               }}>
-                {/* Thumbnail */}
+                {/* Thumbnail（無ければ本体ファイルの署名付きURLで代替表示） */}
                 <div style={{ width: 80, height: 80, borderRadius: 8, background: 'var(--mm-bg)', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
                   {c.thumbnail_url ? (
                     <img src={c.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : fileSignedUrls.has(c.id) && c.content_type === 'video' ? (
+                    <video src={fileSignedUrls.get(c.id)} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : fileSignedUrls.has(c.id) ? (
+                    <img src={fileSignedUrls.get(c.id)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: 'var(--mm-text-muted)' }}>
                       <Package size={24} />
@@ -119,6 +139,11 @@ export default async function AdminContentsPage({
                   <span style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: 9, padding: '1px 5px', borderRadius: 4 }}>
                     {c.content_type === 'video' ? '🎥' : '📸'}
                   </span>
+                  {!c.thumbnail_url && fileSignedUrls.has(c.id) && (
+                    <span style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(217,119,6,0.9)', color: 'white', fontSize: 8, padding: '1px 4px', borderRadius: 3 }}>
+                      本体
+                    </span>
+                  )}
                 </div>
 
                 {/* Body */}
@@ -166,7 +191,7 @@ export default async function AdminContentsPage({
                     <Link href={`/contents/${c.id}`} target="_blank" style={{ fontSize: 11, color: 'var(--mm-primary)', textDecoration: 'none', fontWeight: 600 }}>
                       プレビューを開く ↗
                     </Link>
-                    <ModerationButtons contentId={c.id} currentStatus={status} isPublished={c.is_published} />
+                    <ModerationButtons contentId={c.id} currentStatus={status} isPublished={c.is_published} title={c.title} />
                   </div>
                 </div>
               </div>

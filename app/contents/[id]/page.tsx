@@ -7,7 +7,6 @@ import Footer from '@/components/layout/Footer'
 import PurchaseButton from './PurchaseButton'
 import ContentCard from '@/components/ui/ContentCard'
 import ReviewSection from './ReviewSection'
-import Comments, { type CommentItem } from '@/components/Comments'
 import { notFound } from 'next/navigation'
 import { ImageIcon, VideoIcon, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
@@ -140,41 +139,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     .eq('content_id', id)
     .order('created_at', { ascending: false })
 
-  // コメント取得 + いいね集計
-  // 監査で発覚: is_hidden=false固定フィルタのため、通報により非表示化された自分の
-  // コメントが投稿者本人からも完全に消え、非表示になった事実に気づく手段が無かった。
-  // RLS(comments_select)は元々「is_hidden=false OR 本人」を許可する設計なので、
-  // アプリ側もそれに合わせて自分の分だけは非表示でも取得する。
-  let commentsQuery = supabase
-    .from('content_comments')
-    .select('id, body, created_at, user_id, is_hidden, user:profiles!content_comments_user_id_fkey(id, display_name, avatar_url, username)')
-    .eq('content_id', id)
-  commentsQuery = user
-    ? commentsQuery.or(`is_hidden.eq.false,user_id.eq.${user.id}`)
-    : commentsQuery.eq('is_hidden', false)
-  const { data: commentsData } = await commentsQuery
-    .order('created_at', { ascending: false })
-    .limit(50)
-
-  const commentIds = (commentsData ?? []).map(c => c.id)
-  const likesByComment = new Map<string, number>()
-  const likedByMe = new Set<string>()
-  if (commentIds.length > 0) {
-    const { data: likes } = await supabase.from('comment_likes').select('comment_id, user_id').in('comment_id', commentIds)
-    for (const l of likes ?? []) {
-      likesByComment.set(l.comment_id, (likesByComment.get(l.comment_id) ?? 0) + 1)
-      if (user?.id && l.user_id === user.id) likedByMe.add(l.comment_id)
-    }
-  }
-  const comments: CommentItem[] = (commentsData ?? []).map(c => ({
-    id: c.id,
-    body: c.body,
-    created_at: c.created_at,
-    user: (c.user as unknown as CommentItem['user']) ?? null,
-    likes: likesByComment.get(c.id) ?? 0,
-    liked_by_me: likedByMe.has(c.id),
-    is_hidden: (c as unknown as { is_hidden?: boolean }).is_hidden ?? false,
-  }))
+  // 依頼で削除: コンテンツ詳細ページのコメント機能（★評価つきレビュー機能とは別枠）。
 
   let myReview: any = null
   if (user) {
@@ -344,11 +309,6 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
           existingRating={myReview?.rating}
           existingComment={myReview?.comment ?? ''}
         />
-
-        {/* コメント */}
-        <div style={{ marginTop: 40 }}>
-          <Comments contentId={id} comments={comments} currentUserId={user?.id ?? null} />
-        </div>
 
         {/* おすすめクリエイター */}
         {recCreators && recCreators.length > 0 && (

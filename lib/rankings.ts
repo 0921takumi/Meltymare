@@ -152,22 +152,6 @@ export async function topFans(creatorId: string, limit = 10) {
     .slice(0, limit)
 }
 
-export async function userTotalSupport(userId: string): Promise<{ total: number; count: number; creators: number }> {
-  const supabase = await createClient()
-  const purchases = await fetchAllRows((from, to) => supabase
-    .from('purchases')
-    .select('amount, tip_amount, content:contents!inner(creator_id)')
-    .eq('user_id', userId)
-    .eq('status', 'completed')
-    .range(from, to))
-
-  const rows = purchases as unknown as { amount: number; tip_amount?: number; content: { creator_id: string } }[]
-  const total = rows.reduce((s, r) => s + (r.amount ?? 0), 0)
-  const creatorSet = new Set<string>()
-  for (const r of rows) if (r.content?.creator_id) creatorSet.add(r.content.creator_id)
-  return { total, count: rows.length, creators: creatorSet.size }
-}
-
 export async function userRankForCreator(userId: string, creatorId: string): Promise<{ rank: number; of: number } | null> {
   const fans = await topFans(creatorId, 10000)
   const of = fans.length

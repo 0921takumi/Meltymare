@@ -3,7 +3,7 @@ import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Edit, Eye, EyeOff, ClipboardList, MessageSquare, Tag, ShieldCheck, ShieldAlert, Clock } from 'lucide-react'
+import { Plus, Edit, Eye, EyeOff, ClipboardList, MessageSquare, Tag, ShieldCheck, ShieldAlert, Clock, ExternalLink } from 'lucide-react'
 import { FINANCE } from '@/lib/config'
 import { fetchAllRows } from '@/lib/fetch-all'
 
@@ -291,9 +291,18 @@ export default async function CreatorDashboard() {
                           <Clock size={13} /> 審査中
                         </span>
                       ) : c.review_status === 'rejected' ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#dc2626', fontWeight: 700 }}>
-                          <ShieldAlert size={13} /> 却下（要修正）
-                        </span>
+                        <div>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#dc2626', fontWeight: 700 }}>
+                            <ShieldAlert size={13} /> 却下（要修正）
+                          </span>
+                          {/* 監査で発覚: 却下理由が編集画面に入らないと見えず、一覧では
+                              「却下」とだけ表示されて理由に気づけなかった。一覧にも表示する。 */}
+                          {c.rejection_reason && (
+                            <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 4, maxWidth: 220, lineHeight: 1.4 }}>
+                              理由: {c.rejection_reason}
+                            </p>
+                          )}
+                        </div>
                       ) : (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: c.is_published ? '#059669' : 'var(--mm-text-muted)', fontWeight: 600 }}>
                           {c.is_published ? <><Eye size={13} /> 公開</> : <><EyeOff size={13} /> 非公開</>}
@@ -301,9 +310,17 @@ export default async function CreatorDashboard() {
                       )}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <Link href={`/creator/upload?edit=${c.id}`} style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--mm-primary)', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-                        <Edit size={13} /> 編集
-                      </Link>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {/* 依頼で追加: 販売中コンテンツの詳細（写真・文言・残数）を確認する手段が
+                            編集フォームしか無かった。/contents/[id] は本人(isOwner)なら
+                            未公開/審査中でも全文閲覧できる設計なので、そこへのリンクを出す。 */}
+                        <Link href={`/contents/${c.id}`} target="_blank" style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--mm-text-sub)', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+                          <ExternalLink size={13} /> 詳細を見る
+                        </Link>
+                        <Link href={`/creator/upload?edit=${c.id}`} style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--mm-primary)', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+                          <Edit size={13} /> 編集
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
