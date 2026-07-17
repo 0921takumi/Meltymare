@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { PROFILE_PUBLIC_SELECT, type PublicProfile } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import { Upload, ImageIcon, VideoIcon, X, Plus } from 'lucide-react'
+import ThumbnailTextEditor from './ThumbnailTextEditor'
 
 const SUGGESTED_TAGS = ['チェキ', 'メッセージ', 'コスプレ', 'バースデー', '動画', '制服', 'プライベート', 'サイン入り', 'オフショット', 'カスタム']
 
@@ -23,6 +24,8 @@ function UploadForm() {
   const [isPublished, setIsPublished] = useState(false)
   const [contentFile, setContentFile] = useState<File | null>(null)
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
+  // テキスト合成後のサムネイル。元ファイル(thumbnailFile)は編集し直しても重ね書きされないよう別に保持する
+  const [thumbnailOverride, setThumbnailOverride] = useState<File | null>(null)
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -120,11 +123,12 @@ function UploadForm() {
       }
 
       const uploadThumbnailFile = async (): Promise<string | null> => {
-        if (!thumbnailFile) return null
-        const v = validateUpload(thumbnailFile, 'image')
+        const baseThumb = thumbnailOverride ?? thumbnailFile
+        if (!baseThumb) return null
+        const v = validateUpload(baseThumb, 'image')
         if (!v.ok) throw new Error(v.error)
         // サムネイルも EXIF 除去
-        const safeThumb = await stripExif(thumbnailFile)
+        const safeThumb = await stripExif(baseThumb)
         const ext = (safeThumb.name.split('.').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
         const signed = await getSigned('thumbnails', ext)
         const { error: upErr } = await supabase.storage.from('thumbnails')
@@ -342,8 +346,19 @@ function UploadForm() {
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px', border: '2px dashed var(--mm-border)', borderRadius: 8, cursor: 'pointer', color: 'var(--mm-text-muted)' }}>
                 <ImageIcon size={18} />
                 <span style={{ fontSize: 14 }}>{thumbnailFile ? thumbnailFile.name : 'サムネイルを選択...'}</span>
-                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setThumbnailFile(e.target.files?.[0] ?? null)} />
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                  setThumbnailFile(e.target.files?.[0] ?? null)
+                  setThumbnailOverride(null)
+                }} />
               </label>
+              {thumbnailFile && (
+                <ThumbnailTextEditor
+                  sourceFile={thumbnailFile}
+                  applied={!!thumbnailOverride}
+                  onApply={setThumbnailOverride}
+                  onClear={() => setThumbnailOverride(null)}
+                />
+              )}
             </div>
 
             {/* タグ */}
