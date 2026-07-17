@@ -44,9 +44,6 @@ export default function TopFans({ fans, highlightUserId }: { fans: TopFan[]; hig
                 </p>
                 <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>応援 {f.count}件</p>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: 14, fontWeight: 700, color: '#ec4899' }}>¥{f.total.toLocaleString()}</p>
-              </div>
             </div>
           )
         })}
