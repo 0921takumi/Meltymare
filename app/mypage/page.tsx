@@ -4,6 +4,7 @@ import Header from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Clock, Download, BookOpen } from 'lucide-react'
+import ReceiptButton from './ReceiptButton'
 
 export default async function MyPage() {
   const supabase = await createClient()
@@ -137,7 +138,7 @@ export default async function MyPage() {
                     </p>
                   </div>
                   {/* ステータス・アクション */}
-                  <div style={{ flexShrink: 0 }}>
+                  <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
                     {isDelivered ? (
                       <a href={`/api/download/${purchase.id}`}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#059669', color: 'white', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
@@ -148,6 +149,7 @@ export default async function MyPage() {
                         <Clock size={14} /> 納品待ち
                       </div>
                     )}
+                    <ReceiptButton purchaseId={purchase.id} defaultName={profile?.display_name ?? ''} />
                   </div>
                 </div>
               )

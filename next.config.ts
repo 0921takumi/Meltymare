@@ -21,6 +21,10 @@ const cspHeader = [
 ].join('; ')
 
 const nextConfig: NextConfig = {
+  // レシートPDF生成でnode_modules外の同梱フォントを読むため、tracingの取りこぼしに備えて明示。
+  outputFileTracingIncludes: {
+    '/api/purchase/[id]/receipt': ['./lib/fonts/**'],
+  },
   async headers() {
     return [
       {
