@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import FeeRateEditor from './FeeRateEditor'
+import { computePendingEarningsByCreator } from '@/lib/creator-earnings'
 
 export default async function AdminCreatorsPage() {
   // v22: 振込先の銀行口座（PII）を含むため service_role で読む。
@@ -8,17 +9,19 @@ export default async function AdminCreatorsPage() {
 
   const { data: creators } = await admin
     .from('profiles')
-    .select('*, contents(id, sold_count, price)')
+    .select('*')
     .eq('role', 'creator')
     .order('created_at', { ascending: false })
 
+  // 監査で発覚(2026-07): 従来は contents.sold_count * contents.price という現在価格ベースの
+  // 概算計算で、購入付随チップ・単発チップ・クーポン割引・手数料率スナップショットが
+  // 一切反映されていなかった（本来の購入台帳と乖離し、実データで最大23倍も乖離するケースを確認）。
+  // admin/payouts と同じ実データ集計ロジックに統一する。
+  const earnings = await computePendingEarningsByCreator(admin)
+
   const creatorsWithStats = creators?.map(c => {
-    const contents = c.contents ?? []
-    const totalSales = contents.reduce((sum: number, ct: any) => sum + ct.sold_count * ct.price, 0)
-    const totalSold = contents.reduce((sum: number, ct: any) => sum + ct.sold_count, 0)
-    const netAmount = Math.floor(totalSales * (1 - c.fee_rate / 100))
-    const feeAmount = totalSales - netAmount
-    return { ...c, totalSales, totalSold, netAmount, feeAmount, contents: undefined }
+    const e = earnings[c.id] ?? { sales: 0, fee: 0, net: 0 }
+    return { ...c, totalSales: e.sales, netAmount: e.net, feeAmount: e.fee }
   }) ?? []
 
   return (

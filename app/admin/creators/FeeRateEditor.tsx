@@ -50,12 +50,12 @@ export default function FeeRateEditor({ creatorId, currentRate }: { creatorId: s
       <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>%</span>
       <button onClick={save} disabled={saving} style={{
         background: 'var(--mm-primary)', color: 'white', border: 'none',
-        borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', fontWeight: 600,
+        borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
       }}>
         {saving ? '...' : '保存'}
       </button>
       <button onClick={() => { setRate(currentRate); setEditing(false) }} style={{
-        background: 'none', border: 'none', color: 'var(--mm-text-muted)', fontSize: 12, cursor: 'pointer',
+        background: 'none', border: 'none', color: 'var(--mm-text-muted)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
       }}>
         取消
       </button>

@@ -987,6 +987,7 @@ body {
   letter-spacing: 0.04em;
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
   transition: opacity 0.2s, transform 0.1s;
 }
 .admin-btn:hover { opacity: 0.92; }

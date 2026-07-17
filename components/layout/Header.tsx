@@ -295,8 +295,8 @@ function DropdownItem({ href, icon: Icon, label, sub, highlight, warn, onClick }
   return (
     <Link href={href} onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', textDecoration: 'none', color }}>
       <Icon size={15} />
-      <div style={{ flex: 1 }}>
-        <span style={{ fontSize: 13, fontWeight: highlight ? 700 : 500 }}>{label}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ fontSize: 13, fontWeight: highlight ? 700 : 500, whiteSpace: 'nowrap' }}>{label}</span>
         {sub && <p style={{ fontSize: 10, color: 'var(--mm-text-muted)', marginTop: 1 }}>{sub}</p>}
       </div>
       {warn && <span style={{ background: '#fee2e2', color: '#dc2626', fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10 }}>要対応</span>}
@@ -306,7 +306,7 @@ function DropdownItem({ href, icon: Icon, label, sub, highlight, warn, onClick }
 
 function MobileItem({ href, label, icon: Icon, highlight, onClick }: { href: string; label: string; icon: React.ComponentType<{ size?: number }>; highlight?: boolean; onClick?: () => void }) {
   return (
-    <Link href={href} onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', fontSize: 14, color: highlight ? 'var(--mm-primary)' : 'var(--mm-text)', textDecoration: 'none', borderBottom: '1px solid var(--mm-border)', fontWeight: highlight ? 700 : 500 }}>
+    <Link href={href} onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', fontSize: 14, color: highlight ? 'var(--mm-primary)' : 'var(--mm-text)', textDecoration: 'none', borderBottom: '1px solid var(--mm-border)', fontWeight: highlight ? 700 : 500, whiteSpace: 'nowrap' }}>
       <Icon size={16} />{label}
     </Link>
   )
@@ -328,7 +328,7 @@ function MobileBottomNav({ user, pathname }: { user: HeaderProps['user']; pathna
         return (
           <Link key={it.href + it.label} href={it.href} style={{
             flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 2, padding: '7px 4px', textDecoration: 'none',
+            gap: 2, padding: '7px 4px', textDecoration: 'none', whiteSpace: 'nowrap',
             color: active ? 'var(--mm-primary)' : 'var(--mm-text-muted)',
             fontSize: 10, fontWeight: active ? 700 : 500,
             boxShadow: active ? 'inset 0 2px 0 var(--mm-primary)' : 'none',

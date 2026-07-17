@@ -138,17 +138,17 @@ export default async function CreatorDashboard() {
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>管理ダッシュボード</h1>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Link href="/creator/orders" style={{ display: 'flex', alignItems: 'center', gap: 6, background: pendingCount > 0 ? '#d97706' : 'white', color: pendingCount > 0 ? 'white' : 'var(--mm-primary)', border: `1px solid ${pendingCount > 0 ? '#d97706' : 'var(--mm-primary)'}`, padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Link href="/creator/orders" style={{ display: 'flex', alignItems: 'center', gap: 6, background: pendingCount > 0 ? '#d97706' : 'white', color: pendingCount > 0 ? 'white' : 'var(--mm-primary)', border: `1px solid ${pendingCount > 0 ? '#d97706' : 'var(--mm-primary)'}`, padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}>
               <ClipboardList size={15} /> 注文管理{pendingCount > 0 ? ` (未納品 ${pendingCount}件)` : ''}
             </Link>
-            <Link href="/creator/polls" style={{ display: 'flex', alignItems: 'center', gap: 6, background: (openPollCount ?? 0) > 0 ? '#7c3aed' : 'white', color: (openPollCount ?? 0) > 0 ? 'white' : 'var(--mm-text-sub)', border: `1px solid ${(openPollCount ?? 0) > 0 ? '#7c3aed' : 'var(--mm-border)'}`, padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+            <Link href="/creator/polls" style={{ display: 'flex', alignItems: 'center', gap: 6, background: (openPollCount ?? 0) > 0 ? '#7c3aed' : 'white', color: (openPollCount ?? 0) > 0 ? 'white' : 'var(--mm-text-sub)', border: `1px solid ${(openPollCount ?? 0) > 0 ? '#7c3aed' : 'var(--mm-border)'}`, padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}>
               <MessageSquare size={15} /> アンケート{(openPollCount ?? 0) > 0 ? ` (${openPollCount}件)` : ''}
             </Link>
-            <Link href="/creator/coupons" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', color: 'var(--mm-text-sub)', border: '1px solid var(--mm-border)', padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+            <Link href="/creator/coupons" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', color: 'var(--mm-text-sub)', border: '1px solid var(--mm-border)', padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}>
               <Tag size={15} /> クーポン
             </Link>
-            <Link href="/creator/upload" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--mm-primary)', color: 'white', padding: '9px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+            <Link href="/creator/upload" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--mm-primary)', color: 'white', padding: '9px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}>
               <Plus size={15} /> コンテンツ追加
             </Link>
           </div>
