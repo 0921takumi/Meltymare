@@ -130,7 +130,7 @@ export default async function MyPage() {
                     <Link href={`/contents/${content.id}`} style={{ textDecoration: 'none' }}>
                       <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--mm-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{content.title}</p>
                     </Link>
-                    <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2 }}>
+                    <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {content.creator?.display_name} · ¥{content.price.toLocaleString()}
                     </p>
                     <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 2 }}>

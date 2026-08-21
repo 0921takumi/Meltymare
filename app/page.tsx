@@ -549,7 +549,7 @@ export default async function HomePage() {
             display: 'inline-flex', alignItems: 'center', gap: 10,
             background: 'var(--mm-primary)', color: 'white',
             padding: '18px 44px', borderRadius: 999, fontWeight: 600, fontSize: 15,
-            textDecoration: 'none', letterSpacing: '0.04em',
+            textDecoration: 'none', letterSpacing: '0.04em', whiteSpace: 'nowrap',
             boxShadow: '0 12px 32px -8px rgba(211, 107, 36, 0.55)',
           }}>
             無料で会員登録

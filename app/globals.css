@@ -348,8 +348,13 @@ body {
 /* 安心ポイントグリッド */
 .mm-trust-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 16px;
+}
+/* 狭い画面で2列にすると1項目あたり約100pxしか無く、「手書きメッセージ付き納品」等が
+   4行に割れて読めなくなるため、480px未満は1列にして横幅を確保する。 */
+@media (min-width: 480px) {
+  .mm-trust-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (min-width: 640px) {
   .mm-trust-grid { grid-template-columns: repeat(4, 1fr); }
@@ -423,6 +428,11 @@ body {
 .mm-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+/* 日本語は単語境界が無く、幅が足りないと「タイ/トル」のように文字の途中で改行される。
+   見出しは必ず1行に保ち、入り切らない場合は上の overflow-x で横スクロールさせる。 */
+.mm-table-wrap th {
+  white-space: nowrap;
 }
 
 /* ─── モバイルパディング調整 ─────────────────── */

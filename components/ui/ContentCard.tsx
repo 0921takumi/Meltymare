@@ -130,6 +130,7 @@ export default function ContentCard({ content, isPurchased }: ContentCardProps) 
               fontSize: 10, letterSpacing: '0.1em',
               color: isLowStock ? 'var(--mm-primary)' : 'var(--mm-text-muted)',
               fontWeight: isLowStock ? 700 : 500,
+              whiteSpace: 'nowrap',
             }}>
               {isSoldOut ? 'SOLD OUT' : `残り ${remaining} 点`}
             </span>

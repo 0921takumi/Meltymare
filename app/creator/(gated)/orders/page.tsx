@@ -109,10 +109,10 @@ function OrderRow({ purchase, isPending }: { purchase: any; isPending: boolean }
       {/* 情報 */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{content?.title ?? '(削除済み)'}</p>
-        <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2 }}>
+        <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           購入者: {buyer?.display_name ?? '不明'}
         </p>
-        <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 1 }}>
+        <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 1, whiteSpace: 'nowrap' }}>
           {new Date(purchase.created_at).toLocaleDateString('ja-JP')} · ¥{purchase.amount?.toLocaleString()}
         </p>
       </div>

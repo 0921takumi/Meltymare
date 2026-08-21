@@ -61,7 +61,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
       <p className="admin-h1-sub" style={{ marginBottom: 22 }}>すべての購入トランザクション</p>
 
       {/* タブ */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         {[
           { key: 'all', label: 'すべて' },
           { key: 'completed', label: '決済完了' },
@@ -74,7 +74,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
             background: status === t.key ? 'var(--mm-primary)' : 'white',
             color: status === t.key ? 'white' : 'var(--mm-text-sub)',
             border: status === t.key ? 'none' : '1px solid var(--mm-border)',
-            textDecoration: 'none',
+            textDecoration: 'none', whiteSpace: 'nowrap',
           }}>{t.label}</Link>
         ))}
       </div>

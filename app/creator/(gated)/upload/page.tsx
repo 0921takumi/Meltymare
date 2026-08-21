@@ -399,10 +399,10 @@ function UploadForm() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--mm-bg)', borderRadius: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--mm-bg)', borderRadius: 8, flexWrap: 'wrap' }}>
               <input type="checkbox" id="published" checked={isPublished} onChange={e => setIsPublished(e.target.checked)}
-                style={{ width: 18, height: 18, cursor: 'pointer' }} />
-              <label htmlFor="published" style={{ fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>公開する</label>
+                style={{ width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }} />
+              <label htmlFor="published" style={{ fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>公開する</label>
               <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>チェックを入れると一覧に表示されます</span>
             </div>
 
@@ -410,11 +410,11 @@ function UploadForm() {
 
             <div style={{ display: 'flex', gap: 12 }}>
               <button type="button" onClick={() => router.back()}
-                style={{ flex: 1, padding: 12, border: '1px solid var(--mm-border)', borderRadius: 8, background: 'white', fontWeight: 600, fontSize: 14, cursor: 'pointer', color: 'var(--mm-text-sub)' }}>
+                style={{ flex: 1, padding: 12, border: '1px solid var(--mm-border)', borderRadius: 8, background: 'white', fontWeight: 600, fontSize: 14, cursor: 'pointer', color: 'var(--mm-text-sub)', whiteSpace: 'nowrap' }}>
                 キャンセル
               </button>
               <button type="submit" disabled={loading}
-                style={{ flex: 2, padding: 12, background: 'var(--mm-primary)', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+                style={{ flex: 2, padding: 12, background: 'var(--mm-primary)', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, whiteSpace: 'nowrap' }}>
                 {loading ? '保存中...' : isEdit ? '更新する' : '登録する'}
               </button>
             </div>

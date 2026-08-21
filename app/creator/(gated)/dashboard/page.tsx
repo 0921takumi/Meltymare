@@ -218,7 +218,7 @@ export default async function CreatorDashboard() {
                 <thead>
                   <tr style={{ background: 'var(--mm-bg)' }}>
                     {['対象期間', '振込額', '状態', '振込日'].map((h, i) => (
-                      <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)' }}>{h}</th>
+                      <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -233,10 +233,10 @@ export default async function CreatorDashboard() {
                     const s = statusMap[p.status] ?? statusMap.pending
                     return (
                       <tr key={p.id} style={{ borderBottom: '1px solid var(--mm-border)' }}>
-                        <td style={{ padding: '10px 16px', color: 'var(--mm-text-sub)', fontSize: 12 }}>{p.period_start} 〜 {p.period_end}</td>
+                        <td style={{ padding: '10px 16px', color: 'var(--mm-text-sub)', fontSize: 12, whiteSpace: 'nowrap' }}>{p.period_start} 〜 {p.period_end}</td>
                         <td style={{ padding: '10px 16px', fontWeight: 700, color: 'var(--mm-primary)' }}>¥{p.net_amount.toLocaleString()}</td>
                         <td style={{ padding: '10px 16px' }}>
-                          <span style={{ background: s.bg, color: s.color, padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{s.label}</span>
+                          <span style={{ background: s.bg, color: s.color, padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{s.label}</span>
                         </td>
                         <td style={{ padding: '10px 16px', color: 'var(--mm-text-muted)', fontSize: 12 }}>{p.paid_at ? new Date(p.paid_at).toLocaleDateString('ja-JP') : '—'}</td>
                       </tr>
@@ -266,7 +266,7 @@ export default async function CreatorDashboard() {
               <thead>
                 <tr style={{ background: 'var(--mm-bg)' }}>
                   {['タイトル', '種別', '価格', '在庫', '販売数', '状態', ''].map((h, i) => (
-                    <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)' }}>{h}</th>
+                    <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, color: 'var(--mm-text-muted)', fontWeight: 600, borderBottom: '1px solid var(--mm-border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -275,24 +275,24 @@ export default async function CreatorDashboard() {
                   <tr key={c.id} style={{ borderBottom: '1px solid var(--mm-border)' }}>
                     <td style={{ padding: '12px 16px', fontWeight: 600, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{ background: c.content_type === 'video' ? '#ede9fe' : 'var(--mm-primary-light)', color: c.content_type === 'video' ? '#7c3aed' : 'var(--mm-primary)', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>
+                      <span style={{ background: c.content_type === 'video' ? '#ede9fe' : 'var(--mm-primary-light)', color: c.content_type === 'video' ? '#7c3aed' : 'var(--mm-primary)', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap' }}>
                         {c.content_type === 'video' ? '動画' : '画像'}
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--mm-primary)' }}>¥{c.price.toLocaleString()}</td>
-                    <td style={{ padding: '12px 16px', color: 'var(--mm-text-sub)' }}>{c.stock_limit ?? '無制限'}</td>
+                    <td style={{ padding: '12px 16px', color: 'var(--mm-text-sub)', whiteSpace: 'nowrap' }}>{c.stock_limit ?? '無制限'}</td>
                     <td style={{ padding: '12px 16px', color: 'var(--mm-text-sub)' }}>{c.sold_count}</td>
                     <td style={{ padding: '12px 16px' }}>
                       {/* 監査で発覚: is_publishedの二値だけでは「審査中」「却下」「承認済みだが
                           非公開」が全部同じ「非公開」表示になり、却下されたことにクリエイターが
                           気づく手段が無かった。review_statusを優先して表示する。 */}
                       {c.review_status === 'pending' ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#92400e', fontWeight: 600 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#92400e', fontWeight: 600, whiteSpace: 'nowrap' }}>
                           <Clock size={13} /> 審査中
                         </span>
                       ) : c.review_status === 'rejected' ? (
                         <div>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#dc2626', fontWeight: 700 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#dc2626', fontWeight: 700, whiteSpace: 'nowrap' }}>
                             <ShieldAlert size={13} /> 却下（要修正）
                           </span>
                           {/* 監査で発覚: 却下理由が編集画面に入らないと見えず、一覧では
@@ -304,7 +304,7 @@ export default async function CreatorDashboard() {
                           )}
                         </div>
                       ) : (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: c.is_published ? '#059669' : 'var(--mm-text-muted)', fontWeight: 600 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: c.is_published ? '#059669' : 'var(--mm-text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                           {c.is_published ? <><Eye size={13} /> 公開</> : <><EyeOff size={13} /> 非公開</>}
                         </span>
                       )}
@@ -314,10 +314,10 @@ export default async function CreatorDashboard() {
                         {/* 依頼で追加: 販売中コンテンツの詳細（写真・文言・残数）を確認する手段が
                             編集フォームしか無かった。/contents/[id] は本人(isOwner)なら
                             未公開/審査中でも全文閲覧できる設計なので、そこへのリンクを出す。 */}
-                        <Link href={`/contents/${c.id}`} target="_blank" style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--mm-text-sub)', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+                        <Link href={`/contents/${c.id}`} target="_blank" style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--mm-text-sub)', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
                           <ExternalLink size={13} /> 詳細を見る
                         </Link>
-                        <Link href={`/creator/upload?edit=${c.id}`} style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--mm-primary)', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+                        <Link href={`/creator/upload?edit=${c.id}`} style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--mm-primary)', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
                           <Edit size={13} /> 編集
                         </Link>
                       </div>

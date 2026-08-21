@@ -80,6 +80,7 @@ export default function InquiriesList({ messages, currentStatus }: { messages: I
         {messages.length === 0 ? (
           <div style={{ padding: 60, textAlign: 'center', color: 'var(--mm-text-muted)' }}>該当する問い合わせはありません</div>
         ) : (
+          <div className="mm-table-wrap">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#fafafa', borderBottom: '1px solid var(--mm-border)' }}>
@@ -97,17 +98,18 @@ export default function InquiriesList({ messages, currentStatus }: { messages: I
                   <tr key={m.id} onClick={() => open(m)}
                     style={{ borderBottom: '1px solid var(--mm-border)', cursor: 'pointer' }}>
                     <td style={{ padding: '10px 14px' }}>
-                      <span style={{ padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: s.color, background: s.bg }}>{s.label}</span>
+                      <span style={{ padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: s.color, background: s.bg, whiteSpace: 'nowrap' }}>{s.label}</span>
                     </td>
-                    <td style={{ padding: '10px 14px', color: 'var(--mm-text-sub)' }}>{CATEGORY_LABELS[m.category] ?? m.category}</td>
+                    <td style={{ padding: '10px 14px', color: 'var(--mm-text-sub)', whiteSpace: 'nowrap' }}>{CATEGORY_LABELS[m.category] ?? m.category}</td>
                     <td style={{ padding: '10px 14px', fontWeight: 600 }}>{m.subject}</td>
-                    <td style={{ padding: '10px 14px', color: 'var(--mm-text-sub)' }}>{m.name}<br /><span style={{ fontSize: 11 }}>{m.email}</span></td>
-                    <td style={{ padding: '10px 14px', color: 'var(--mm-text-muted)', fontSize: 12 }}>{new Date(m.created_at).toLocaleString('ja-JP')}</td>
+                    <td style={{ padding: '10px 14px', color: 'var(--mm-text-sub)', whiteSpace: 'nowrap' }}>{m.name}<br /><span style={{ fontSize: 11 }}>{m.email}</span></td>
+                    <td style={{ padding: '10px 14px', color: 'var(--mm-text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{new Date(m.created_at).toLocaleString('ja-JP')}</td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
