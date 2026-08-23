@@ -49,9 +49,9 @@ export interface RateLimitOptions {
   /** ウィンドウ秒数 */
   windowSec: number
   /**
-   * Redis 障害時に fail-closed（429で拒否）にするか。
-   * 決済系（tip/purchase/coupon 等、スパムが金銭直撃する経路）で true を指定する。
-   * 未指定（false）の閲覧・通知系は従来どおり fail-open（サービス継続優先）。
+   * 【非推奨・後方互換のみ】以前は Redis 障害時に 429 で拒否する指定だったが、
+   * Upstash 障害で全購入が止まる事故（2026-08）を受けて廃止した。
+   * 現在は障害時、この値に関わらずインメモリ制限へ退避する。
    */
   failClosed?: boolean
 }
@@ -67,6 +67,23 @@ export interface RateLimitResult {
  *
  * 既存呼び出し側（同期で `rateLimit({...})` していたコード）は `await` を追加すること。
  */
+// インメモリ判定本体。Upstash 未設定時のフォールバックに加え、Upstash 障害時の
+// 退避先としても使う（下の catch 参照）。
+function memoryLimit(fullKey: string, limit: number, windowSec: number, now: number): RateLimitResult {
+  memCleanup(now)
+  const bucket = memBuckets.get(fullKey)
+  if (!bucket || bucket.resetAt < now) {
+    const resetAt = now + windowSec * 1000
+    memBuckets.set(fullKey, { count: 1, resetAt })
+    return { ok: true, remaining: limit - 1, resetAt }
+  }
+  bucket.count += 1
+  if (bucket.count > limit) {
+    return { ok: false, remaining: 0, resetAt: bucket.resetAt }
+  }
+  return { ok: true, remaining: limit - bucket.count, resetAt: bucket.resetAt }
+}
+
 export async function rateLimit({ key, limit, windowSec, failClosed = false }: RateLimitOptions): Promise<RateLimitResult> {
   const now = Date.now()
   const fullKey = `rl:${key}`
@@ -94,27 +111,18 @@ export async function rateLimit({ key, limit, windowSec, failClosed = false }: R
       //   failClosed=true（決済系・金銭直撃）→ fail-closed(429)。スパムを通すリスクの方が
       //                                        一時的な決済不可より深刻なため拒否する。
       //   failClosed=false（閲覧・通知系）  → fail-open。Redis 障害でのサービス全停止を避ける。
-      console.error(`[rate-limit] Upstash error (failClosed=${failClosed}):`, err)
-      if (failClosed) {
-        return { ok: false, remaining: 0, resetAt: now + windowSec * 1000 }
-      }
-      return { ok: true, remaining: limit, resetAt: now + windowSec * 1000 }
+      // 2026-08 障害: ここが failClosed=true で「Upstash が死んだ瞬間に全ての購入が429」
+      // になり、売上が丸ごと止まる事故が起きた。決済導線を止める損失は、スパムを一時的に
+      // 通す損失より遥かに大きい（/api/purchase は Stripe Checkout セッションを作るだけで
+      // 課金は発生せず、二重購入は purchases の unique 制約が別途防ぐ）。
+      // 「拒否」でも「素通し」でもなく、インメモリ制限に退避して守りを残したまま継続する。
+      console.error(`[rate-limit] Upstash error → in-memory へ退避 (key=${key}):`, err)
+      return memoryLimit(fullKey, limit, windowSec, now)
     }
   }
 
-  // ─── インメモリ版（dev フォールバック） ──────────
-  memCleanup(now)
-  const bucket = memBuckets.get(fullKey)
-  if (!bucket || bucket.resetAt < now) {
-    const resetAt = now + windowSec * 1000
-    memBuckets.set(fullKey, { count: 1, resetAt })
-    return { ok: true, remaining: limit - 1, resetAt }
-  }
-  bucket.count += 1
-  if (bucket.count > limit) {
-    return { ok: false, remaining: 0, resetAt: bucket.resetAt }
-  }
-  return { ok: true, remaining: limit - bucket.count, resetAt: bucket.resetAt }
+  // ─── インメモリ版（Upstash 未設定時のフォールバック） ──────────
+  return memoryLimit(fullKey, limit, windowSec, now)
 }
 
 export function getClientIp(req: Request): string {

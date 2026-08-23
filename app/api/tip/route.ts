@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     if (suspendedRes) return suspendedRes
 
     // レート制限: 並列大量決済を防ぐ（金銭直撃のため厳しめ）
-    const rl = await rateLimit({ key: `tip:${user.id}`, limit: 5, windowSec: 60, failClosed: true })
+    const rl = await rateLimit({ key: `tip:${user.id}`, limit: 20, windowSec: 60 })
     if (!rl.ok) return NextResponse.json({ error: 'リクエストが多すぎます。少し時間をおいてください' }, { status: 429 })
 
     const { creatorId, amount, message } = await req.json()

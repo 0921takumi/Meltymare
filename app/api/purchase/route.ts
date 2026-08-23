@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     // レート制限: 1ユーザーあたり 10req/分
-    const rl = await rateLimit({ key: `purchase:${user.id}`, limit: 10, windowSec: 60, failClosed: true })
+    const rl = await rateLimit({ key: `purchase:${user.id}`, limit: 30, windowSec: 60 })
     if (!rl.ok) return NextResponse.json({ error: 'リクエストが多すぎます。しばらくしてから再試行してください' }, { status: 429 })
 
     const { contentId, couponCode, tipPercent: rawTipPercent } = await req.json()
