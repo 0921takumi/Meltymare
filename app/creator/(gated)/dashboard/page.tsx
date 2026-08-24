@@ -160,8 +160,8 @@ export default async function CreatorDashboard() {
             { label: 'コンテンツ数', value: `${contents?.length ?? 0} 件`, color: 'var(--mm-primary)', sub: null },
             { label: '総販売数', value: `${totalSold} 件`, color: '#7c3aed', sub: null },
             { label: 'コンテンツ売上', value: `¥${contentSales.toLocaleString()}`, color: '#059669', sub: '税込' },
-            { label: `手数料 (${feeRate}%)`, value: `¥${feeAmount.toLocaleString()}`, color: '#dc2626', sub: '運営取り分' },
-            { label: '振込予定額', value: `¥${netAmount.toLocaleString()}`, color: 'var(--mm-primary)', sub: '売上 - 手数料 + チップ' },
+            // 依頼により「手数料」カードは非表示（クリエイターには受け取り額のみ見せる）。
+            { label: '振込予定額', value: `¥${netAmount.toLocaleString()}`, color: 'var(--mm-primary)', sub: 'お受け取り予定の金額' },
           ].map((s, i) => (
             <div key={i} className="mm-card" style={{ padding: '16px', textAlign: 'center' }}>
               <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 6 }}>{s.label}</p>
@@ -287,9 +287,15 @@ export default async function CreatorDashboard() {
                           非公開」が全部同じ「非公開」表示になり、却下されたことにクリエイターが
                           気づく手段が無かった。review_statusを優先して表示する。 */}
                       {c.review_status === 'pending' ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#92400e', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                          <Clock size={13} /> 審査中
-                        </span>
+                        c.is_published ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            <Eye size={13} /> 販売中
+                          </span>
+                        ) : (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--mm-text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            <EyeOff size={13} /> 非公開
+                          </span>
+                        )
                       ) : c.review_status === 'rejected' ? (
                         <div>
                           <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#dc2626', fontWeight: 700, whiteSpace: 'nowrap' }}>

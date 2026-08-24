@@ -1,15 +1,18 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Type, X } from 'lucide-react'
+import { Type, X, Droplet, Undo2 } from 'lucide-react'
 
 type VAlign = 'top' | 'middle' | 'bottom'
 type HAlign = 'left' | 'center' | 'right'
 type FontSize = 'small' | 'medium' | 'large'
+type Mode = 'text' | 'blur'
+/** ぼかし範囲。元画像の実ピクセル座標で保持する（表示倍率に依存させない） */
+interface BlurRect { x: number; y: number; w: number; h: number }
 
 const SIZE_RATIO: Record<FontSize, number> = { small: 0.045, medium: 0.07, large: 0.1 }
 
-// canvasに画像+テキストを描画する共通ロジック（プレビューと最終書き出しの両方で使う）
+// canvasに画像+ぼかし+テキストを描画する共通ロジック（プレビューと最終書き出しの両方で使う）
 function paint(
   canvas: HTMLCanvasElement,
   img: HTMLImageElement,
@@ -17,6 +20,7 @@ function paint(
   valign: VAlign,
   halign: HAlign,
   fontSize: FontSize,
+  blurs: BlurRect[],
 ) {
   canvas.width = img.naturalWidth
   canvas.height = img.naturalHeight
@@ -24,6 +28,20 @@ function paint(
   if (!ctx) return
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   ctx.drawImage(img, 0, 0)
+
+  // ぼかしはテキストより先に描く（乗せた文字までぼけないように）
+  const blurPx = Math.max(6, Math.round(canvas.width * 0.025))
+  for (const b of blurs) {
+    if (b.w < 2 || b.h < 2) continue
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(b.x, b.y, b.w, b.h)
+    ctx.clip()
+    ctx.filter = `blur(${blurPx}px)`
+    // 同じ画像をクリップ範囲内だけ描き直すことで、その領域だけをぼかす
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    ctx.restore()
+  }
 
   const lines = text.split('\n').slice(0, 2).map(l => l.trim()).filter(Boolean)
   if (lines.length === 0) return
@@ -61,7 +79,7 @@ function toFile(canvas: HTMLCanvasElement, originalFile: File): Promise<File | n
       if (!blob) { resolve(null); return }
       const baseName = originalFile.name.replace(/\.[^.]+$/, '')
       const ext = outputType === 'image/jpeg' ? 'jpg' : 'png'
-      resolve(new File([blob], `${baseName}_text.${ext}`, { type: outputType, lastModified: Date.now() }))
+      resolve(new File([blob], `${baseName}_edit.${ext}`, { type: outputType, lastModified: Date.now() }))
     }, outputType, 0.92)
   })
 }
@@ -80,12 +98,15 @@ export default function ThumbnailTextEditor({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [open, setOpen] = useState(false)
   const [imgEl, setImgEl] = useState<HTMLImageElement | null>(null)
+  const [mode, setMode] = useState<Mode>('text')
   const [text, setText] = useState('')
   const [valign, setValign] = useState<VAlign>('bottom')
   const [halign, setHalign] = useState<HAlign>('center')
   const [fontSize, setFontSize] = useState<FontSize>('medium')
+  const [blurs, setBlurs] = useState<BlurRect[]>([])
+  const [drag, setDrag] = useState<BlurRect | null>(null)
 
-  // sourceFile は常に「テキストを乗せる前の元画像」。編集をやり直しても重ね書きされない。
+  // sourceFile は常に「加工前の元画像」。編集をやり直しても重ね書きされない。
   useEffect(() => {
     let cancelled = false
     const url = URL.createObjectURL(sourceFile)
@@ -97,32 +118,71 @@ export default function ThumbnailTextEditor({
 
   useEffect(() => {
     if (!open || !imgEl || !canvasRef.current) return
-    paint(canvasRef.current, imgEl, text, valign, halign, fontSize)
-  }, [open, imgEl, text, valign, halign, fontSize])
+    const preview = drag ? [...blurs, drag] : blurs
+    paint(canvasRef.current, imgEl, text, valign, halign, fontSize, preview)
+  }, [open, imgEl, text, valign, halign, fontSize, blurs, drag])
+
+  // 表示上の座標 → 元画像の実ピクセル座標
+  const toImageCoords = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current!
+    const r = canvas.getBoundingClientRect()
+    return {
+      x: Math.max(0, Math.min(canvas.width, (clientX - r.left) * (canvas.width / r.width))),
+      y: Math.max(0, Math.min(canvas.height, (clientY - r.top) * (canvas.height / r.height))),
+    }
+  }
+
+  const startDrag = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (mode !== 'blur' || !canvasRef.current) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const p = toImageCoords(e.clientX, e.clientY)
+    setDrag({ x: p.x, y: p.y, w: 0, h: 0 })
+  }
+  const moveDrag = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drag || mode !== 'blur') return
+    const p = toImageCoords(e.clientX, e.clientY)
+    setDrag(d => d && ({ x: Math.min(d.x, p.x), y: Math.min(d.y, p.y), w: Math.abs(p.x - d.x), h: Math.abs(p.y - d.y) }))
+  }
+  const endDrag = () => {
+    if (!drag) return
+    if (drag.w >= 8 && drag.h >= 8) setBlurs(b => [...b, drag])
+    setDrag(null)
+  }
 
   const apply = async () => {
     if (!imgEl || !canvasRef.current) return
+    // 書き出し前にドラッグ途中の枠を除いて描き直す
+    paint(canvasRef.current, imgEl, text, valign, halign, fontSize, blurs)
     const file = await toFile(canvasRef.current, sourceFile)
     if (file) { onApply(file); setOpen(false) }
   }
+
+  const hasEdits = !!text.trim() || blurs.length > 0
 
   const gridBtn = (active: boolean) => ({
     width: 28, height: 28, borderRadius: 6, cursor: 'pointer',
     border: active ? '2px solid var(--mm-primary)' : '1px solid var(--mm-border)',
     background: active ? 'var(--mm-primary-light)' : 'white',
   })
+  const tabBtn = (active: boolean) => ({
+    display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
+    fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const,
+    border: active ? '2px solid var(--mm-primary)' : '1px solid var(--mm-border)',
+    background: active ? 'var(--mm-primary-light)' : 'white',
+    color: active ? 'var(--mm-primary)' : 'var(--mm-text-sub)',
+  })
 
   if (!open) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
         <button type="button" onClick={() => setOpen(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'white', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 12, fontWeight: 600, color: 'var(--mm-text-sub)', cursor: 'pointer' }}>
-          <Type size={13} /> {applied ? 'テキストを編集' : 'テキストを追加'}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'white', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 12, fontWeight: 600, color: 'var(--mm-text-sub)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <Type size={13} /> {applied ? '加工を編集' : '文字入れ・ぼかし'}
         </button>
         {applied && (
-          <button type="button" onClick={onClear}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-            <X size={12} /> 削除
+          <button type="button" onClick={() => { setBlurs([]); setText(''); onClear() }}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>
+            <X size={12} /> 加工を削除
           </button>
         )}
       </div>
@@ -131,48 +191,88 @@ export default function ThumbnailTextEditor({
 
   return (
     <div style={{ marginTop: 10, padding: 14, border: '1px solid var(--mm-border)', borderRadius: 10, background: 'var(--mm-bg)' }}>
-      <canvas ref={canvasRef} style={{ width: '100%', maxHeight: 220, objectFit: 'contain', borderRadius: 8, background: '#111', display: 'block' }} />
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => setMode('text')} style={tabBtn(mode === 'text')}>
+          <Type size={13} /> 文字入れ
+        </button>
+        <button type="button" onClick={() => setMode('blur')} style={tabBtn(mode === 'blur')}>
+          <Droplet size={13} /> ぼかし
+        </button>
+      </div>
 
-      <textarea
-        value={text}
-        onChange={e => setText(e.target.value.split('\n').slice(0, 2).join('\n'))}
-        placeholder="サムネイルに乗せるテキスト（最大2行）"
-        rows={2}
-        style={{ width: '100%', marginTop: 10, padding: '8px 10px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 13, resize: 'none', boxSizing: 'border-box' }}
+      <canvas
+        ref={canvasRef}
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        style={{
+          width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 8, background: '#111',
+          display: 'block', touchAction: mode === 'blur' ? 'none' : 'auto',
+          cursor: mode === 'blur' ? 'crosshair' : 'default',
+        }}
       />
 
-      <div style={{ display: 'flex', gap: 20, marginTop: 10, flexWrap: 'wrap' }}>
-        <div>
-          <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 4 }}>位置</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 28px)', gap: 4 }}>
-            {(['top', 'middle', 'bottom'] as VAlign[]).flatMap(v =>
-              (['left', 'center', 'right'] as HAlign[]).map(h => (
-                <button key={`${v}-${h}`} type="button" onClick={() => { setValign(v); setHalign(h) }}
-                  style={gridBtn(v === valign && h === halign)} aria-label={`${v}-${h}`} />
-              ))
-            )}
+      {mode === 'blur' ? (
+        <div style={{ marginTop: 10 }}>
+          <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>
+            画像の上をなぞると、その範囲をぼかせます（何度でも追加できます）
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => setBlurs(b => b.slice(0, -1))} disabled={blurs.length === 0}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--mm-border)', background: 'white', color: 'var(--mm-text-sub)', cursor: blurs.length ? 'pointer' : 'not-allowed', opacity: blurs.length ? 1 : 0.5, whiteSpace: 'nowrap' }}>
+              <Undo2 size={12} /> 1つ戻す
+            </button>
+            <button type="button" onClick={() => setBlurs([])} disabled={blurs.length === 0}
+              style={{ padding: '5px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--mm-border)', background: 'white', color: '#dc2626', cursor: blurs.length ? 'pointer' : 'not-allowed', opacity: blurs.length ? 1 : 0.5, whiteSpace: 'nowrap' }}>
+              全て消す
+            </button>
+            <span style={{ fontSize: 11, color: 'var(--mm-text-muted)', alignSelf: 'center' }}>{blurs.length}箇所</span>
           </div>
         </div>
-        <div>
-          <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 4 }}>文字サイズ</p>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {(['small', 'medium', 'large'] as FontSize[]).map(s => (
-              <button key={s} type="button" onClick={() => setFontSize(s)}
-                style={{ padding: '5px 10px', fontSize: 12, borderRadius: 6, cursor: 'pointer', border: fontSize === s ? '2px solid var(--mm-primary)' : '1px solid var(--mm-border)', background: fontSize === s ? 'var(--mm-primary-light)' : 'white', color: fontSize === s ? 'var(--mm-primary)' : 'var(--mm-text-sub)' }}>
-                {s === 'small' ? '小' : s === 'medium' ? '中' : '大'}
-              </button>
-            ))}
+      ) : (
+        <>
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value.split('\n').slice(0, 2).join('\n'))}
+            placeholder="サムネイルに乗せるテキスト（最大2行）"
+            rows={2}
+            style={{ width: '100%', marginTop: 10, padding: '8px 10px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 13, resize: 'none', boxSizing: 'border-box' }}
+          />
+          <div style={{ display: 'flex', gap: 20, marginTop: 10, flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 4 }}>位置</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 28px)', gap: 4 }}>
+                {(['top', 'middle', 'bottom'] as VAlign[]).flatMap(v =>
+                  (['left', 'center', 'right'] as HAlign[]).map(h => (
+                    <button key={`${v}-${h}`} type="button" onClick={() => { setValign(v); setHalign(h) }}
+                      style={gridBtn(v === valign && h === halign)} aria-label={`${v}-${h}`} />
+                  ))
+                )}
+              </div>
+            </div>
+            <div>
+              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 4 }}>文字サイズ</p>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(['small', 'medium', 'large'] as FontSize[]).map(s => (
+                  <button key={s} type="button" onClick={() => setFontSize(s)}
+                    style={{ padding: '5px 10px', fontSize: 12, borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap', border: fontSize === s ? '2px solid var(--mm-primary)' : '1px solid var(--mm-border)', background: fontSize === s ? 'var(--mm-primary-light)' : 'white', color: fontSize === s ? 'var(--mm-primary)' : 'var(--mm-text-sub)' }}>
+                    {s === 'small' ? '小' : s === 'medium' ? '中' : '大'}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
         <button type="button" onClick={() => setOpen(false)}
-          style={{ flex: 1, padding: '8px', border: '1px solid var(--mm-border)', borderRadius: 8, background: 'white', fontWeight: 600, fontSize: 13, cursor: 'pointer', color: 'var(--mm-text-sub)' }}>
+          style={{ flex: 1, padding: '8px', border: '1px solid var(--mm-border)', borderRadius: 8, background: 'white', fontWeight: 600, fontSize: 13, cursor: 'pointer', color: 'var(--mm-text-sub)', whiteSpace: 'nowrap' }}>
           キャンセル
         </button>
-        <button type="button" onClick={apply} disabled={!text.trim()}
-          style={{ flex: 1, padding: '8px', border: 'none', borderRadius: 8, background: 'var(--mm-primary)', color: 'white', fontWeight: 700, fontSize: 13, cursor: text.trim() ? 'pointer' : 'not-allowed', opacity: text.trim() ? 1 : 0.5 }}>
+        <button type="button" onClick={apply} disabled={!hasEdits}
+          style={{ flex: 1, padding: '8px', border: 'none', borderRadius: 8, background: 'var(--mm-primary)', color: 'white', fontWeight: 700, fontSize: 13, cursor: hasEdits ? 'pointer' : 'not-allowed', opacity: hasEdits ? 1 : 0.5, whiteSpace: 'nowrap' }}>
           適用
         </button>
       </div>

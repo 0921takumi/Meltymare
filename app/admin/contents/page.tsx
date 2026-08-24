@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 type Filter = 'pending' | 'approved' | 'rejected' | 'all'
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string; icon: React.ComponentType<{ size?: number }> }> = {
-  pending:  { label: '審査待ち', color: '#d97706', bg: '#fef3c7', icon: Clock },
+  pending:  { label: '新着・未確認', color: '#d97706', bg: '#fef3c7', icon: Clock },
   approved: { label: '承認済み', color: '#059669', bg: '#d1fae5', icon: CheckCircle2 },
   rejected: { label: '却下',     color: '#dc2626', bg: '#fee2e2', icon: XCircle },
 }
@@ -33,15 +33,15 @@ export default async function AdminContentsPage({
 
   const { data: contents } = await query
 
-  // 監査で発覚(実際にサポート報告あり): プレビュー(サムネイル)を設定せずに投稿された
-  // コンテンツは、この画面がthumbnail_urlしか表示していなかったため、管理者が中身を
-  // 一切見られないまま審査（承認/却下判断）せざるを得なかった。thumbnail_urlが無い場合は
-  // 本体ファイル(file_url、非公開バケット)の署名付きURLを発行してプレビュー代わりに表示する。
+  // 依頼: 「プレビューではなく、実際の販売写真が確認できるようにしてほしい」。
+  // 従来はサムネイルが無いときだけ本体を署名URLで出していたため、サムネイル付きの商品は
+  // 加工済みプレビューしか見えず、実際に売られる写真を審査できなかった。
+  // 常に本体ファイル(file_url、非公開バケット)の署名URLを発行し、そちらを主表示にする。
   const admin = createAdminClient()
   const fileSignedUrls = new Map<string, string>()
   await Promise.all(
     (contents ?? [])
-      .filter((c: any) => !c.thumbnail_url && c.file_url)
+      .filter((c: any) => c.file_url)
       .map(async (c: any) => {
         const { data: signed } = await admin.storage.from('contents').createSignedUrl(c.file_url, 600)
         if (signed?.signedUrl) fileSignedUrls.set(c.id, signed.signedUrl)
@@ -57,7 +57,7 @@ export default async function AdminContentsPage({
   const now = Date.now()
 
   const tabs: { key: Filter; label: string; count?: number; color?: string }[] = [
-    { key: 'pending',  label: '審査待ち', count: counts.pending,  color: '#d97706' },
+    { key: 'pending',  label: '新着・未確認', count: counts.pending,  color: '#d97706' },
     { key: 'approved', label: '承認済み', count: counts.approved, color: '#059669' },
     { key: 'rejected', label: '却下',     count: counts.rejected, color: '#dc2626' },
     { key: 'all',      label: 'すべて' },
@@ -73,8 +73,8 @@ export default async function AdminContentsPage({
         <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '12px 16px', marginBottom: 22, display: 'flex', alignItems: 'center', gap: 12 }}>
           <AlertTriangle size={18} color="#d97706" />
           <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>審査待ちが {counts.pending} 件あります</p>
-            <p style={{ fontSize: 11, color: '#9a6a1a', marginTop: 2 }}>投稿から24時間以内の審査が目標SLAです。赤色のアラートが出ているものから優先対応してください。</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>未確認の新着出品が {counts.pending} 件あります（すでに販売中）</p>
+            <p style={{ fontSize: 11, color: '#9a6a1a', marginTop: 2 }}>v55以降、出品は審査を待たずに販売開始されます。ここは公開後の事後チェック用です。ガイドライン違反を見つけたら「却下」で即座に取り下げてください（赤色は投稿から24時間以上未確認）。</p>
           </div>
         </div>
       )}
@@ -117,32 +117,47 @@ export default async function AdminContentsPage({
             const createdAt = new Date(c.created_at).getTime()
             const ageHours = Math.floor((now - createdAt) / (1000 * 60 * 60))
             const overdue = status === 'pending' && ageHours > 24
+            // 実際に販売されるファイルを最優先。取得できないときのみサムネイルで代替する。
+            const isRealFile = fileSignedUrls.has(c.id)
+            const realSrc = fileSignedUrls.get(c.id) ?? c.thumbnail_url ?? null
             return (
               <div key={c.id} className="mm-card" style={{
                 padding: '14px 16px',
                 display: 'flex', gap: 14, alignItems: 'flex-start',
                 border: overdue ? '2px solid #dc2626' : '1px solid var(--mm-border)',
               }}>
-                {/* Thumbnail（無ければ本体ファイルの署名付きURLで代替表示） */}
-                <div style={{ width: 80, height: 80, borderRadius: 8, background: 'var(--mm-bg)', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
-                  {c.thumbnail_url ? (
-                    <img src={c.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : fileSignedUrls.has(c.id) && c.content_type === 'video' ? (
-                    <video src={fileSignedUrls.get(c.id)} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : fileSignedUrls.has(c.id) ? (
-                    <img src={fileSignedUrls.get(c.id)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: 'var(--mm-text-muted)' }}>
-                      <Package size={24} />
-                    </div>
-                  )}
-                  <span style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: 9, padding: '1px 5px', borderRadius: 4 }}>
-                    {c.content_type === 'video' ? '🎥' : '📸'}
-                  </span>
-                  {!c.thumbnail_url && fileSignedUrls.has(c.id) && (
-                    <span style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(217,119,6,0.9)', color: 'white', fontSize: 8, padding: '1px 4px', borderRadius: 3 }}>
-                      本体
+                {/* 審査用の画像。依頼により「加工済みプレビュー」ではなく実際に売られる本体を主表示にする。 */}
+                <div style={{ flexShrink: 0, width: 110 }}>
+                  <div style={{ width: 110, height: 110, borderRadius: 8, background: 'var(--mm-bg)', overflow: 'hidden', position: 'relative' }}>
+                    {realSrc && c.content_type === 'video' ? (
+                      <video src={realSrc} muted controls={false} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : realSrc ? (
+                      <img src={realSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: 'var(--mm-text-muted)' }}>
+                        <Package size={24} />
+                      </div>
+                    )}
+                    <span style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: 9, padding: '1px 5px', borderRadius: 4 }}>
+                      {c.content_type === 'video' ? '🎥' : '📸'}
                     </span>
+                    {isRealFile && (
+                      <span style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(5,150,105,0.92)', color: 'white', fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3 }}>
+                        販売実物
+                      </span>
+                    )}
+                  </div>
+                  {realSrc && (
+                    <a href={realSrc} target="_blank" rel="noopener noreferrer"
+                      style={{ display: 'block', marginTop: 5, fontSize: 10, fontWeight: 700, color: 'var(--mm-primary)', textDecoration: 'none', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      原寸で開く →
+                    </a>
+                  )}
+                  {isRealFile && c.thumbnail_url && (
+                    <a href={c.thumbnail_url} target="_blank" rel="noopener noreferrer"
+                      style={{ display: 'block', marginTop: 3, fontSize: 10, color: 'var(--mm-text-muted)', textDecoration: 'none', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      プレビュー画像
+                    </a>
                   )}
                 </div>
 

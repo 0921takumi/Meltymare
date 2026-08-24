@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       .select('*')
       .eq('id', contentId)
       .eq('is_published', true)
-      .eq('review_status', 'approved')
+      .neq('review_status', 'rejected')
       .single()
     if (contentError || !content) return NextResponse.json({ error: 'コンテンツが見つかりません' }, { status: 404 })
 

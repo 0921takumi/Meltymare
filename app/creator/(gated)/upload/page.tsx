@@ -21,7 +21,8 @@ function UploadForm() {
   const [price, setPrice] = useState('')
   const [stockLimit, setStockLimit] = useState('')
   const [contentType, setContentType] = useState<'image' | 'video'>('image')
-  const [isPublished, setIsPublished] = useState(false)
+  // v55: 事後審査へ変更したため、新規出品は既定で公開ON（=即販売開始）。編集時は既存値で上書きされる。
+  const [isPublished, setIsPublished] = useState(!isEdit)
   const [contentFile, setContentFile] = useState<File | null>(null)
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
   // テキスト合成後のサムネイル。元ファイル(thumbnailFile)は編集し直しても重ね書きされないよう別に保持する
@@ -201,8 +202,11 @@ function UploadForm() {
         payload.creator_id = user.id
         // 新規投稿は AI 審査を通すため、is_published=false かつ review_status=pending で挿入。
         // 審査結果が approved になり、かつ creator が公開フラグを ON にしたタイミングで公開される。
+        // v55: 事前審査を廃止し、公開を選んでいれば即販売開始する（事後審査）。
+        // review_status='pending' は「販売停止中」ではなく「販売中・審査は事後」の意味。
+        // AI審査(/api/moderate)が違反を検知すれば rejected になり自動で取り下げられる。
         payload.review_status = 'pending'
-        payload.is_published = false
+        payload.is_published = isPublished
         const { data: inserted, error: insErr } = await supabase
           .from('contents')
           .insert(payload)
@@ -403,7 +407,7 @@ function UploadForm() {
               <input type="checkbox" id="published" checked={isPublished} onChange={e => setIsPublished(e.target.checked)}
                 style={{ width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }} />
               <label htmlFor="published" style={{ fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>公開する</label>
-              <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>チェックを入れると一覧に表示されます</span>
+              <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>チェックを入れると、すぐに販売が始まります</span>
             </div>
 
             {error && <p style={{ fontSize: 13, color: '#dc2626', background: '#fef2f2', padding: '10px 14px', borderRadius: 8 }}>{error}</p>}

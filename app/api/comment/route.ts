@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     .select('id, is_published, review_status, creator_id, title')
     .eq('id', contentId)
     .maybeSingle()
-  if (!content || !content.is_published || content.review_status !== 'approved') {
+  if (!content || !content.is_published || content.review_status === 'rejected') {
     return NextResponse.json({ error: 'content_not_found' }, { status: 404 })
   }
 

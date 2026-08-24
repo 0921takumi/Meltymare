@@ -40,37 +40,48 @@ export default async function HomePage() {
 
   // ログイン状態
   const { data: { user } } = await supabase.auth.getUser()
-  let profile = null
-  if (user) {
-    const { data } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
-    profile = data
-  }
 
-  // クリエイター一覧（最大6名）
-  const { data: creators } = await supabase
-    .from('profiles')
-    .select('id, display_name, username, avatar_url, bio')
-    .eq('role', 'creator')
-    .limit(6)
+  // 依頼「表示が遅い」の実体: トップは以下5クエリを直列awaitしており、Supabase往復
+  // (1回あたり150〜500ms) が単純合算されて初期表示が数秒かかっていた。
+  // 互いに独立しているのでまとめて並列実行する（クリエイター別件数だけは creators に
+  // 依存するため後段で1回だけ実行）。
+  const [
+    profileRes,
+    creatorsRes,
+    contentsRes,
+    purchasesRes,
+    bannersRes,
+  ] = await Promise.all([
+    user
+      ? supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
+      : Promise.resolve({ data: null } as any),
+    supabase
+      .from('profiles')
+      .select('id, display_name, username, avatar_url, bio')
+      .eq('role', 'creator')
+      .limit(6),
+    supabase
+      .from('contents')
+      .select(CONTENT_CARD_WITH_CREATOR_SELECT)
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+      .limit(8),
+    user
+      ? supabase.from('purchases').select('content_id').eq('user_id', user.id).eq('status', 'completed')
+      : Promise.resolve({ data: [] } as any),
+    supabase
+      .from('featured_banners')
+      .select('*, creator:profiles(id, display_name, username, avatar_url), content:contents(id, title, thumbnail_url)')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .limit(5),
+  ])
 
-  // コンテンツ一覧（最新8件）
-  const { data: contents } = await supabase
-    .from('contents')
-    .select(CONTENT_CARD_WITH_CREATOR_SELECT)
-    .eq('is_published', true)
-    .order('created_at', { ascending: false })
-    .limit(8)
-
-  // 購入済みIDリスト
-  let purchasedIds: string[] = []
-  if (user) {
-    const { data: purchases } = await supabase
-      .from('purchases')
-      .select('content_id')
-      .eq('user_id', user.id)
-      .eq('status', 'completed')
-    purchasedIds = purchases?.map(p => p.content_id) ?? []
-  }
+  const profile = profileRes.data
+  const creators = creatorsRes.data
+  const contents = contentsRes.data
+  const banners = bannersRes.data
+  const purchasedIds: string[] = (purchasesRes.data ?? []).map((p: any) => p.content_id)
 
   // クリエイターごとのコンテンツ数（N+1 を避け、1クエリで集計）
   const creatorContentCounts: Record<string, number> = {}
@@ -84,14 +95,6 @@ export default async function HomePage() {
       creatorContentCounts[row.creator_id] = (creatorContentCounts[row.creator_id] ?? 0) + 1
     }
   }
-
-  // 特集バナー取得
-  const { data: banners } = await supabase
-    .from('featured_banners')
-    .select('*, creator:profiles(id, display_name, username, avatar_url), content:contents(id, title, thumbnail_url)')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .limit(5)
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mm-bg)' }}>

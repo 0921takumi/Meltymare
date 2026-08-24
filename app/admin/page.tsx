@@ -40,7 +40,10 @@ export default async function AdminDashboard() {
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'user'),
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'creator'),
     supabase.from('contents').select('*', { count: 'exact', head: true }).eq('is_published', true),
-    supabase.from('contents').select('*', { count: 'exact', head: true }).eq('is_published', false),
+    // 依頼で発覚: ここは is_published=false を数えていたため、クリエイターが非公開にした
+    // 下書きや却下済みまで「商品審査待ち」に計上され、審査待ちが0件でも通知が出ていた。
+    // 実際の審査対象は review_status='pending'（v55以降は「新着出品」）のみ。
+    supabase.from('contents').select('*', { count: 'exact', head: true }).eq('review_status', 'pending'),
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('identity_status', 'pending'),
     supabase.from('inquiries').select('*', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('inquiries').select('*', { count: 'exact', head: true }).eq('status', 'open').eq('priority', 'urgent'),
@@ -104,7 +107,7 @@ export default async function AdminDashboard() {
   const alerts: { kind: 'urgent' | 'warn' | 'info'; label: string; count?: number; href: string }[] = []
   if ((urgentInquiries ?? 0) > 0) alerts.push({ kind: 'urgent', label: '緊急問い合わせ', count: urgentInquiries ?? 0, href: '/admin/inquiries?priority=urgent' })
   if ((pendingVerifications ?? 0) > 0) alerts.push({ kind: 'warn', label: '本人確認待ち', count: pendingVerifications ?? 0, href: '/admin/verifications' })
-  if ((pendingContents ?? 0) > 0) alerts.push({ kind: 'warn', label: '商品審査待ち', count: pendingContents ?? 0, href: '/admin/contents' })
+  if ((pendingContents ?? 0) > 0) alerts.push({ kind: 'warn', label: '新着出品（未確認）', count: pendingContents ?? 0, href: '/admin/contents?filter=pending' })
   if ((pendingReports ?? 0) > 0) alerts.push({ kind: 'warn', label: 'コメント通報', count: pendingReports ?? 0, href: '/admin/comments' })
   if ((openInquiries ?? 0) > 0) alerts.push({ kind: 'info', label: '未対応問い合わせ', count: openInquiries ?? 0, href: '/admin/inquiries' })
 
