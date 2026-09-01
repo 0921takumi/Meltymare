@@ -18,10 +18,14 @@
 --      アプリ側(app/api/comment/route.ts)は v55 で「rejectedのみ拒否」に緩めたが、
 --      comments_insert ポリシー(v38)は今も review_status='approved' を要求していた。
 --
---   ④ contents_select の審査ゲートがそもそも本番に入っていない
---      v27 で入れたはずの review_status ゲートが効いておらず、却下済みでも
---      is_published=true なら未ログインから見えた。v55 の該当部分も未反映だった。
---      （アプリ側は多層防御として既にコードで塞いだが、DB側も正しい状態に戻す）
+--   ④ 審査ゲートを無効化していた野良ポリシーがある【真因】
+--      pg_policies を確認したところ、contents には SELECT ポリシーが2つ存在した:
+--        - contents_select           … v55で入れた正しいゲート（審査状態を見る）
+--        - contents_select_published … (is_published = true OR creator_id = auth.uid())
+--      RLSの許可ポリシーはOR結合されるため、後者だけで「公開なら誰でも見える」が
+--      成立し、前者の審査ゲートを丸ごと無効化していた。これが v27 のゲートも
+--      効いていなかった理由。後者はマイグレーションのどこにも定義が無く、
+--      ダッシュボードから手動作成された残骸と思われる。削除する。
 --
 -- Supabase SQL Editor で「全文を選択せずに」そのまま実行してください。
 -- ※ 一部だけ選択すると選択範囲しか実行されません（v55で実際に起きた可能性が高い）。
@@ -38,7 +42,11 @@ update public.contents
   set requires_admin_review = true
   where review_status = 'rejected' and requires_admin_review = false;
 
--- ── 1) 公開範囲: 却下済みは公開しない（v27/v55 の再適用）──
+-- ── 1) 公開範囲: 却下済みは公開しない ──
+-- 【最重要】審査ゲートを無効化していた野良ポリシーを削除する。
+-- これが残っている限り、下の contents_select を何度入れ直しても効かない。
+drop policy if exists "contents_select_published" on public.contents;
+
 drop policy if exists "contents_select" on public.contents;
 create policy "contents_select" on public.contents
   for select
