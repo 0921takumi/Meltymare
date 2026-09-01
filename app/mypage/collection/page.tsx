@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import Link from 'next/link'
@@ -29,14 +30,30 @@ export default async function CollectionPage() {
 
   const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
 
-  const { data: purchasesData } = await supabase
+  // 検証で判明した実害: 購入後に運営がその商品を取り下げる（却下=is_published false）と、
+  // RLS越しの埋め込み取得では contents が null になり、購入履歴から行ごと消えて
+  // ダウンロード・領収書に到達できなくなる（＝支払い済みの購入者が商品を失う）。
+  // 購入者に自分が買ったものを見せるのは取り下げ後も必要なので、購入行はセッション
+  // (自分の行のみRLSで保証) で取り、商品情報だけ service_role で取り直して合成する。
+  const { data: purchaseRows } = await supabase
     .from('purchases')
-    .select('id, created_at, content:contents(id, title, thumbnail_url, price, creator_id, creator:profiles(id, display_name, username, avatar_url))')
+    .select('id, created_at, content_id')
     .eq('user_id', user.id)
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
 
-  const purchases = (purchasesData ?? []) as unknown as PurchaseRow[]
+  const purchasedContentIds = [...new Set((purchaseRows ?? []).map((p: any) => p.content_id))]
+  const contentById = new Map<string, any>()
+  if (purchasedContentIds.length > 0) {
+    const { data: rows } = await createAdminClient()
+      .from('contents')
+      .select('id, title, thumbnail_url, price, creator_id, creator:profiles(id, display_name, username, avatar_url)')
+      .in('id', purchasedContentIds)
+    for (const r of rows ?? []) contentById.set(r.id, r)
+  }
+  const purchases = ((purchaseRows ?? []).map((p: any) => ({
+    id: p.id, created_at: p.created_at, content: contentById.get(p.content_id) ?? null,
+  })) as unknown) as PurchaseRow[]
 
   const byCreator = new Map<string, { creator: NonNullable<PurchaseRow['content']>['creator']; items: PurchaseRow[]; total: number }>()
   for (const p of purchases) {

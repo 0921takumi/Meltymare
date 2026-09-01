@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
@@ -13,12 +14,28 @@ export default async function MyPage() {
 
   const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
 
-  const { data: purchases } = await supabase
+  // 検証で判明した実害: 購入後に運営がその商品を取り下げる（却下=is_published false）と、
+  // RLS越しの埋め込み取得では contents が null になり、購入履歴から行ごと消えて
+  // ダウンロード・領収書に到達できなくなる（＝支払い済みの購入者が商品を失う）。
+  // 購入者に自分が買ったものを見せるのは取り下げ後も必要なので、購入行はセッション
+  // (自分の行のみRLSで保証) で取り、商品情報だけ service_role で取り直して合成する。
+  const { data: purchaseRows } = await supabase
     .from('purchases')
-    .select('*, content:contents(id, title, thumbnail_url, price, creator:profiles(id, display_name))')
+    .select('*')
     .eq('user_id', user.id)
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
+
+  const purchasedContentIds = [...new Set((purchaseRows ?? []).map((p: any) => p.content_id))]
+  const contentById = new Map<string, any>()
+  if (purchasedContentIds.length > 0) {
+    const { data: rows } = await createAdminClient()
+      .from('contents')
+      .select('id, title, thumbnail_url, price, creator:profiles(id, display_name)')
+      .in('id', purchasedContentIds)
+    for (const r of rows ?? []) contentById.set(r.id, r)
+  }
+  const purchases = (purchaseRows ?? []).map((p: any) => ({ ...p, content: contentById.get(p.content_id) ?? null }))
 
   // フォロー中クリエイター
   const { data: follows } = await supabase
@@ -28,8 +45,8 @@ export default async function MyPage() {
     .order('created_at', { ascending: false })
     .limit(12)
 
-  const totalCount = purchases?.length ?? 0
-  const deliveredCount = purchases?.filter(p => p.delivery_status === 'delivered').length ?? 0
+  const totalCount = purchases.length
+  const deliveredCount = purchases.filter((p: any) => p.delivery_status === 'delivered').length
   const pendingCount = totalCount - deliveredCount
 
   return (

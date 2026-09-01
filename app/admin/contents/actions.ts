@@ -20,6 +20,9 @@ export async function moderateContent(contentId: string, action: ModerationActio
     patch.review_status = 'approved'
     patch.is_published = true
     patch.rejection_reason = null
+    // v56: 却下された商品はクリエイター側から再公開できないよう requires_admin_review を
+    // 立てている。その旗を降ろせるのは管理者の承認だけ（＝ここが唯一の復帰経路）。
+    patch.requires_admin_review = false
   } else if (action === 'reject') {
     // 監査で発覚: 却下理由を入力する欄自体が無く、クリエイターに一切理由が伝わらなかった
     // （本人確認の却下(identity_rejection_reason)と非対称だった）。他のadmin自由入力欄
@@ -29,6 +32,8 @@ export async function moderateContent(contentId: string, action: ModerationActio
     patch.review_status = 'rejected'
     patch.is_published = false
     patch.rejection_reason = reason
+    // 以後クリエイターが自力で販売再開できないようにする（再開には運営の承認が必要）
+    patch.requires_admin_review = true
   } else if (action === 'unpublish') {
     patch.is_published = false
   }

@@ -57,7 +57,11 @@ function UploadForm() {
       setRecentUploads(count ?? 0)
 
       if (isEdit && editId) {
-        const { data: content } = await supabase.from('contents').select('*').eq('id', editId).single()
+        // 監査で発覚: creator_id で絞っていなかったため、?edit=<他人のコンテンツID> を開くと
+        // 他クリエイターの行を select('*') で取得でき、非公開バケットの実ファイルパス(file_url)
+        // までブラウザに渡っていた（実データで再現確認済み）。必ず本人の行だけに限定する。
+        const { data: content } = await supabase.from('contents').select('*')
+          .eq('id', editId).eq('creator_id', user.id).maybeSingle()
         if (content) {
           setTitle(content.title)
           setDescription(content.description ?? '')
