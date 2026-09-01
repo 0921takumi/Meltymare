@@ -2,44 +2,64 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Type, X, Droplet, Undo2 } from 'lucide-react'
+import { rectFrom, toImageCoords as toImageCoordsPure, workSize, WORK_MAX_PX } from '@/lib/thumbnail-edit'
 
 type VAlign = 'top' | 'middle' | 'bottom'
 type HAlign = 'left' | 'center' | 'right'
 type FontSize = 'small' | 'medium' | 'large'
 type Mode = 'text' | 'blur'
-/** ぼかし範囲。元画像の実ピクセル座標で保持する（表示倍率に依存させない） */
-interface BlurRect { x: number; y: number; w: number; h: number }
+/** ぼかし範囲。作業用画像の実ピクセル座標で保持する（表示倍率に依存させない） */
+type BlurRect = import('@/lib/thumbnail-edit').Rect
 
 const SIZE_RATIO: Record<FontSize, number> = { small: 0.045, medium: 0.07, large: 0.1 }
 
 // canvasに画像+ぼかし+テキストを描画する共通ロジック（プレビューと最終書き出しの両方で使う）
 function paint(
   canvas: HTMLCanvasElement,
-  img: HTMLImageElement,
+  base: HTMLCanvasElement,
   text: string,
   valign: VAlign,
   halign: HAlign,
   fontSize: FontSize,
   blurs: BlurRect[],
+  dragRect: BlurRect | null,
 ) {
-  canvas.width = img.naturalWidth
-  canvas.height = img.naturalHeight
+  canvas.width = base.width
+  canvas.height = base.height
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   ctx.clearRect(0, 0, canvas.width, canvas.height)
-  ctx.drawImage(img, 0, 0)
+  ctx.drawImage(base, 0, 0)
 
   // ぼかしはテキストより先に描く（乗せた文字までぼけないように）
-  const blurPx = Math.max(6, Math.round(canvas.width * 0.025))
-  for (const b of blurs) {
+  const blurPx = Math.max(6, Math.round(canvas.width * 0.022))
+  const all = dragRect ? [...blurs, dragRect] : blurs
+  for (const b of all) {
     if (b.w < 2 || b.h < 2) continue
+    // 画像全体をぼかして切り抜くと重いので、対象範囲＋にじみ分の余白だけを描き直す。
+    const pad = blurPx * 2
+    const sx = Math.max(0, Math.floor(b.x - pad))
+    const sy = Math.max(0, Math.floor(b.y - pad))
+    const ex = Math.min(base.width, Math.ceil(b.x + b.w + pad))
+    const ey = Math.min(base.height, Math.ceil(b.y + b.h + pad))
+    if (ex <= sx || ey <= sy) continue
     ctx.save()
     ctx.beginPath()
     ctx.rect(b.x, b.y, b.w, b.h)
     ctx.clip()
     ctx.filter = `blur(${blurPx}px)`
-    // 同じ画像をクリップ範囲内だけ描き直すことで、その領域だけをぼかす
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    // 転送元と転送先を同じ座標にすることで、位置ズレなくその範囲だけをぼかす
+    ctx.drawImage(base, sx, sy, ex - sx, ey - sy, sx, sy, ex - sx, ey - sy)
+    ctx.restore()
+  }
+
+  // ドラッグ中の範囲は枠線を出して「どこを選んでいるか」を見せる
+  if (dragRect && dragRect.w >= 2 && dragRect.h >= 2) {
+    ctx.save()
+    ctx.setLineDash([Math.max(4, canvas.width * 0.008), Math.max(4, canvas.width * 0.008)])
+    ctx.lineWidth = Math.max(2, canvas.width * 0.004)
+    ctx.strokeStyle = '#fff'
+    ctx.strokeRect(dragRect.x, dragRect.y, dragRect.w, dragRect.h)
     ctx.restore()
   }
 
@@ -96,8 +116,11 @@ export default function ThumbnailTextEditor({
   onClear: () => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const baseRef = useRef<HTMLCanvasElement | null>(null)
+  // ドラッグ開始点。state に持つと移動のたびに起点が上書きされて範囲が壊れるため ref で固定する。
+  const anchorRef = useRef<{ x: number; y: number } | null>(null)
   const [open, setOpen] = useState(false)
-  const [imgEl, setImgEl] = useState<HTMLImageElement | null>(null)
+  const [baseReady, setBaseReady] = useState(false)
   const [mode, setMode] = useState<Mode>('text')
   const [text, setText] = useState('')
   const [valign, setValign] = useState<VAlign>('bottom')
@@ -109,50 +132,60 @@ export default function ThumbnailTextEditor({
   // sourceFile は常に「加工前の元画像」。編集をやり直しても重ね書きされない。
   useEffect(() => {
     let cancelled = false
+    setBaseReady(false)
     const url = URL.createObjectURL(sourceFile)
     const img = new Image()
-    img.onload = () => { if (!cancelled) setImgEl(img) }
+    img.onload = () => {
+      if (cancelled) return
+      const { w, h } = workSize(img.naturalWidth, img.naturalHeight, WORK_MAX_PX)
+      const base = document.createElement('canvas')
+      base.width = w
+      base.height = h
+      base.getContext('2d')?.drawImage(img, 0, 0, w, h)
+      baseRef.current = base
+      setBaseReady(true)
+    }
     img.src = url
     return () => { cancelled = true; URL.revokeObjectURL(url) }
   }, [sourceFile])
 
   useEffect(() => {
-    if (!open || !imgEl || !canvasRef.current) return
-    const preview = drag ? [...blurs, drag] : blurs
-    paint(canvasRef.current, imgEl, text, valign, halign, fontSize, preview)
-  }, [open, imgEl, text, valign, halign, fontSize, blurs, drag])
+    if (!open || !baseReady || !baseRef.current || !canvasRef.current) return
+    paint(canvasRef.current, baseRef.current, text, valign, halign, fontSize, blurs, drag)
+  }, [open, baseReady, text, valign, halign, fontSize, blurs, drag])
 
-  // 表示上の座標 → 元画像の実ピクセル座標
+  // 表示上の座標 → 作業用画像の実ピクセル座標。
+  // canvas は object-fit を使わず縦横比そのままで表示しているため、単純な比率換算で一致する。
   const toImageCoords = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current!
-    const r = canvas.getBoundingClientRect()
-    return {
-      x: Math.max(0, Math.min(canvas.width, (clientX - r.left) * (canvas.width / r.width))),
-      y: Math.max(0, Math.min(canvas.height, (clientY - r.top) * (canvas.height / r.height))),
-    }
+    return toImageCoordsPure(canvas.getBoundingClientRect(), canvas.width, canvas.height, clientX, clientY)
   }
 
   const startDrag = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (mode !== 'blur' || !canvasRef.current) return
+    e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
     const p = toImageCoords(e.clientX, e.clientY)
+    anchorRef.current = p
     setDrag({ x: p.x, y: p.y, w: 0, h: 0 })
   }
   const moveDrag = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drag || mode !== 'blur') return
-    const p = toImageCoords(e.clientX, e.clientY)
-    setDrag(d => d && ({ x: Math.min(d.x, p.x), y: Math.min(d.y, p.y), w: Math.abs(p.x - d.x), h: Math.abs(p.y - d.y) }))
+    const a = anchorRef.current
+    if (!a || mode !== 'blur') return
+    e.preventDefault()
+    setDrag(rectFrom(a, toImageCoords(e.clientX, e.clientY)))
   }
   const endDrag = () => {
-    if (!drag) return
-    if (drag.w >= 8 && drag.h >= 8) setBlurs(b => [...b, drag])
+    if (!anchorRef.current) return
+    anchorRef.current = null
+    if (drag && drag.w >= 4 && drag.h >= 4) setBlurs(b => [...b, drag])
     setDrag(null)
   }
 
   const apply = async () => {
-    if (!imgEl || !canvasRef.current) return
-    // 書き出し前にドラッグ途中の枠を除いて描き直す
-    paint(canvasRef.current, imgEl, text, valign, halign, fontSize, blurs)
+    if (!baseRef.current || !canvasRef.current) return
+    // 書き出し前にドラッグ中の枠線を除いて描き直す
+    paint(canvasRef.current, baseRef.current, text, valign, halign, fontSize, blurs, null)
     const file = await toFile(canvasRef.current, sourceFile)
     if (file) { onApply(file); setOpen(false) }
   }
@@ -200,6 +233,8 @@ export default function ThumbnailTextEditor({
         </button>
       </div>
 
+      {/* object-fit を使うと縦長写真で余白が入り、なぞった位置とぼける位置がズレる。
+          幅だけ指定して高さは縦横比なりに伸ばし、表示とcanvas座標を1対1に保つ。 */}
       <canvas
         ref={canvasRef}
         onPointerDown={startDrag}
@@ -207,8 +242,8 @@ export default function ThumbnailTextEditor({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         style={{
-          width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 8, background: '#111',
-          display: 'block', touchAction: mode === 'blur' ? 'none' : 'auto',
+          width: '100%', maxWidth: 380, height: 'auto', borderRadius: 8, background: '#111',
+          display: 'block', margin: '0 auto', touchAction: mode === 'blur' ? 'none' : 'auto',
           cursor: mode === 'blur' ? 'crosshair' : 'default',
         }}
       />
@@ -216,7 +251,7 @@ export default function ThumbnailTextEditor({
       {mode === 'blur' ? (
         <div style={{ marginTop: 10 }}>
           <p style={{ fontSize: 11, color: 'var(--mm-text-muted)' }}>
-            画像の上をなぞると、その範囲をぼかせます（何度でも追加できます）
+            隠したい部分を指やマウスでなぞってください（何度でも追加できます）
           </p>
           <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
             <button type="button" onClick={() => setBlurs(b => b.slice(0, -1))} disabled={blurs.length === 0}

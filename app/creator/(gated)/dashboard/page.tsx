@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Plus, Edit, Eye, EyeOff, ClipboardList, MessageSquare, Tag, ShieldCheck, ShieldAlert, Clock, ExternalLink } from 'lucide-react'
 import { FINANCE } from '@/lib/config'
 import { fetchAllRows } from '@/lib/fetch-all'
+import ShopLinkBar from './ShopLinkBar'
 
 export default async function CreatorDashboard() {
   const supabase = await createClient()
@@ -135,6 +136,8 @@ export default async function CreatorDashboard() {
             </Link>
           )
         })()}
+
+        {profile.username && <ShopLinkBar username={profile.username} />}
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>管理ダッシュボード</h1>
