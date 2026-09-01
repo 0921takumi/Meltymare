@@ -45,18 +45,26 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
-  let myProfile = null
-  if (user) {
-    const { data } = await supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
-    myProfile = data
-  }
 
-  const { data: creator } = await supabase
-    .from('profiles')
-    .select(PROFILE_PUBLIC_SELECT)
-    .eq('username', username)
-    .eq('role', 'creator')
-    .single()
+  // 依頼「表示が遅い」対応: このページは10回近い往復を直列awaitしており、
+  // 実測で3.7〜5.2秒かかっていた。依存関係のないものはまとめて並列実行する。
+  const [myProfileRes, creatorRes, purchasesRes] = await Promise.all([
+    user
+      ? supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
+      : Promise.resolve({ data: null } as any),
+    supabase
+      .from('profiles')
+      .select(PROFILE_PUBLIC_SELECT)
+      .eq('username', username)
+      .eq('role', 'creator')
+      .single(),
+    user
+      ? supabase.from('purchases').select('content_id').eq('user_id', user.id).eq('status', 'completed')
+      : Promise.resolve({ data: [] } as any),
+  ])
+  const myProfile = myProfileRes.data
+  const creator = creatorRes.data
+  const purchasedIds: string[] = (purchasesRes.data ?? []).map((p: any) => p.content_id)
   if (!creator) return notFound()
 
   // v49: 凍結・退会済みクリエイターの公開ページ/購入導線が一切ブロックされていなかった
@@ -64,49 +72,46 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
   // 他ユーザーから見た公開プロフィールには影響しない）。is_suspended/deleted_at は
   // 他人の行のPII列のため service_role(admin) で読む。
   const admin = createAdminClient()
-  const { data: creatorStatus } = await admin
-    .from('profiles')
-    .select('is_suspended, deleted_at')
-    .eq('id', creator.id)
-    .maybeSingle()
+  const [
+    creatorStatusRes,
+    contentsRes,
+    followerCountRes,
+    followRowRes,
+    fans,
+    myFanRank,
+    pollsRes,
+  ] = await Promise.all([
+    admin.from('profiles').select('is_suspended, deleted_at').eq('id', creator.id).maybeSingle(),
+    supabase
+      .from('contents')
+      .select(CONTENT_CARD_WITH_CREATOR_SELECT)
+      .eq('creator_id', creator.id)
+      .eq('is_published', true)
+      .order('created_at', { ascending: false }),
+    supabase.from('follows').select('id', { count: 'exact', head: true }).eq('creator_id', creator.id),
+    user
+      ? supabase.from('follows').select('id').eq('follower_id', user.id).eq('creator_id', creator.id).maybeSingle()
+      : Promise.resolve({ data: null } as any),
+    topFans(creator.id, 10),
+    user ? userRankForCreator(user.id, creator.id) : Promise.resolve(null),
+    supabase
+      .from('polls')
+      .select('id, question, options, status, created_at')
+      .eq('creator_id', creator.id)
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(10),
+  ])
+
+  // 凍結・退会済みクリエイターは公開ページごと 404 にする（v49）。
+  // 並列化しても、この判定は描画前に必ず通す。
+  const creatorStatus = creatorStatusRes.data
   if (creatorStatus?.is_suspended || creatorStatus?.deleted_at) return notFound()
 
-  const { data: contents } = await supabase
-    .from('contents')
-    .select(CONTENT_CARD_WITH_CREATOR_SELECT)
-    .eq('creator_id', creator.id)
-    .eq('is_published', true)
-    .order('created_at', { ascending: false })
-
-  let purchasedIds: string[] = []
-  if (user) {
-    const { data: purchases } = await supabase
-      .from('purchases').select('content_id')
-      .eq('user_id', user.id).eq('status', 'completed')
-    purchasedIds = purchases?.map(p => p.content_id) ?? []
-  }
-
-  // フォロワー数 & フォロー済みチェック
-  const { count: followerCount } = await supabase
-    .from('follows')
-    .select('id', { count: 'exact', head: true })
-    .eq('creator_id', creator.id)
-
-  let isFollowing = false
-  if (user) {
-    const { data: followRow } = await supabase
-      .from('follows')
-      .select('id')
-      .eq('follower_id', user.id)
-      .eq('creator_id', creator.id)
-      .single()
-    isFollowing = !!followRow
-  }
-
+  const contents = contentsRes.data
+  const followerCount = followerCountRes.count
+  const isFollowing = !!followRowRes.data
   const totalSold = contents?.reduce((s: number, c: any) => s + (c.sold_count ?? 0), 0) ?? 0
-
-  const fans = await topFans(creator.id, 10)
-  const myFanRank = user ? await userRankForCreator(user.id, creator.id) : null
 
   // ストーリー (24h以内) — 機能停止中(FEATURES.stories=false)はクエリ自体をスキップ
   let stories: { id: string; media_url: string; media_type: string; created_at: string }[] = []
@@ -161,15 +166,8 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
     upcomingStreams = liveData ?? []
   }
 
-  // アンケート（公開中）
-  const { data: pollsData } = await supabase
-    .from('polls')
-    .select('id, question, options, status, created_at')
-    .eq('creator_id', creator.id)
-    .eq('status', 'open')
-    .order('created_at', { ascending: false })
-    .limit(10)
-  const openPolls = pollsData ?? []
+  // アンケート（公開中）— 取得は上の Promise.all にまとめ済み
+  const openPolls = pollsRes.data ?? []
   const pollOptionCounts: Record<string, number> = {}
   for (const p of openPolls) pollOptionCounts[p.id] = Array.isArray(p.options) ? p.options.length : 0
   const pollCounts = await getVoteCounts(pollOptionCounts)
