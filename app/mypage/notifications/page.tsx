@@ -152,6 +152,7 @@ export default async function NotificationsPage() {
       .select('id, title, thumbnail_url, created_at, creator:profiles(id, display_name, avatar_url)')
       .in('creator_id', followedIds)
       .eq('is_published', true)
+      .neq('review_status', 'rejected')
       .gte('created_at', since.toISOString())
       .order('created_at', { ascending: false })
       .limit(20)

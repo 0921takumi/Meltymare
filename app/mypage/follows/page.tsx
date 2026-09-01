@@ -45,6 +45,7 @@ export default async function FollowsPage() {
       .select('id, creator_id, title, thumbnail_url, created_at')
       .in('creator_id', creatorIds)
       .eq('is_published', true)
+      .neq('review_status', 'rejected')
       .order('created_at', { ascending: false })
 
     for (const c of contents ?? []) {

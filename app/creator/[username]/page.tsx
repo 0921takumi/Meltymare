@@ -87,6 +87,7 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
       .select(CONTENT_CARD_WITH_CREATOR_SELECT)
       .eq('creator_id', creator.id)
       .eq('is_published', true)
+      .neq('review_status', 'rejected')
       .order('created_at', { ascending: false }),
     supabase.from('follows').select('id', { count: 'exact', head: true }).eq('creator_id', creator.id),
     user

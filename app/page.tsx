@@ -64,6 +64,7 @@ export default async function HomePage() {
       .from('contents')
       .select(CONTENT_CARD_WITH_CREATOR_SELECT)
       .eq('is_published', true)
+      .neq('review_status', 'rejected')
       .order('created_at', { ascending: false })
       .limit(8),
     user
@@ -91,6 +92,7 @@ export default async function HomePage() {
       .select('creator_id')
       .in('creator_id', creators.map(c => c.id))
       .eq('is_published', true)
+      .neq('review_status', 'rejected')
     for (const row of countRows ?? []) {
       creatorContentCounts[row.creator_id] = (creatorContentCounts[row.creator_id] ?? 0) + 1
     }

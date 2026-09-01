@@ -28,6 +28,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .from('contents')
       .select('id, updated_at')
       .eq('is_published', true)
+      .neq('review_status', 'rejected')
       .order('updated_at', { ascending: false })
       .limit(1000)
 

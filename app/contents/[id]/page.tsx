@@ -15,11 +15,15 @@ import type { Metadata } from 'next'
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
   const supabase = await createClient()
+  // v55: 取り下げ(却下)済み・非公開の商品名がタブ/OGPに残らないよう、
+  // 本文側の表示条件とメタデータの取得条件を揃える。
   const { data: content } = await supabase
     .from('contents')
     .select('title, description, thumbnail_url, price, creator:profiles(display_name)')
     .eq('id', id)
-    .single()
+    .eq('is_published', true)
+    .neq('review_status', 'rejected')
+    .maybeSingle()
   if (!content) return { title: 'コンテンツが見つかりません', robots: { index: false, follow: false } }
   const creator = content.creator as any
   const desc = content.description ?? `${creator?.display_name ?? ''} の限定コンテンツ ¥${content.price.toLocaleString()}`
@@ -48,7 +52,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     user
       ? supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
       : Promise.resolve({ data: null }),
-    supabase.from('contents').select(CONTENT_SELECT).eq('id', id).eq('is_published', true).maybeSingle(),
+    supabase.from('contents').select(CONTENT_SELECT).eq('id', id).eq('is_published', true).neq('review_status', 'rejected').maybeSingle(),
   ])
   const profile = profileResult.data
   let content = contentResult.data
@@ -73,6 +77,16 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   const isOwner = !!user && user.id === (content as { creator_id: string }).creator_id
   const isAdminViewer = profile?.role === 'admin'
 
+  // v55: 上のフォールバックは「管理者/本人が審査前後の中身を確認する」ための経路で、
+  // 元コメントは RLS が status を絞ってくれる前提だった。しかし本番の contents_select は
+  // 実際には is_published しか見ておらず（v27の審査ゲートが未適用）、却下済みでも
+  // is_published=true のままなら第三者に見えてしまう。事後審査では「却下=取り下げ」が
+  // 唯一の販売停止手段なので、RLS任せにせずアプリ側でも必ず閉じる。
+  if (!isOwner && !isAdminViewer) {
+    const c = content as { is_published?: boolean; review_status?: string | null }
+    if (c.is_published !== true || c.review_status === 'rejected') return notFound()
+  }
+
   // 依頼で発覚(表示が遅い): ここから先の凍結チェック・購入済みチェック・関連コンテンツ・
   // 購入済みIDリスト・レビュー取得は互いに無関係なのに直列(await→await→…)で行っており、
   // ページ表示のたびに待ち時間が積み重なっていた。互いを待たずに並行して取得する。
@@ -92,6 +106,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
       .select(CONTENT_CARD_WITH_CREATOR_SELECT)
       .eq('creator_id', content.creator_id)
       .eq('is_published', true)
+      .neq('review_status', 'rejected')
       .neq('id', id)
       .order('created_at', { ascending: false })
       .limit(4),

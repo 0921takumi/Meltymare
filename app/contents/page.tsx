@@ -32,6 +32,7 @@ export default async function ContentsPage({
     .from('contents')
     .select(CONTENT_CARD_WITH_CREATOR_AND_TAGS_SELECT)
     .eq('is_published', true)
+    .neq('review_status', 'rejected')
 
   if (type !== 'all') query = query.eq('content_type', type)
   if (tag) query = query.contains('tags', [tag])
@@ -115,6 +116,7 @@ export default async function ContentsPage({
             .select(CONTENT_CARD_WITH_CREATOR_AND_TAGS_SELECT)
             .in('id', topIds)
             .eq('is_published', true)
+            .neq('review_status', 'rejected')
           recommendations = recs ?? []
         }
       }

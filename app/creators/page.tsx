@@ -39,6 +39,7 @@ export default async function CreatorsPage() {
         .select('sold_count')
         .eq('creator_id', c.id)
         .eq('is_published', true)
+        .neq('review_status', 'rejected')
       const count = contents?.length ?? 0
       const sold = contents?.reduce((s, x) => s + (x.sold_count ?? 0), 0) ?? 0
       creatorStats[c.id] = { count, sold }

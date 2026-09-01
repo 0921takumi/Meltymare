@@ -36,6 +36,7 @@ export default async function DiagnosisResultPage({
     .from('contents')
     .select('id, title, tags, price, thumbnail_url, creator_id, sold_count, creator:profiles(id, display_name, username, avatar_url, bio)')
     .eq('is_published', true)
+    .neq('review_status', 'rejected')
 
   const scoreByCreator = new Map<string, { score: number; creator: any; hitTags: Set<string>; contentCount: number; totalSold: number }>()
 

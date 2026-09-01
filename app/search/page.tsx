@@ -38,6 +38,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         .from('contents')
         .select(CONTENT_CARD_WITH_CREATOR_SELECT)
         .eq('is_published', true)
+        .neq('review_status', 'rejected')
         .ilike('title', `%${safeQ}%`)
         .order('created_at', { ascending: false })
         .limit(12),
