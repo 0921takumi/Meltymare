@@ -48,12 +48,16 @@ export async function POST(req: Request) {
   // 所有権確認: この purchase のコンテンツのクリエイターが本人か
   const { data: purchase } = await admin
     .from('purchases')
-    .select('id, status, content:contents(creator_id)')
+    .select('id, status, content:contents(creator_id, hard_takedown)')
     .eq('id', purchaseId)
     .maybeSingle()
   if (!purchase) return NextResponse.json({ error: 'not_found' }, { status: 404 })
 
-  const content = purchase.content as { creator_id?: string } | null
+  const content = purchase.content as { creator_id?: string; hard_takedown?: boolean } | null
+  // v57: 配信停止された商品は、未納品分もこれ以上配信させない
+  if (content?.hard_takedown) {
+    return NextResponse.json({ error: 'content_taken_down', message: 'この商品は運営により配信を停止しています' }, { status: 403 })
+  }
   if (content?.creator_id !== user.id && role !== 'admin') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }

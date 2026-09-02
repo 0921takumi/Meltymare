@@ -29,10 +29,16 @@ export default async function MyPage() {
   const purchasedContentIds = [...new Set((purchaseRows ?? []).map((p: any) => p.content_id))]
   const contentById = new Map<string, any>()
   if (purchasedContentIds.length > 0) {
-    const { data: rows } = await createAdminClient()
-      .from('contents')
-      .select('id, title, thumbnail_url, price, creator:profiles(id, display_name)')
-      .in('id', purchasedContentIds)
+    const admin = createAdminClient()
+    const COLS_WITH_TAKEDOWN = 'id, title, thumbnail_url, price, hard_takedown, creator:profiles(id, display_name)'
+    const COLS_FALLBACK = 'id, title, thumbnail_url, price, creator:profiles(id, display_name)'
+    let { data: rows, error } = await admin.from('contents').select(COLS_WITH_TAKEDOWN).in('id', purchasedContentIds)
+    if (error) {
+      // v57 未適用（hard_takedown 列が無い）でも購入履歴が空にならないようにする
+      console.warn('[mypage] hard_takedown 列が未適用の可能性:', error.message)
+      const retry = await admin.from('contents').select(COLS_FALLBACK).in('id', purchasedContentIds)
+      rows = retry.data as any
+    }
     for (const r of rows ?? []) contentById.set(r.id, r)
   }
   const purchases = (purchaseRows ?? []).map((p: any) => ({ ...p, content: contentById.get(p.content_id) ?? null }))
@@ -156,7 +162,13 @@ export default async function MyPage() {
                   </div>
                   {/* ステータス・アクション */}
                   <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                    {isDelivered ? (
+                    {content.hard_takedown ? (
+                      // v57: 法令違反で配信停止した商品。黙って消すと購入者が混乱するため、
+                      // 履歴には残したうえで停止した事実を明示する。
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 12, fontWeight: 600, maxWidth: 200, lineHeight: 1.5 }}>
+                        配信停止中<br />（運営にお問い合わせください）
+                      </div>
+                    ) : isDelivered ? (
                       <a href={`/api/download/${purchase.id}`}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#059669', color: 'white', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
                         <Download size={14} /> DL

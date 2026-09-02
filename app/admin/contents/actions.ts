@@ -4,7 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { sanitizeText } from '@/lib/sanitize'
 
-export type ModerationAction = 'approve' | 'reject' | 'unpublish'
+// v57: takedown は「法令違反による配信停止」。通常の却下と違い、購入済みの人の
+// ダウンロードも止める（返金対応が前提の重い操作）。
+export type ModerationAction = 'approve' | 'reject' | 'unpublish' | 'takedown'
 
 export async function moderateContent(contentId: string, action: ModerationAction, rejectionReason?: string) {
   const supabase = await createClient()
@@ -36,6 +38,18 @@ export async function moderateContent(contentId: string, action: ModerationActio
     patch.requires_admin_review = true
   } else if (action === 'unpublish') {
     patch.is_published = false
+  } else if (action === 'takedown') {
+    const reason = sanitizeText(rejectionReason, { maxLength: 500, allowNewlines: true })
+    if (reason.length < 3) return { error: '配信停止の理由を入力してください' }
+    patch.review_status = 'rejected'
+    patch.is_published = false
+    patch.rejection_reason = reason
+    patch.requires_admin_review = true
+    // 購入済みの人のダウンロードも止める
+    patch.hard_takedown = true
+    patch.takedown_reason = reason
+    patch.takedown_at = new Date().toISOString()
+    patch.takedown_by = user.id
   }
 
   const { data: updated, error } = await supabase.from('contents').update(patch).eq('id', contentId).select('id')

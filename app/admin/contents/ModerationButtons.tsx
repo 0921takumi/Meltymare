@@ -6,10 +6,10 @@ import { moderateContent, type ModerationAction } from './actions'
 export default function ModerationButtons({ contentId, currentStatus, isPublished, title }: { contentId: string; currentStatus: string; isPublished: boolean; title: string }) {
   const [pending, start] = useTransition()
 
-  const go = (action: ModerationAction, confirmText?: string) => {
+  const go = (action: ModerationAction, confirmText?: string, reason?: string) => {
     if (confirmText && !confirm(confirmText)) return
     start(async () => {
-      const res = await moderateContent(contentId, action)
+      const res = await moderateContent(contentId, action, reason)
       if ((res as { error?: string }).error) alert((res as { error: string }).error)
     })
   }
@@ -53,6 +53,14 @@ export default function ModerationButtons({ contentId, currentStatus, isPublishe
       {/* v55以降は販売中の大半が pending（＝未確認のまま販売中）なので、approved 限定だと
           運営に残る手段が「却下」しかなくなる。却下は再公開に運営承認が要る重い操作なので、
           軽く取り下げる手段として公開中なら常に出す。 */}
+      <button
+        onClick={() => {
+          const reason = window.prompt('法令違反による配信停止を行います。購入済みユーザーのダウンロードも停止されます（返金対応が必要です）。理由を入力してください:')
+          if (reason && reason.trim().length >= 3) go('takedown', undefined, reason)
+        }}
+        disabled={pending}
+        style={{ background: '#7f1d1d', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: pending ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}
+      >⛔ 配信停止（法令違反）</button>
       {isPublished && currentStatus !== 'rejected' && (
         <button
           onClick={() => go('unpublish', '公開を停止します。よろしいですか？')}
