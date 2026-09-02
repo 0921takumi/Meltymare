@@ -50,7 +50,10 @@ export default function ModerationButtons({ contentId, currentStatus, isPublishe
           style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: pending ? 'wait' : 'pointer' }}
         >✗ 却下</button>
       )}
-      {isPublished && currentStatus === 'approved' && (
+      {/* v55以降は販売中の大半が pending（＝未確認のまま販売中）なので、approved 限定だと
+          運営に残る手段が「却下」しかなくなる。却下は再公開に運営承認が要る重い操作なので、
+          軽く取り下げる手段として公開中なら常に出す。 */}
+      {isPublished && currentStatus !== 'rejected' && (
         <button
           onClick={() => go('unpublish', '公開を停止します。よろしいですか？')}
           disabled={pending}
