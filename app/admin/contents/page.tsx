@@ -27,7 +27,7 @@ export default async function AdminContentsPage({
   const oldestFirst = filter === 'pending'
   let query = supabase
     .from('contents')
-    .select('*, creator:profiles(id, display_name, username, avatar_url)')
+    .select('*, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url)')
     .order('created_at', { ascending: oldestFirst })
     .limit(200)
 

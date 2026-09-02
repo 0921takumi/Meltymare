@@ -30,8 +30,8 @@ export default async function MyPage() {
   const contentById = new Map<string, any>()
   if (purchasedContentIds.length > 0) {
     const admin = createAdminClient()
-    const COLS_WITH_TAKEDOWN = 'id, title, thumbnail_url, price, hard_takedown, creator:profiles(id, display_name)'
-    const COLS_FALLBACK = 'id, title, thumbnail_url, price, creator:profiles(id, display_name)'
+    const COLS_WITH_TAKEDOWN = 'id, title, thumbnail_url, price, hard_takedown, creator:profiles!contents_creator_id_fkey(id, display_name)'
+    const COLS_FALLBACK = 'id, title, thumbnail_url, price, creator:profiles!contents_creator_id_fkey(id, display_name)'
     let { data: rows, error } = await admin.from('contents').select(COLS_WITH_TAKEDOWN).in('id', purchasedContentIds)
     if (error) {
       // v57 未適用（hard_takedown 列が無い）でも購入履歴が空にならないようにする

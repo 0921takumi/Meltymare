@@ -21,7 +21,7 @@ export default async function AdminAnalyticsPage() {
     supabase.from('profiles').select('created_at, role').gte('created_at', last90.toISOString()),
     supabase.from('contents').select('created_at, is_published').gte('created_at', last90.toISOString()),
     supabase.from('profiles').select('id, display_name, username, avatar_url').eq('role', 'creator'),
-    supabase.from('contents').select('id, title, sold_count, price, thumbnail_url, creator:profiles(display_name, username)').eq('is_published', true).order('sold_count', { ascending: false }).limit(10),
+    supabase.from('contents').select('id, title, sold_count, price, thumbnail_url, creator:profiles!contents_creator_id_fkey(display_name, username)').eq('is_published', true).order('sold_count', { ascending: false }).limit(10),
     supabase.from('profiles').select('id, display_name, username, avatar_url').eq('role', 'user').limit(500),
   ])
 

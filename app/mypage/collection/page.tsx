@@ -47,7 +47,7 @@ export default async function CollectionPage() {
   if (purchasedContentIds.length > 0) {
     const { data: rows } = await createAdminClient()
       .from('contents')
-      .select('id, title, thumbnail_url, price, creator_id, creator:profiles(id, display_name, username, avatar_url)')
+      .select('id, title, thumbnail_url, price, creator_id, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url)')
       .in('id', purchasedContentIds)
     for (const r of rows ?? []) contentById.set(r.id, r)
   }

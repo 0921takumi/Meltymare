@@ -24,7 +24,7 @@ export default async function AdminPayoutsPage() {
   // 振込履歴
   const { data: payouts } = await supabase
     .from('payouts')
-    .select('*, creator:profiles(display_name)')
+    .select('*, creator:profiles!contents_creator_id_fkey(display_name)')
     .order('created_at', { ascending: false })
     .limit(30)
 

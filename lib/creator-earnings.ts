@@ -25,8 +25,8 @@ export async function computePendingEarningsByCreator(
 ): Promise<Record<string, CreatorEarnings>> {
   // hard_takedown は v57 で追加した列。未適用のDBに対しても集計が落ちないようにする
   // （落ちると管理画面の振込予定額が丸ごと表示できなくなる）。
-  const SEL_WITH_TAKEDOWN = 'content_price, amount, tip_amount, fee_rate, content:contents(creator_id, hard_takedown, creator:profiles(fee_rate))'
-  const SEL_FALLBACK = 'content_price, amount, tip_amount, fee_rate, content:contents(creator_id, creator:profiles(fee_rate))'
+  const SEL_WITH_TAKEDOWN = 'content_price, amount, tip_amount, fee_rate, content:contents(creator_id, hard_takedown, creator:profiles!contents_creator_id_fkey(fee_rate))'
+  const SEL_FALLBACK = 'content_price, amount, tip_amount, fee_rate, content:contents(creator_id, creator:profiles!contents_creator_id_fkey(fee_rate))'
   const load = (sel: string) => fetchAllRows((from, to) => supabase
     .from('purchases')
     .select(sel)

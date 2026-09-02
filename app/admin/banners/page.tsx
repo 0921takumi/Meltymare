@@ -14,7 +14,7 @@ export default async function AdminBannersPage() {
 
   const { data: banners } = await supabase
     .from('featured_banners')
-    .select('*, creator:profiles(id, display_name, username), content:contents(id, title)')
+    .select('*, creator:profiles!contents_creator_id_fkey(id, display_name, username), content:contents(id, title)')
     .order('sort_order', { ascending: true })
 
   // クリエイター一覧 (選択用)

@@ -85,7 +85,7 @@ export default async function NotificationsPage() {
   // 自分の購入完了 / 納品完了
   const { data: myPurchases } = await supabase
     .from('purchases')
-    .select('id, status, delivery_status, delivered_at, created_at, content:contents(id, title, thumbnail_url, creator:profiles(display_name, avatar_url))')
+    .select('id, status, delivery_status, delivered_at, created_at, content:contents(id, title, thumbnail_url, creator:profiles!contents_creator_id_fkey(display_name, avatar_url))')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(50)
@@ -149,7 +149,7 @@ export default async function NotificationsPage() {
     since.setDate(since.getDate() - 30)
     const { data: newContents } = await supabase
       .from('contents')
-      .select('id, title, thumbnail_url, created_at, creator:profiles(id, display_name, avatar_url)')
+      .select('id, title, thumbnail_url, created_at, creator:profiles!contents_creator_id_fkey(id, display_name, avatar_url)')
       .in('creator_id', followedIds)
       .eq('is_published', true)
       .neq('review_status', 'rejected')

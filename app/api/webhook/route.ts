@@ -275,7 +275,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // 後日adminが手数料率を変更しても、過去の確定売上の手数料が遡って変わらないようにするため。
   const { data: contentRow } = await supabase
     .from('contents')
-    .select('creator_id, creator:profiles(fee_rate)')
+    .select('creator_id, creator:profiles!contents_creator_id_fkey(fee_rate)')
     .eq('id', purchase.content_id)
     .maybeSingle()
   const feeRateSnapshot = (contentRow as unknown as { creator: { fee_rate: number } | null } | null)?.creator?.fee_rate ?? null
@@ -723,7 +723,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
     const { data: user } = await supabase.from('profiles').select('display_name').eq('id', userId).single()
     const { data: content } = await supabase
       .from('contents')
-      .select('title, price, creator:profiles(display_name)')
+      .select('title, price, creator:profiles!contents_creator_id_fkey(display_name)')
       .eq('id', contentId)
       .single()
     if (!user || !content) return
@@ -779,7 +779,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
   try {
     const { data: purchase } = await supabase
       .from('purchases')
-      .select('user_id, content:contents(title, creator:profiles(display_name))')
+      .select('user_id, content:contents(title, creator:profiles!contents_creator_id_fkey(display_name))')
       .eq('id', purchaseId)
       .single()
     if (!purchase) return

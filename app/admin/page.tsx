@@ -61,7 +61,7 @@ export default async function AdminDashboard() {
     fetchAllRows((from, to) => supabase.from('purchases').select('amount, tip_amount, created_at').eq('status', 'completed').range(from, to)),
     fetchAllRows((from, to) => supabase.from('purchases').select('amount, tip_amount').eq('status', 'completed').gte('created_at', startOfMonth).range(from, to)),
     fetchAllRows((from, to) => supabase.from('purchases').select('amount, tip_amount, created_at').eq('status', 'completed').gte('created_at', last30).range(from, to)),
-    fetchAllRows((from, to) => supabase.from('purchases').select('amount, content_price, tip_amount, fee_rate, content:contents(creator:profiles(fee_rate))').eq('status', 'completed').is('payout_id', null).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('purchases').select('amount, content_price, tip_amount, fee_rate, content:contents(creator:profiles!contents_creator_id_fkey(fee_rate))').eq('status', 'completed').is('payout_id', null).range(from, to)),
   ])
 
   // purchases.amount は既に content_price + tip_amount（purchase/route.ts参照）。

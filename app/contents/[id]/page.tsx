@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   // 本文側の表示条件とメタデータの取得条件を揃える。
   const { data: content } = await supabase
     .from('contents')
-    .select('title, description, thumbnail_url, price, creator:profiles(display_name)')
+    .select('title, description, thumbnail_url, price, creator:profiles!contents_creator_id_fkey(display_name)')
     .eq('id', id)
     .eq('is_published', true)
     .neq('review_status', 'rejected')
@@ -45,7 +45,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const CONTENT_SELECT = '*, creator:profiles(id, display_name, username, avatar_url, bio, twitter_url, instagram_url, tiktok_url)'
+  const CONTENT_SELECT = '*, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url, bio, twitter_url, instagram_url, tiktok_url)'
   // 依頼で発覚(表示が遅い): 自分のプロフィール取得と本体コンテンツ取得は互いに無関係
   // なのに直列で行っていた。並行して取得する。
   const [profileResult, contentResult] = await Promise.all([

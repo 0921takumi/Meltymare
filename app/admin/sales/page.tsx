@@ -10,7 +10,7 @@ export default async function AdminSalesPage() {
   // v42: fetchAllRows で PostgREST のデフォルト行数上限による無言の切り捨てを防止。
   const purchases = await fetchAllRows((from, to) => admin
     .from('purchases')
-    .select('*, content:contents(title, price, creator:profiles(display_name, fee_rate)), user:profiles(display_name, email)')
+    .select('*, content:contents(title, price, creator:profiles!contents_creator_id_fkey(display_name, fee_rate)), user:profiles(display_name, email)')
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
     .range(from, to))

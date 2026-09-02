@@ -72,7 +72,7 @@ export default async function HomePage() {
       : Promise.resolve({ data: [] } as any),
     supabase
       .from('featured_banners')
-      .select('*, creator:profiles(id, display_name, username, avatar_url), content:contents(id, title, thumbnail_url)')
+      .select('*, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url), content:contents(id, title, thumbnail_url)')
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
       .limit(5),

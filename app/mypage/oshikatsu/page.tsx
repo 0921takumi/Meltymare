@@ -42,7 +42,7 @@ export default async function OshikatsuPage() {
   // 購入履歴
   const { data: purchasesData } = await supabase
     .from('purchases')
-    .select('id, amount, tip_amount, created_at, content:contents(id, title, thumbnail_url, creator:profiles(id, display_name, username, avatar_url))')
+    .select('id, amount, tip_amount, created_at, content:contents(id, title, thumbnail_url, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url))')
     .eq('user_id', user.id)
     .eq('status', 'completed')
     .order('created_at', { ascending: false })

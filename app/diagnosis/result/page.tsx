@@ -34,7 +34,7 @@ export default async function DiagnosisResultPage({
 
   const { data: contents } = await supabase
     .from('contents')
-    .select('id, title, tags, price, thumbnail_url, creator_id, sold_count, creator:profiles(id, display_name, username, avatar_url, bio)')
+    .select('id, title, tags, price, thumbnail_url, creator_id, sold_count, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url, bio)')
     .eq('is_published', true)
     .neq('review_status', 'rejected')
 

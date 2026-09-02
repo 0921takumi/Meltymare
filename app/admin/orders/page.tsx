@@ -30,7 +30,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
 
   let query = admin
     .from('purchases')
-    .select('id, amount, tip_amount, status, delivery_status, created_at, content:contents!inner(id, title, thumbnail_url, creator:profiles(id, display_name, username)), user:profiles!purchases_user_id_fkey(id, display_name, email, avatar_url)', { count: 'exact' })
+    .select('id, amount, tip_amount, status, delivery_status, created_at, content:contents!inner(id, title, thumbnail_url, creator:profiles!contents_creator_id_fkey(id, display_name, username)), user:profiles!purchases_user_id_fkey(id, display_name, email, avatar_url)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + PER_PAGE - 1)
 
