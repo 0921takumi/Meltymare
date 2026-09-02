@@ -72,7 +72,9 @@ export default async function HomePage() {
       : Promise.resolve({ data: [] } as any),
     supabase
       .from('featured_banners')
-      .select('*, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url), content:contents(id, title, thumbnail_url)')
+      // featured_banners→profiles は単一FK(featured_banners_creator_id_fkey)。contents 用の
+      // ヒント(contents_creator_id_fkey)を付けると PGRST200 で特集が無言で全消えする。
+      .select('*, creator:profiles!featured_banners_creator_id_fkey(id, display_name, username, avatar_url), content:contents(id, title, thumbnail_url)')
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
       .limit(5),

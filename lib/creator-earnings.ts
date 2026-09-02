@@ -37,7 +37,10 @@ export async function computePendingEarningsByCreator(
   try {
     purchases = await load(SEL_WITH_TAKEDOWN)
   } catch (e) {
-    console.warn('[creator-earnings] hard_takedown 列が未適用の可能性:', (e as Error).message)
+    // フォールバックは「列が無い(42703)」のときだけ。RLS 拒否やネットワーク断まで拾うと、
+    // 配信停止した商品の売上が静かに振込予定額へ混ざる。
+    if ((e as { code?: string })?.code !== '42703') throw e
+    console.warn('[creator-earnings] hard_takedown 列が未適用:', (e as Error).message)
     purchases = await load(SEL_FALLBACK)
   }
 

@@ -54,12 +54,14 @@ export async function POST(req: Request) {
   if (!purchase) return NextResponse.json({ error: 'not_found' }, { status: 404 })
 
   const content = purchase.content as { creator_id?: string; hard_takedown?: boolean } | null
+  // 所有権を先に判定する（配信停止の判定を先に置くと、他人の purchase ID を投げた第三者に
+  // 「その商品が配信停止されたか」を教える応答オラクルになる）。
+  if (content?.creator_id !== user.id && role !== 'admin') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  }
   // v57: 配信停止された商品は、未納品分もこれ以上配信させない
   if (content?.hard_takedown) {
     return NextResponse.json({ error: 'content_taken_down', message: 'この商品は運営により配信を停止しています' }, { status: 403 })
-  }
-  if (content?.creator_id !== user.id && role !== 'admin') {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
   // 完了済みの購入のみ納品可（pending/failed には納品しない）
   if (purchase.status !== 'completed') {

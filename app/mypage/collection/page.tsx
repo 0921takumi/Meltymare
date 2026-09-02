@@ -19,6 +19,7 @@ interface PurchaseRow {
     thumbnail_url: string | null
     price: number
     creator_id: string
+    hard_takedown?: boolean | null
     creator: { id: string; display_name: string; username: string; avatar_url: string | null } | null
   } | null
 }
@@ -45,10 +46,21 @@ export default async function CollectionPage() {
   const purchasedContentIds = [...new Set((purchaseRows ?? []).map((p: any) => p.content_id))]
   const contentById = new Map<string, any>()
   if (purchasedContentIds.length > 0) {
-    const { data: rows } = await createAdminClient()
-      .from('contents')
-      .select('id, title, thumbnail_url, price, creator_id, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url)')
-      .in('id', purchasedContentIds)
+    // v57 追随: /mypage と同様に hard_takedown を見て、配信停止した商品はサムネイルもリンクも出さない
+    // （納品前監査で「コレクション帳だけ配信停止した商品が通常どおり並び続ける」と指摘）。
+    const admin = createAdminClient()
+    const COLS = 'id, title, thumbnail_url, price, creator_id, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url)'
+    let rows: any[] | null = null
+    const withFlag = await admin.from('contents').select(`${COLS}, hard_takedown`).in('id', purchasedContentIds)
+    if (withFlag.error?.code === '42703') {
+      console.warn('[collection] hard_takedown 列が未適用:', withFlag.error.message)
+      const plain = await admin.from('contents').select(COLS).in('id', purchasedContentIds)
+      if (plain.error) console.error('[collection] contents lookup failed:', plain.error.message)
+      rows = plain.data
+    } else {
+      if (withFlag.error) console.error('[collection] contents lookup failed:', withFlag.error.message)
+      rows = withFlag.data
+    }
     for (const r of rows ?? []) contentById.set(r.id, r)
   }
   const purchases = ((purchaseRows ?? []).map((p: any) => ({
@@ -133,7 +145,13 @@ export default async function CollectionPage() {
                     )}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
-                    {group.items.map(p => (
+                    {group.items.map(p => p.content?.hard_takedown ? (
+                      <div key={p.id} style={{ aspectRatio: '1/1', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: 8, textAlign: 'center' }}>
+                        <span style={{ fontSize: 20 }}>⛔</span>
+                        <p style={{ fontSize: 10, fontWeight: 700, color: '#991b1b', lineHeight: 1.4 }}>配信停止中</p>
+                        <p style={{ fontSize: 9, color: '#991b1b', lineHeight: 1.3 }}>運営にお問い合わせください</p>
+                      </div>
+                    ) : (
                       <Link key={p.id} href={`/contents/${p.content!.id}`} style={{ textDecoration: 'none' }}>
                         <div style={{ aspectRatio: '1/1', borderRadius: 8, overflow: 'hidden', background: 'var(--mm-primary-light)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', position: 'relative' }}>
                           {p.content?.thumbnail_url ? (

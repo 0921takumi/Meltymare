@@ -170,15 +170,21 @@ function UploadForm() {
         // ファイル以外の修正では resubmit が一切呼ばれず rejected のまま無期限にロックされていた。
         // ファイル変更の有無に関わらず、却下済みを編集して保存した時点で常に再審査する。
         // 監査で発覚(2): 承認済みコンテンツのサムネイルだけを差し替えても再審査が一切
-        // 走らず、無審査の画像がそのまま即座に公開され続けていた。承認済みコンテンツで
-        // 新しいサムネイルをアップロードした場合も再審査の対象に含める
-        // （resubmit_content_for_review はv47でapproved始点にも対応済み）。
+        // 走らず、無審査の画像がそのまま即座に公開され続けていた。
+        // 納品前監査で発覚(3): サムネイルしか見ていなかったため、承認済みの「本体ファイル」だけを
+        // 差し替えると再審査されず、審査を通した動画の中身をあとから任意のファイルに入れ替えられた。
+        // 本体・サムネイルのどちらかを差し替えたら、審査状態に関わらず再審査する
+        // （fileUrl/thumbnailUrl は新規アップロード時だけ値が入る）。DB側のトリガー(v59)でも
+        // approved→pending に戻すが、AI審査の再トリガーはここが担う。
         const needsReReview = editId && (
-          originalReviewStatus === 'rejected' ||
-          (originalReviewStatus === 'approved' && !!thumbnailUrl)
+          originalReviewStatus === 'rejected' || !!fileUrl || !!thumbnailUrl
         )
         if (needsReReview) {
-          const { data: resubmitted } = await supabase.rpc('resubmit_content_for_review', { p_content_id: editId })
+          const { data: resubmitted, error: resubmitErr } = await supabase.rpc('resubmit_content_for_review', { p_content_id: editId })
+          if (resubmitErr) console.warn('resubmit_content_for_review failed:', resubmitErr.message)
+          // v56 が RPC の対象を rejected 限定に絞った際、ここが false を受けて無言で再審査を
+          // スキップしていた。同じ巻き戻しが起きても気づけるよう、false は必ずログに残す。
+          if (resubmitted !== true) console.warn('resubmit_content_for_review returned', resubmitted, '- moderation NOT re-triggered for', editId)
           if (resubmitted === true) {
             // 依頼で発覚: 保存が遅いという報告の主因がここだった。AI審査(AWS Rekognitionへの
             // 実ファイル取得+検出)は数秒かかるが、コメントにある通り「失敗しても投稿自体は

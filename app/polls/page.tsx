@@ -28,7 +28,7 @@ export default async function PollsFeedPage() {
 
   const { data: rawPolls, error } = await supabase
     .from('polls')
-    .select('id, question, options, status, created_at, creator:profiles!contents_creator_id_fkey(display_name, username, avatar_url)')
+    .select('id, question, options, status, created_at, creator:profiles!polls_creator_id_fkey(display_name, username, avatar_url)')
     .eq('status', 'open')
     .order('created_at', { ascending: false })
     .limit(30)

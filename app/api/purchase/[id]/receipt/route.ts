@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { PDFDocument, rgb } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
@@ -21,7 +22,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   // 本人が完了済みで行った購入のみ対象。id×user_id×status で所有者チェックを兼ねる。
   const { data: purchase, error } = await supabase
     .from('purchases')
-    .select('id, amount, created_at, status, content:contents(title)')
+    .select('id, amount, created_at, status, content_id')
     .eq('id', id)
     .eq('user_id', user.id)
     .eq('status', 'completed')
@@ -33,8 +34,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
   if (!purchase) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content
-  const rawTitle = content?.title ?? 'コンテンツ'
+  // 納品前監査で発覚: 商品名を RLS 越しの埋め込みで取っていたため、購入後に却下・非公開・
+  // 配信停止された商品は埋め込みが null になり、但し書きが「コンテンツ」になっていた
+  // （金銭書類として商品名が抜ける実害）。所有者チェックは上の purchases 行で済んでいるので、
+  // 商品名だけ service_role で読む。
+  const { data: contentRow } = await createAdminClient()
+    .from('contents')
+    .select('title')
+    .eq('id', purchase.content_id)
+    .maybeSingle()
+  const rawTitle = contentRow?.title ?? 'コンテンツ'
   // タイトルは自由入力(文字数上限なし)。但し書き行の幅に収まるよう安全側で切り詰める。
   const MAX_TITLE_LEN = 40
   const title = rawTitle.length > MAX_TITLE_LEN ? rawTitle.slice(0, MAX_TITLE_LEN) + '…' : rawTitle

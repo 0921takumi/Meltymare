@@ -66,8 +66,19 @@ export async function PATCH(req: Request) {
   // 不一致なら監査ログに残す（自動修正はしない＝金額を勝手に書き換えない）。
   let linkedTotal = 0
   if (status === 'completed' && payoutRow?.creator_id) {
-    const { data: creatorContents } = await admin.from('contents').select('id').eq('creator_id', payoutRow.creator_id)
-    const contentIds = (creatorContents ?? []).map(c => c.id)
+    // v57: 配信停止(hard_takedown)した商品の売上は振込予定額(lib/creator-earnings)から除外している。
+    // 紐付けも同じ基準に揃えないと、払っていない売上に payout_id が付いて未払いプールから永久に
+    // 消え、停止を解除しても復活しない。列未適用(42703)の環境では従来どおり全件を対象にする。
+    let creatorContents: { id: string; hard_takedown?: boolean | null }[] | null = null
+    const withFlag = await admin.from('contents').select('id, hard_takedown').eq('creator_id', payoutRow.creator_id)
+    if (withFlag.error?.code === '42703') {
+      const plain = await admin.from('contents').select('id').eq('creator_id', payoutRow.creator_id)
+      creatorContents = plain.data
+    } else {
+      if (withFlag.error) console.error('[admin-payout] contents lookup failed:', withFlag.error.message, 'payout:', payoutId)
+      creatorContents = withFlag.data
+    }
+    const contentIds = (creatorContents ?? []).filter(c => !c.hard_takedown).map(c => c.id)
     if (contentIds.length > 0) {
       let linkQuery = admin.from('purchases')
         .update({ payout_id: payoutId })

@@ -294,6 +294,12 @@ export default async function CreatorDashboard() {
                           <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>
                             <Eye size={13} /> 販売中
                           </span>
+                        ) : c.content_type === 'video' ? (
+                          // v58: 動画は運営が承認するまで公開されない。自分で下書きにした「非公開」と
+                          // 同じ表示だと、承認待ちであることが伝わらない。
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#d97706', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            <Clock size={13} /> 運営確認待ち
+                          </span>
                         ) : (
                           <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--mm-text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                             <EyeOff size={13} /> 非公開

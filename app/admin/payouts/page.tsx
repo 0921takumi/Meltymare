@@ -22,11 +22,17 @@ export default async function AdminPayoutsPage() {
   const pendingByCreator = await computePendingEarningsByCreator(supabase)
 
   // 振込履歴
-  const { data: payouts } = await supabase
+  // 納品前監査で発覚: contents 用の FK ヒント(contents_creator_id_fkey)が一括置換でここにも入り、
+  // PostgREST が PGRST200 を返して履歴が常に「0件」表示になっていた。履歴が出ない＝振込を
+  // completed にする唯一のUI(PayoutStatusChanger)に到達できず、purchases.payout_id の紐付けが
+  // 一度も走らない＝振込予定額が永遠に減らず二重払いを誘発する。payouts→profiles の制約名は
+  // payouts_creator_id_fkey。error は握り潰さず、「0件」と「取得失敗」を画面で区別する。
+  const { data: payouts, error: payoutsError } = await supabase
     .from('payouts')
-    .select('*, creator:profiles!contents_creator_id_fkey(display_name)')
+    .select('*, creator:profiles!payouts_creator_id_fkey(display_name)')
     .order('created_at', { ascending: false })
     .limit(30)
+  if (payoutsError) console.error('[admin/payouts] payouts query failed:', payoutsError.message)
 
   return (
     <div className="admin-page">
@@ -95,7 +101,11 @@ export default async function AdminPayoutsPage() {
         <span style={{ width: 18, height: 1, background: 'var(--mm-primary)' }} />
         振込履歴
       </h2>
-      {!payouts || payouts.length === 0 ? (
+      {payoutsError ? (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: 20, color: '#991b1b', fontSize: 13, fontWeight: 600 }}>
+          振込履歴を取得できませんでした（{payoutsError.message}）。0件ではなく取得エラーです。
+        </div>
+      ) : !payouts || payouts.length === 0 ? (
         <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 12, padding: 40, textAlign: 'center', color: 'var(--mm-text-muted)', fontSize: 13 }}>
           振込履歴がありません
         </div>

@@ -6,7 +6,9 @@ import ModerationButtons from './ModerationButtons'
 
 export const dynamic = 'force-dynamic'
 
-type Filter = 'pending' | 'approved' | 'rejected' | 'all'
+type Filter = 'pending' | 'approved' | 'rejected' | 'takedown' | 'all'
+
+const PAGE_LIMIT = 200
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string; icon: React.ComponentType<{ size?: number }> }> = {
   pending:  { label: '新着・未確認', color: '#d97706', bg: '#fef3c7', icon: Clock },
@@ -29,13 +31,18 @@ export default async function AdminContentsPage({
     .from('contents')
     .select('*, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url)')
     .order('created_at', { ascending: oldestFirst })
-    .limit(200)
+    .limit(PAGE_LIMIT)
 
-  if (filter !== 'all') {
+  // 納品前監査で発覚: 配信停止(takedown)は review_status='rejected' も立てるため「却下」タブに
+  // 紛れ、通常の却下と区別できなかった。専用タブを設ける。
+  if (filter === 'takedown') {
+    query = query.eq('hard_takedown', true)
+  } else if (filter !== 'all') {
     query = query.eq('review_status', filter)
   }
 
-  const { data: contents } = await query
+  const { data: contents, error: contentsError } = await query
+  if (contentsError) console.error('[admin/contents] query failed:', contentsError.message)
 
   // 依頼: 「プレビューではなく、実際の販売写真が確認できるようにしてほしい」。
   // 従来はサムネイルが無いときだけ本体を署名URLで出していたため、サムネイル付きの商品は
@@ -54,13 +61,14 @@ export default async function AdminContentsPage({
 
   // 件数は全行を取得して数えると1000行で頭打ちになり、SLAバナーが過少表示になる。
   // head:true の件数取得に変えて件数だけを正確に得る。
-  const counts: Record<string, number> = { pending: 0, approved: 0, rejected: 0 }
-  const countResults = await Promise.all(
-    (['pending', 'approved', 'rejected'] as const).map(st =>
+  const counts: Record<string, number> = { pending: 0, approved: 0, rejected: 0, takedown: 0 }
+  const countResults = await Promise.all([
+    ...(['pending', 'approved', 'rejected'] as const).map(st =>
       supabase.from('contents').select('id', { count: 'exact', head: true }).eq('review_status', st)
-    )
-  )
-  ;(['pending', 'approved', 'rejected'] as const).forEach((st, i) => {
+    ),
+    supabase.from('contents').select('id', { count: 'exact', head: true }).eq('hard_takedown', true),
+  ])
+  ;(['pending', 'approved', 'rejected', 'takedown'] as const).forEach((st, i) => {
     counts[st] = countResults[i].count ?? 0
   })
 
@@ -70,8 +78,14 @@ export default async function AdminContentsPage({
     { key: 'pending',  label: '新着・未確認', count: counts.pending,  color: '#d97706' },
     { key: 'approved', label: '承認済み', count: counts.approved, color: '#059669' },
     { key: 'rejected', label: '却下',     count: counts.rejected, color: '#dc2626' },
+    { key: 'takedown', label: '配信停止', count: counts.takedown, color: '#7f1d1d' },
     { key: 'all',      label: 'すべて' },
   ]
+
+  // 200件で切っている。件数バッジは正確なので、切れているときは明示する（既定非表示禁止）。
+  const shownCount = contents?.length ?? 0
+  const totalForFilter = filter === 'all' ? null : counts[filter]
+  const truncated = totalForFilter != null && shownCount >= PAGE_LIMIT && totalForFilter > shownCount
 
   return (
     <div className="admin-page">
@@ -83,8 +97,8 @@ export default async function AdminContentsPage({
         <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '12px 16px', marginBottom: 22, display: 'flex', alignItems: 'center', gap: 12 }}>
           <AlertTriangle size={18} color="#d97706" />
           <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>未確認の新着出品が {counts.pending} 件あります（すでに販売中）</p>
-            <p style={{ fontSize: 11, color: '#9a6a1a', marginTop: 2 }}>v55以降、出品は審査を待たずに販売開始されます。ここは公開後の事後チェック用です。ガイドライン違反を見つけたら「却下」で即座に取り下げてください（赤色は投稿から24時間以上未確認）。</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>未確認の新着出品が {counts.pending} 件あります</p>
+            <p style={{ fontSize: 11, color: '#9a6a1a', marginTop: 2 }}>写真は審査を待たずに販売中です（事後チェック）。動画は「承認待ち」バッジのもので、承認するまで公開されません＝クリエイターが待っています。ガイドライン違反は「却下」で取り下げ、法令違反は「配信停止」（赤枠は投稿から24時間以上未確認）。</p>
           </div>
         </div>
       )}
@@ -112,6 +126,17 @@ export default async function AdminContentsPage({
           )
         })}
       </div>
+
+      {contentsError && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#991b1b', fontSize: 13, fontWeight: 600 }}>
+          一覧を取得できませんでした（{contentsError.message}）。0件ではなく取得エラーです。
+        </div>
+      )}
+      {truncated && (
+        <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', marginBottom: 16, color: '#92400e', fontSize: 12, fontWeight: 600 }}>
+          {totalForFilter} 件中、{filter === 'pending' ? '古い順に' : '新しい順に'}最初の {shownCount} 件だけ表示しています。処理して件数を減らすと残りが出ます。
+        </div>
+      )}
 
       {!contents || contents.length === 0 ? (
         <div className="admin-empty">
@@ -177,6 +202,28 @@ export default async function AdminContentsPage({
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: meta.bg, color: meta.color, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
                       <Icon size={11} />{meta.label}
                     </span>
+                    {c.hard_takedown && (
+                      <span style={{ background: '#7f1d1d', color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                        ⛔ 配信停止中（購入者のDLも停止）
+                      </span>
+                    )}
+                    {/* pending の意味は v55 で「販売中・確認は事後」に変わったが、動画(v58)だけは
+                        承認まで非公開。同じ列に混ざるので、どちらなのかを行ごとに明示する。 */}
+                    {status === 'pending' && !c.hard_takedown && (
+                      c.is_published ? (
+                        <span style={{ background: '#d1fae5', color: '#065f46', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                          販売中（事後確認）
+                        </span>
+                      ) : c.content_type === 'video' ? (
+                        <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                          承認待ち（未公開・クリエイターが待っています）
+                        </span>
+                      ) : (
+                        <span style={{ background: '#6b7280', color: 'white', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                          非公開（下書き）
+                        </span>
+                      )
+                    )}
                     {c.moderated_at == null && (
                       <span style={{ background: '#fee2e2', color: '#991b1b', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap' }}>
                         AI未実行
@@ -226,7 +273,7 @@ export default async function AdminContentsPage({
                     <Link href={`/contents/${c.id}`} target="_blank" style={{ fontSize: 11, color: 'var(--mm-primary)', textDecoration: 'none', fontWeight: 600 }}>
                       プレビューを開く ↗
                     </Link>
-                    <ModerationButtons contentId={c.id} currentStatus={status} isPublished={c.is_published} title={c.title} />
+                    <ModerationButtons contentId={c.id} currentStatus={status} isPublished={c.is_published} title={c.title} hardTakedown={!!c.hard_takedown} />
                   </div>
                 </div>
               </div>

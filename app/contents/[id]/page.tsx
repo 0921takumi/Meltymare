@@ -11,6 +11,9 @@ import { notFound } from 'next/navigation'
 import { ImageIcon, VideoIcon, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { COMPANY } from '@/lib/config'
+
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp').trim()
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
@@ -56,6 +59,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   ])
   const profile = profileResult.data
   let content = contentResult.data
+  let viewerIsBuyer = false
 
   if (!content) {
     // 監査で発覚: is_published=true固定のため、管理者が審査前(pending/rejected)の
@@ -65,6 +69,24 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     // （無関係な訪問者は同じクエリでもRLSにより0件になるため安全）。
     const { data: fallback } = await supabase.from('contents').select(CONTENT_SELECT).eq('id', id).maybeSingle()
     content = fallback
+  }
+
+  if (!content && user) {
+    // 納品前監査で発覚: 購入後に却下・非公開になった商品は、購入履歴のタイトルリンクから
+    // ここに来ると 404 になっていた（「買ったものが消えた」体験がリンク経由で残る）。
+    // RLS では他人の非公開行は取れないため、完了済みの購入がある場合だけ service_role で
+    // 取り直す。配信停止(hard_takedown)は購入者にも見せない（DL も 403）。
+    const { data: bought } = await supabase
+      .from('purchases').select('id')
+      .eq('user_id', user.id).eq('content_id', id).eq('status', 'completed')
+      .limit(1).maybeSingle()
+    if (bought) {
+      const { data: boughtContent } = await createAdminClient().from('contents').select(CONTENT_SELECT).eq('id', id).maybeSingle()
+      if (boughtContent && !(boughtContent as { hard_takedown?: boolean }).hard_takedown) {
+        content = boughtContent
+        viewerIsBuyer = true
+      }
+    }
   }
 
   if (!content) return notFound()
@@ -82,10 +104,11 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   // 実際には is_published しか見ておらず（v27の審査ゲートが未適用）、却下済みでも
   // is_published=true のままなら第三者に見えてしまう。事後審査では「却下=取り下げ」が
   // 唯一の販売停止手段なので、RLS任せにせずアプリ側でも必ず閉じる。
-  if (!isOwner && !isAdminViewer) {
+  if (!isOwner && !isAdminViewer && !viewerIsBuyer) {
     const c = content as { is_published?: boolean; review_status?: string | null }
     if (c.is_published !== true || c.review_status === 'rejected') return notFound()
   }
+  const buyerSeesStoppedItem = viewerIsBuyer && (content.is_published !== true || content.review_status === 'rejected')
 
   // 依頼で発覚(表示が遅い): ここから先の凍結チェック・購入済みチェック・関連コンテンツ・
   // 購入済みIDリスト・レビュー取得は互いに無関係なのに直列(await→await→…)で行っており、
@@ -218,6 +241,12 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
               </div>
             </div>
 
+            {buyerSeesStoppedItem && (
+              <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#92400e', lineHeight: 1.6 }}>
+                この商品は現在販売を停止しています。購入済みのため、ダウンロードと領収書は引き続きご利用いただけます。
+              </div>
+            )}
+
             {/* 購入ボタン */}
             <PurchaseButton
               contentId={content.id}
@@ -228,6 +257,16 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
               isLoggedIn={!!user}
               downloadUrl={downloadUrl}
             />
+
+            {/* 通報導線。ガイドラインが案内する「通報する」の実体（納品前監査で「ボタンが存在しない」と
+                指摘）。写真が事後審査になった以上、運営の目視以外に違反を見つける経路が要る。
+                DB を増やさずメール窓口に直結する。 */}
+            <p style={{ fontSize: 11, textAlign: 'right', marginTop: -6 }}>
+              <a
+                href={`mailto:${COMPANY.email}?subject=${encodeURIComponent(`【通報】コンテンツ ${content.id}`)}&body=${encodeURIComponent(`通報対象: ${APP_URL}/contents/${content.id}\n\n理由（できるだけ具体的に）:\n`)}`}
+                style={{ color: 'var(--mm-text-muted)', textDecoration: 'underline' }}
+              >この商品を通報する</a>
+            </p>
 
             {/* クリエイター */}
             {content.creator && (

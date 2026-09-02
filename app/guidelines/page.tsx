@@ -79,7 +79,7 @@ export default function GuidelinesPage() {
         {/* 通報・問い合わせ */}
         <Section icon={<Shield size={18} color="var(--mm-primary)" />} title="違反コンテンツの通報">
           <p>
-            違反が疑われるコンテンツやコメントを発見した場合、各コンテンツ・コメントの <strong>「通報する」ボタン</strong> または下記窓口までご連絡ください。
+            違反が疑われるコンテンツを発見した場合、各コンテンツページ下部の <strong>「この商品を通報する」</strong>（メールが開きます）または下記窓口までご連絡ください。
           </p>
           <p style={{ marginTop: 8 }}>
             通報窓口: <a href={`mailto:${COMPANY.email}`} style={{ color: 'var(--mm-primary)' }}>{COMPANY.email}</a>

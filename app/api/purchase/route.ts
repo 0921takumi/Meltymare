@@ -54,9 +54,9 @@ export async function POST(req: NextRequest) {
     }
 
     // コンテンツ取得
-    // review_status='approved' のみ購入可能。pending（審査待ち）/ rejected（却下）はブロック。
-    // AIモデレーション/admin手動レビューでフラグされたコンテンツが
-    // is_published=true のまま放置されていても、購入導線を物理的に閉じる二重防御。
+    // v55(事後審査)以降: rejected（却下）だけをブロックし、pending（販売中・運営の確認は事後）と
+    // approved は購入可能。hard_takedown(配信停止)は RLS(v57)が行ごと隠すので .single() が 404 になる。
+    // 却下された商品が is_published=true のまま残っていても、購入導線を物理的に閉じる二重防御。
     const { data: content, error: contentError } = await supabase
       .from('contents')
       .select('*')

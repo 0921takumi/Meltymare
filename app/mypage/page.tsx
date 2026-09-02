@@ -142,17 +142,22 @@ export default async function MyPage() {
                 <div key={purchase.id} className="mm-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                   {/* サムネイル */}
                   <div style={{ width: 60, height: 60, borderRadius: 8, background: 'var(--mm-primary-light)', flexShrink: 0, overflow: 'hidden' }}>
-                    {content.thumbnail_url ? (
+                    {/* 配信停止した商品は画像も出さない（法令違反として止めたものを購入者画面に描画し続けない） */}
+                    {content.thumbnail_url && !content.hard_takedown ? (
                       <img src={content.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📷</div>
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{content.hard_takedown ? '⛔' : '📷'}</div>
                     )}
                   </div>
                   {/* 情報 */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <Link href={`/contents/${content.id}`} style={{ textDecoration: 'none' }}>
+                    {content.hard_takedown ? (
                       <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--mm-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{content.title}</p>
-                    </Link>
+                    ) : (
+                      <Link href={`/contents/${content.id}`} style={{ textDecoration: 'none' }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--mm-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{content.title}</p>
+                      </Link>
+                    )}
                     <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {content.creator?.display_name} · ¥{content.price.toLocaleString()}
                     </p>
