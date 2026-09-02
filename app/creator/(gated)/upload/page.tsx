@@ -411,7 +411,11 @@ function UploadForm() {
               <input type="checkbox" id="published" checked={isPublished} onChange={e => setIsPublished(e.target.checked)}
                 style={{ width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }} />
               <label htmlFor="published" style={{ fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>公開する</label>
-              <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>チェックを入れると、すぐに販売が始まります</span>
+              <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>
+                {contentType === 'video'
+                  ? '動画は運営の確認後に公開されます（写真はすぐに販売が始まります）'
+                  : 'チェックを入れると、すぐに販売が始まります'}
+              </span>
             </div>
 
             {error && <p style={{ fontSize: 13, color: '#dc2626', background: '#fef2f2', padding: '10px 14px', borderRadius: 8 }}>{error}</p>}

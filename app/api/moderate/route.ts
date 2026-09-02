@@ -122,6 +122,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Already moderated' }, { status: 409 })
     }
 
+    // AI審査の実行結果を記録（一度も走っていない商品を運営が特定できるようにする）。
+    // これらの列はクリエイターから書き換えられないため service_role で書く。
+    try {
+      const { createAdminClient } = await import('@/lib/supabase/admin')
+      const { error: recErr } = await createAdminClient().from('contents').update({
+        ai_verdict: result.verdict,
+        moderated_at: new Date().toISOString(),
+      }).eq('id', content_id)
+      if (recErr) console.warn('[moderate] ai_verdict 記録に失敗（v58未適用の可能性）:', recErr.message)
+    } catch (e) {
+      console.warn('[moderate] ai_verdict 記録に失敗:', e)
+    }
+
     // 監査ログ
     await supabase.from('audit_logs').insert({
       actor_id: user.id,

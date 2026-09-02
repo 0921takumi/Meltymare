@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { sanitizeText } from '@/lib/sanitize'
 
@@ -59,6 +60,32 @@ export async function moderateContent(contentId: string, action: ModerationActio
     // （v31のcontents_updateポリシー不備で実際に起きていた失敗パターン。v36で修正済みだが
     // 将来同種の穴が再発しても「成功したように見えて何も変わらない」を防ぐ防御）。
     return { error: '更新対象が見つからないか、権限がありません' }
+  }
+
+  // 審査結果をクリエイターに通知する。
+  // これまで承認/却下/配信停止が一切通知されず、クリエイターはダッシュボードを
+  // 開くまで自分の商品が販売停止になったことに気づけなかった。
+  // notifications は service_role でしか insert できない（RLSにINSERTポリシーが無い）。
+  try {
+    const admin = createAdminClient()
+    const { data: target } = await admin.from('contents').select('creator_id, title').eq('id', contentId).maybeSingle()
+    if (target?.creator_id) {
+      const notice =
+        action === 'approve'   ? { type: 'content_approved',  title: '出品が承認されました',   body: `「${target.title}」が承認されました。` }
+        : action === 'reject'  ? { type: 'content_rejected',  title: '出品が却下されました',   body: `「${target.title}」の販売を停止しました。理由: ${patch.rejection_reason}` }
+        : action === 'takedown'? { type: 'content_takedown',  title: '配信を停止しました',     body: `「${target.title}」は法令違反のため配信を停止しました。理由: ${patch.rejection_reason}` }
+        : { type: 'content_unpublished', title: '出品を非公開にしました', body: `「${target.title}」を運営が非公開にしました。` }
+      const { error: notifErr } = await admin.from('notifications').insert({
+        user_id: target.creator_id,
+        type: notice.type,
+        title: notice.title,
+        body: notice.body,
+        link: '/creator/dashboard',
+      })
+      if (notifErr) console.error('[moderateContent] notification insert failed:', notifErr.message)
+    }
+  } catch (e) {
+    console.error('[moderateContent] notification failed:', e)
   }
 
   // 監査ログ（監査で発覚: 他の全admin書き込み経路はadmin_actionsに記録しているのに

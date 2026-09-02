@@ -22,10 +22,14 @@ export default async function AdminContentsPage({
   const { filter = 'pending' } = await searchParams
   const supabase = await createClient()
 
+  // 未確認(pending)は古いものほど危険なので昇順（滞留した順）で出す。
+  // それ以外のタブは従来どおり新しい順。
+  const oldestFirst = filter === 'pending'
   let query = supabase
     .from('contents')
     .select('*, creator:profiles(id, display_name, username, avatar_url)')
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: oldestFirst })
+    .limit(200)
 
   if (filter !== 'all') {
     query = query.eq('review_status', filter)
@@ -48,10 +52,16 @@ export default async function AdminContentsPage({
       })
   )
 
+  // 件数は全行を取得して数えると1000行で頭打ちになり、SLAバナーが過少表示になる。
+  // head:true の件数取得に変えて件数だけを正確に得る。
   const counts: Record<string, number> = { pending: 0, approved: 0, rejected: 0 }
-  const { data: allForCount } = await supabase.from('contents').select('review_status')
-  ;(allForCount ?? []).forEach((c: any) => {
-    if (c.review_status in counts) counts[c.review_status] += 1
+  const countResults = await Promise.all(
+    (['pending', 'approved', 'rejected'] as const).map(st =>
+      supabase.from('contents').select('id', { count: 'exact', head: true }).eq('review_status', st)
+    )
+  )
+  ;(['pending', 'approved', 'rejected'] as const).forEach((st, i) => {
+    counts[st] = countResults[i].count ?? 0
   })
 
   const now = Date.now()
@@ -167,6 +177,16 @@ export default async function AdminContentsPage({
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: meta.bg, color: meta.color, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
                       <Icon size={11} />{meta.label}
                     </span>
+                    {c.moderated_at == null && (
+                      <span style={{ background: '#fee2e2', color: '#991b1b', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                        AI未実行
+                      </span>
+                    )}
+                    {c.ai_verdict && c.ai_verdict !== 'approved' && (
+                      <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                        AI判定: {c.ai_verdict}
+                      </span>
+                    )}
                     {overdue && (
                       <span style={{ background: '#dc2626', color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
                         SLA超過 ({ageHours}h経過)

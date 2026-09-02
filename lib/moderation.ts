@@ -88,6 +88,36 @@ export interface ModerationResult {
  * @param input  - HTTPS 公開URL or Uint8Array バイト列。
  *                 Supabase Storage の private bucket の場合は事前に署名URLを発行して渡すこと。
  */
+/**
+ * Rekognition の 5MB 上限に収まるように画像を縮小する。
+ * Node ランタイム上で追加依存なしに扱うため、外部変換サービスは使わず
+ * `@napi-rs/canvas` 等が無い環境でも動くよう、失敗したら null を返して呼び出し側で保留にする。
+ */
+async function shrinkForModeration(bytes: Uint8Array): Promise<Uint8Array | null> {
+  try {
+    // sharp があれば使う（Vercel の Node ランタイムには next/image 経由で同梱されることが多い）
+    const mod: any = await import('sharp').catch(() => null)
+    if (!mod) return null
+    const sharp = mod.default ?? mod
+    let quality = 80
+    let width = 2000
+    for (let i = 0; i < 4; i++) {
+      const out: Buffer = await sharp(Buffer.from(bytes))
+        .rotate()
+        .resize({ width, withoutEnlargement: true })
+        .jpeg({ quality })
+        .toBuffer()
+      if (out.length <= 5 * 1024 * 1024) return new Uint8Array(out)
+      width = Math.round(width * 0.7)
+      quality -= 10
+    }
+    return null
+  } catch (err) {
+    console.error('[moderation] shrink failed:', err)
+    return null
+  }
+}
+
 export async function moderateImage(input: string | Uint8Array): Promise<ModerationResult> {
   if (!client) {
     return { verdict: 'skip', labels: [], note: 'AI moderation not configured' }
@@ -103,13 +133,20 @@ export async function moderateImage(input: string | Uint8Array): Promise<Moderat
       bytes = input
     }
 
-    // Rekognition は 5MB まで（バイト列指定時）。それ以上は事前に S3 にアップロードして S3 オブジェクト指定が必要。
+    // Rekognition はバイト列指定時 5MB まで。スマホ写真は普通に超えるため、
+    // 以前はここで素通り(pending=販売中)になっており、実質ほとんどの写真が無審査だった。
+    // さらに「違反画像を5MB超に膨らませれば検査を回避できる」状態でもあった。
+    // 縮小して検査する（判定に必要な解像度は十分に残る）。
     if (bytes.length > 5 * 1024 * 1024) {
-      return {
-        verdict: 'pending',
-        labels: [],
-        reason: 'File >5MB, manual review required',
+      const shrunk = await shrinkForModeration(bytes)
+      if (!shrunk) {
+        return {
+          verdict: 'pending',
+          labels: [],
+          reason: 'File >5MB and could not be resized for scanning',
+        }
       }
+      bytes = shrunk
     }
 
     const cmd = new DetectModerationLabelsCommand({

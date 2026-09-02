@@ -23,17 +23,31 @@ export interface CreatorEarnings {
 export async function computePendingEarningsByCreator(
   supabase: any,
 ): Promise<Record<string, CreatorEarnings>> {
-  const purchases = await fetchAllRows((from, to) => supabase
+  // hard_takedown は v57 で追加した列。未適用のDBに対しても集計が落ちないようにする
+  // （落ちると管理画面の振込予定額が丸ごと表示できなくなる）。
+  const SEL_WITH_TAKEDOWN = 'content_price, amount, tip_amount, fee_rate, content:contents(creator_id, hard_takedown, creator:profiles(fee_rate))'
+  const SEL_FALLBACK = 'content_price, amount, tip_amount, fee_rate, content:contents(creator_id, creator:profiles(fee_rate))'
+  const load = (sel: string) => fetchAllRows((from, to) => supabase
     .from('purchases')
-    .select('content_price, amount, tip_amount, fee_rate, content:contents(creator_id, creator:profiles(fee_rate))')
+    .select(sel)
     .eq('status', 'completed')
     .is('payout_id', null)
     .range(from, to))
+  let purchases: any[]
+  try {
+    purchases = await load(SEL_WITH_TAKEDOWN)
+  } catch (e) {
+    console.warn('[creator-earnings] hard_takedown 列が未適用の可能性:', (e as Error).message)
+    purchases = await load(SEL_FALLBACK)
+  }
 
   const byCreator: Record<string, CreatorEarnings> = {}
   for (const p of purchases as any[]) {
     const creatorId = p.content?.creator_id
     if (!creatorId) continue
+    // 法令違反で配信停止した商品の売上は振込対象にしない。
+    // 購入者への返金対応が前提の状態でクリエイターに支払うと二重の損失になる。
+    if (p.content?.hard_takedown) continue
     const feeRate = p.fee_rate ?? p.content?.creator?.fee_rate ?? FINANCE.defaultFeeRate
     const contentPrice = p.content_price ?? p.amount ?? 0
     const tip = p.tip_amount ?? 0
