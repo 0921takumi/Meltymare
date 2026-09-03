@@ -20,6 +20,30 @@ export interface CreatorEarnings {
  * creator の現在の fee_rate にフォールバックする（admin が手数料率を変更しても
  * 既に確定した過去の売上の手数料額が遡って変わらないようにするため）。
  */
+/** 集計に使う purchases の行の形（PostgREST の埋め込みを含む） */
+export interface PurchaseForEarnings {
+  content_price?: number | null
+  amount?: number | null
+  tip_amount?: number | null
+  fee_rate?: number | null
+  content?: { creator?: { fee_rate?: number | null } | { fee_rate?: number | null }[] | null } | null
+}
+
+/**
+ * 1件の購入からクリエイター取り分を出す「唯一の式」。
+ * 振込予定額の集計（computePendingEarningsByCreator）と、振込確定時の突合
+ * （app/api/admin-payout）が別々の式を持っていたため、総額(手数料前)と振込額(手数料後)を
+ * 比べて常に不一致になる突合が生まれていた。以後は両方ここを使う。
+ */
+export function purchaseNet(p: PurchaseForEarnings, fallbackFeeRate: number = FINANCE.defaultFeeRate) {
+  const creator = Array.isArray(p.content?.creator) ? p.content?.creator[0] : p.content?.creator
+  const feeRate = p.fee_rate ?? creator?.fee_rate ?? fallbackFeeRate
+  const contentPrice = p.content_price ?? p.amount ?? 0
+  const tip = p.tip_amount ?? 0
+  const fee = Math.floor(contentPrice * feeRate / 100)
+  return { contentPrice, tip, fee, net: (contentPrice - fee) + tip }
+}
+
 export async function computePendingEarningsByCreator(
   supabase: any,
 ): Promise<Record<string, CreatorEarnings>> {
@@ -51,14 +75,11 @@ export async function computePendingEarningsByCreator(
     // 法令違反で配信停止した商品の売上は振込対象にしない。
     // 購入者への返金対応が前提の状態でクリエイターに支払うと二重の損失になる。
     if (p.content?.hard_takedown) continue
-    const feeRate = p.fee_rate ?? p.content?.creator?.fee_rate ?? FINANCE.defaultFeeRate
-    const contentPrice = p.content_price ?? p.amount ?? 0
-    const tip = p.tip_amount ?? 0
-    const fee = Math.floor(contentPrice * feeRate / 100)
+    const { contentPrice, tip, fee, net } = purchaseNet(p)
     if (!byCreator[creatorId]) byCreator[creatorId] = { sales: 0, fee: 0, net: 0 }
     byCreator[creatorId].sales += contentPrice + tip
     byCreator[creatorId].fee += fee
-    byCreator[creatorId].net += (contentPrice - fee) + tip
+    byCreator[creatorId].net += net
   }
 
   // 単発チップ(tipsテーブル)も未払い分を加算。手数料0%で全額クリエイターへ。

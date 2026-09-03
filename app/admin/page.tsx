@@ -6,9 +6,9 @@ import {
   ShieldCheck, Gem, Cake, ArrowRight, Activity,
   Flag, Bell,
 } from 'lucide-react'
-import { FINANCE } from '@/lib/config'
 import Avatar from '@/components/ui/Avatar'
 import { fetchAllRows } from '@/lib/fetch-all'
+import { computePendingEarningsByCreator } from '@/lib/creator-earnings'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,11 +57,13 @@ export default async function AdminDashboard() {
 
   // v42: fetchAllRows で PostgREST のデフォルト行数上限による無言の切り捨てを防止
   // （売上・KPI集計は全件が前提のため、1000件超で過少表示になるのを防ぐ）。
-  const [allPurchases, monthPurchases, dailyPurchases, pendingPayouts] = await Promise.all([
+  const [allPurchases, monthPurchases, dailyPurchases, pendingByCreator] = await Promise.all([
     fetchAllRows((from, to) => supabase.from('purchases').select('amount, tip_amount, created_at').eq('status', 'completed').range(from, to)),
     fetchAllRows((from, to) => supabase.from('purchases').select('amount, tip_amount').eq('status', 'completed').gte('created_at', startOfMonth).range(from, to)),
     fetchAllRows((from, to) => supabase.from('purchases').select('amount, tip_amount, created_at').eq('status', 'completed').gte('created_at', last30).range(from, to)),
-    fetchAllRows((from, to) => supabase.from('purchases').select('amount, content_price, tip_amount, fee_rate, content:contents(creator:profiles!contents_creator_id_fkey(fee_rate))').eq('status', 'completed').is('payout_id', null).range(from, to)),
+    // 未払振込は admin/payouts・admin/creators と同じ集計関数を使う（配信停止商品の除外や
+    // 単発チップの加算まで含めて基準を一本化。ここだけ独自計算で配信停止分が混ざっていた）。
+    computePendingEarningsByCreator(supabase),
   ])
 
   // purchases.amount は既に content_price + tip_amount（purchase/route.ts参照）。
@@ -93,15 +95,11 @@ export default async function AdminDashboard() {
   // クリエイターへ」の計算に揃える。以前は amount+tip の二重計上額に一律20%を掛けており、
   // チップにも手数料をかけた上で二重計上する二重の誤りだった。
   let creatorShare = 0
-  let pendingPayoutAmount = 0
-  for (const p of (pendingPayouts ?? []) as any[]) {
-    const contentPrice = p.content_price ?? p.amount ?? 0
-    const tip = p.tip_amount ?? 0
-    const feeRate = p.fee_rate ?? p.content?.creator?.fee_rate ?? FINANCE.defaultFeeRate
-    pendingPayoutAmount += contentPrice + tip
-    creatorShare += (contentPrice - Math.floor(contentPrice * feeRate / 100)) + tip
+  let platformShare = 0
+  for (const e of Object.values(pendingByCreator)) {
+    creatorShare += e.net
+    platformShare += e.fee
   }
-  const platformShare = pendingPayoutAmount - creatorShare
 
   // アラート
   const alerts: { kind: 'urgent' | 'warn' | 'info'; label: string; count?: number; href: string }[] = []

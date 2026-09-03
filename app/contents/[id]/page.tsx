@@ -27,7 +27,24 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     .eq('is_published', true)
     .neq('review_status', 'rejected')
     .maybeSingle()
-  if (!content) return { title: 'コンテンツが見つかりません', robots: { index: false, follow: false } }
+  if (!content) {
+    // 本文側の「購入者は取り下げ後も到達できる」経路と揃える（本文は商品を描画するのに
+    // タブ題名だけ「見つかりません」になる不整合をレビューで指摘）。noindex は維持。
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: bought } = await supabase
+        .from('purchases').select('id')
+        .eq('user_id', user.id).eq('content_id', id).eq('status', 'completed')
+        .limit(1).maybeSingle()
+      if (bought) {
+        const { data: own } = await createAdminClient().from('contents').select('title, hard_takedown').eq('id', id).maybeSingle()
+        if (own && !(own as { hard_takedown?: boolean }).hard_takedown) {
+          return { title: own.title, robots: { index: false, follow: false } }
+        }
+      }
+    }
+    return { title: 'コンテンツが見つかりません', robots: { index: false, follow: false } }
+  }
   const creator = content.creator as any
   const desc = content.description ?? `${creator?.display_name ?? ''} の限定コンテンツ ¥${content.price.toLocaleString()}`
   return {

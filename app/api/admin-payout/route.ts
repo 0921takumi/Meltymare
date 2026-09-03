@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { purchaseNet } from '@/lib/creator-earnings'
+import { FINANCE } from '@/lib/config'
 
 /**
  * 出金ステータス変更（管理者専用）
@@ -33,8 +35,39 @@ export async function PATCH(req: Request) {
   // v41: completed→pending/failed の逆遷移時に purchases/tips の payout_id を解除するため、
   // 更新前の status を確認しておく（誤操作や振込失敗の巻き戻しで、実際は未振込なのに
   // 「支払済み」として振込予定額の集計から永久に消えてしまうのを防ぐ）。
-  const { data: before } = await admin.from('payouts').select('status').eq('id', payoutId).maybeSingle()
-  const wasCompleted = before?.status === 'completed'
+  const { data: before, error: beforeErr } = await admin.from('payouts').select('status, creator_id, period_start, period_end, net_amount').eq('id', payoutId).maybeSingle()
+  if (beforeErr) return NextResponse.json({ error: beforeErr.message }, { status: 500 })
+  if (!before) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  const wasCompleted = before.status === 'completed'
+
+  // レビューで指摘: 紐付けに使う contents の取得がステータス更新の「後」にあり、取得が一時障害で
+  // 失敗すると completed だけ確定して purchases が未紐付けのまま残る（振込予定額が減らず、次回
+  // 同じ額が再表示される＝二重払い側の失敗）。紐付けに必要な情報はステータス更新の前に揃え、
+  // 揃わなければ completed にしない。
+  let contentIds: string[] = []
+  let creatorFeeRate: number | null = null
+  if (status === 'completed' && before.creator_id) {
+    // v57: 配信停止(hard_takedown)した商品の売上は振込予定額(lib/creator-earnings)から除外している。
+    // 紐付けも同じ基準に揃える。列未適用(42703)の環境では従来どおり全件を対象にする。
+    let rows: { id: string; hard_takedown?: boolean | null }[] | null = null
+    const withFlag = await admin.from('contents').select('id, hard_takedown').eq('creator_id', before.creator_id)
+    if (withFlag.error?.code === '42703') {
+      const plain = await admin.from('contents').select('id').eq('creator_id', before.creator_id)
+      if (plain.error) {
+        console.error('[admin-payout] contents lookup failed:', plain.error.message, 'payout:', payoutId)
+        return NextResponse.json({ error: 'contents_lookup_failed' }, { status: 500 })
+      }
+      rows = plain.data
+    } else if (withFlag.error) {
+      console.error('[admin-payout] contents lookup failed:', withFlag.error.message, 'payout:', payoutId)
+      return NextResponse.json({ error: 'contents_lookup_failed' }, { status: 500 })
+    } else {
+      rows = withFlag.data
+    }
+    contentIds = (rows ?? []).filter(c => !c.hard_takedown).map(c => c.id)
+    const { data: prof } = await admin.from('profiles').select('fee_rate').eq('id', before.creator_id).maybeSingle()
+    creatorFeeRate = prof?.fee_rate ?? null
+  }
 
   const update: Record<string, unknown> = { status }
   if (status === 'completed') update.paid_at = new Date().toISOString()
@@ -64,60 +97,53 @@ export async function PATCH(req: Request) {
   // purchases/tips の合計と突き合わせる仕組みが一切無かった（入力ミス・期間の
   // 取り違え等があっても気づく手段が無い）。紐付け結果を集計してnet_amountと比較し、
   // 不一致なら監査ログに残す（自動修正はしない＝金額を勝手に書き換えない）。
-  let linkedTotal = 0
+  // レビューで指摘(1): created_at >= period_start の下限があると、配信停止→解除で未払いに戻った
+  // 旧期間の購入（や何らかの理由で紐付け漏れした購入）に二度と payout_id が付かず、振込予定額に
+  // 載り続けて毎回払われる。振込予定額の集計(lib/creator-earnings)は期間で絞らず「未払い全部」
+  // なので、紐付けもそれに揃える。上限 period_end は残す（対象期間より後の購入は次回に回す、
+  // という v36 の意図は維持）。
+  // レビューで指摘(2): 突合が「総額(手数料前) vs 振込額(手数料後)」の比較になっており、手数料が
+  // ある限り毎回 MISMATCH が出て検知器として機能していなかった。集計と同じ式(purchaseNet)で
+  // 純額を出して比較する。
+  let linkedNet = 0
   if (status === 'completed' && payoutRow?.creator_id) {
-    // v57: 配信停止(hard_takedown)した商品の売上は振込予定額(lib/creator-earnings)から除外している。
-    // 紐付けも同じ基準に揃えないと、払っていない売上に payout_id が付いて未払いプールから永久に
-    // 消え、停止を解除しても復活しない。列未適用(42703)の環境では従来どおり全件を対象にする。
-    let creatorContents: { id: string; hard_takedown?: boolean | null }[] | null = null
-    const withFlag = await admin.from('contents').select('id, hard_takedown').eq('creator_id', payoutRow.creator_id)
-    if (withFlag.error?.code === '42703') {
-      const plain = await admin.from('contents').select('id').eq('creator_id', payoutRow.creator_id)
-      creatorContents = plain.data
-    } else {
-      if (withFlag.error) console.error('[admin-payout] contents lookup failed:', withFlag.error.message, 'payout:', payoutId)
-      creatorContents = withFlag.data
-    }
-    const contentIds = (creatorContents ?? []).filter(c => !c.hard_takedown).map(c => c.id)
     if (contentIds.length > 0) {
       let linkQuery = admin.from('purchases')
         .update({ payout_id: payoutId })
         .in('content_id', contentIds)
         .is('payout_id', null)
         .eq('status', 'completed')
-      if (payoutRow.period_start) linkQuery = linkQuery.gte('created_at', payoutRow.period_start)
       if (payoutRow.period_end) linkQuery = linkQuery.lte('created_at', `${payoutRow.period_end}T23:59:59.999Z`)
       else console.warn('[admin-payout] payout has no period_end, linking without upper bound:', payoutId)
-      const { data: linkedPurchases, error: linkErr } = await linkQuery.select('amount')
+      const { data: linkedPurchases, error: linkErr } = await linkQuery.select('amount, content_price, tip_amount, fee_rate')
       if (linkErr) console.error('[admin-payout] purchases payout_id linkage failed:', linkErr.message, 'payout:', payoutId)
-      linkedTotal += (linkedPurchases ?? []).reduce((s, p) => s + (p.amount ?? 0), 0)
+      for (const p of linkedPurchases ?? []) linkedNet += purchaseNet(p, creatorFeeRate ?? FINANCE.defaultFeeRate).net
     }
 
     // v40: 単発チップ(tips)も同じ振込に紐付ける。tips は creator_id を直接持つため
-    // contents 経由の絞り込みは不要。期間境界は tips.created_at で揃える。
+    // contents 経由の絞り込みは不要。手数料0%で全額クリエイターへ。
     let tipLink = admin.from('tips')
       .update({ payout_id: payoutId })
       .eq('creator_id', payoutRow.creator_id)
       .is('payout_id', null)
       .eq('status', 'completed')
-    if (payoutRow.period_start) tipLink = tipLink.gte('created_at', payoutRow.period_start)
     if (payoutRow.period_end) tipLink = tipLink.lte('created_at', `${payoutRow.period_end}T23:59:59.999Z`)
     const { data: linkedTips, error: tipLinkErr } = await tipLink.select('amount')
     if (tipLinkErr) console.error('[admin-payout] tips payout_id linkage failed:', tipLinkErr.message, 'payout:', payoutId)
-    linkedTotal += (linkedTips ?? []).reduce((s, t) => s + (t.amount ?? 0), 0)
+    linkedNet += (linkedTips ?? []).reduce((s, t) => s + (t.amount ?? 0), 0)
 
     const netAmount = payoutRow.net_amount ?? 0
-    if (linkedTotal !== netAmount) {
+    if (linkedNet !== netAmount) {
       console.error(
-        '[admin-payout] RECONCILIATION MISMATCH: net_amount(手入力)と実際に紐付いた購入/チップ合計が不一致。手入力ミスまたは期間指定の誤りの可能性。要目視確認。',
-        'payout:', payoutId, 'net_amount:', netAmount, 'linked_total:', linkedTotal,
+        '[admin-payout] RECONCILIATION MISMATCH: net_amount(手入力)と実際に紐付いた購入/チップの純額合計が不一致。手入力ミスまたは期間指定の誤りの可能性。要目視確認。',
+        'payout:', payoutId, 'net_amount:', netAmount, 'linked_net:', linkedNet,
       )
       await admin.from('audit_logs').insert({
         actor_id: user.id,
         action: 'payout.reconciliation_mismatch',
         target_type: 'payout',
         target_id: payoutId,
-        metadata: { net_amount: netAmount, linked_total: linkedTotal, diff: linkedTotal - netAmount },
+        metadata: { net_amount: netAmount, linked_net: linkedNet, diff: linkedNet - netAmount },
       })
     }
   }

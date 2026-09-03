@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { sanitizeText } from '@/lib/sanitize'
+import { ownedThumbnailPath } from '@/lib/storage-path'
 
 // v57: takedown は「法令違反による配信停止」。通常の却下と違い、購入済みの人の
 // ダウンロードも止める（返金対応が前提の重い操作）。
@@ -11,14 +12,6 @@ import { sanitizeText } from '@/lib/sanitize'
 export type ModerationAction = 'approve' | 'reject' | 'unpublish' | 'takedown' | 'untakedown'
 
 const TAKEDOWN_COLUMNS = ['hard_takedown', 'takedown_reason', 'takedown_at', 'takedown_by'] as const
-
-/** 公開バケット thumbnails の公開URLから、ストレージ上のオブジェクトパスを取り出す */
-function thumbnailStoragePath(url: string | null | undefined): string | null {
-  if (!url) return null
-  const m = url.match(/\/storage\/v1\/object\/public\/thumbnails\/(.+)$/)
-  if (!m) return null
-  try { return decodeURIComponent(m[1].split('?')[0]) } catch { return null }
-}
 
 export async function moderateContent(contentId: string, action: ModerationAction, rejectionReason?: string) {
   const supabase = await createClient()
@@ -101,16 +94,20 @@ export async function moderateContent(contentId: string, action: ModerationActio
   // 失敗しても配信停止自体は成立させる（ログに残して運営が手動で消せるようにする）。
   if (action === 'takedown') {
     try {
-      const { data: row } = await admin.from('contents').select('thumbnail_url').eq('id', contentId).maybeSingle()
-      const path = thumbnailStoragePath(row?.thumbnail_url)
-      if (path) {
-        const { error: rmErr } = await admin.storage.from('thumbnails').remove([path])
-        if (rmErr) {
-          console.error('[moderateContent] takedown: thumbnail remove failed:', rmErr.message, 'content:', contentId, 'path:', path)
+      const { data: row } = await admin.from('contents').select('thumbnail_url, creator_id').eq('id', contentId).maybeSingle()
+      if (row?.thumbnail_url) {
+        // thumbnail_url はクリエイターが書ける列。他人のオブジェクトや別ホストを指していても
+        // 削除しない（レビューで指摘されたクロステナント削除の防止）。その場合も My Focus 上では
+        // 画像を出さないよう列だけ空にする。
+        const path = ownedThumbnailPath(row.thumbnail_url, row.creator_id, process.env.NEXT_PUBLIC_SUPABASE_URL)
+        if (path) {
+          const { error: rmErr } = await admin.storage.from('thumbnails').remove([path])
+          if (rmErr) console.error('[moderateContent] takedown: thumbnail remove failed:', rmErr.message, 'content:', contentId, 'path:', path)
         } else {
-          const { error: nullErr } = await admin.from('contents').update({ thumbnail_url: null }).eq('id', contentId)
-          if (nullErr) console.error('[moderateContent] takedown: thumbnail_url clear failed:', nullErr.message)
+          console.warn('[moderateContent] takedown: thumbnail_url is not an owned thumbnails object; skipped storage remove. content:', contentId)
         }
+        const { error: nullErr } = await admin.from('contents').update({ thumbnail_url: null }).eq('id', contentId)
+        if (nullErr) console.error('[moderateContent] takedown: thumbnail_url clear failed:', nullErr.message)
       }
     } catch (e) {
       console.error('[moderateContent] takedown: thumbnail cleanup failed:', e)
