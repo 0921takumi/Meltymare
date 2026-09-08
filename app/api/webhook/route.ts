@@ -371,8 +371,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   })
   if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
 
-  // 購入完了メール
+  // 購入完了メール（購入者）と売上通知メール（クリエイター）。
+  // 依頼(2026-09): 「販売商品が購入されたら該当クリエイターにメールなどで通知が行くように」。
+  // アプリ内通知は下で入れているが、メールは購入者宛しか無かった。
   await sendPurchaseEmail(purchase.user_id, purchase.content_id, purchase.id)
+  await sendCreatorSaleEmail(purchase.content_id, purchase.user_id, purchase.id)
 
   // アプリ内通知（購入者 + クリエイター）。
   // 行欠落で .single() 例外→Stripeへ200返却→リトライ無し で通知が静かに消えるのを防ぐ
@@ -772,6 +775,64 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
     }
   } catch (e) {
     console.error('Purchase email error:', e)
+  }
+}
+
+/** クリエイター宛: 自分の商品が売れたことをメールで知らせる（納品を促す） */
+async function sendCreatorSaleEmail(contentId: string, buyerId: string, purchaseId: string) {
+  try {
+    const { data: content } = await supabase
+      .from('contents')
+      .select('title, price, creator_id')
+      .eq('id', contentId)
+      .maybeSingle()
+    if (!content?.creator_id) return
+
+    const { data: creatorAuth } = await supabase.auth.admin.getUserById(content.creator_id)
+    const email = creatorAuth?.user?.email
+    if (!email) return
+
+    const resendKey = process.env.RESEND_API_KEY
+    if (!resendKey) {
+      console.error('[email] RESEND_API_KEY not set, skipping creator sale email', 'creatorId:', content.creator_id, 'purchaseId:', purchaseId)
+      return
+    }
+
+    const [{ data: creator }, { data: buyer }] = await Promise.all([
+      supabase.from('profiles').select('display_name').eq('id', content.creator_id).maybeSingle(),
+      supabase.from('profiles').select('display_name').eq('id', buyerId).maybeSingle(),
+    ])
+    const appUrl = cleanEnv(process.env.NEXT_PUBLIC_APP_URL) || 'https://my-focus.jp'
+
+    // display_name / title は自由入力なので必ず escapeHtml を通す（HTMLメールは自動エスケープされない）
+    const html = brandedEmail({
+      title: 'New order.',
+      greeting: `${escapeHtml(creator?.display_name ?? 'クリエイター')} さん、商品が購入されました。`,
+      bodyText: `${escapeHtml(buyer?.display_name ?? 'ファン')} さんがご購入です。<br>注文管理からメッセージを添えて納品してください。`,
+      cardTitle: escapeHtml(content.title),
+      cardSub: `¥${Number(content.price ?? 0).toLocaleString('ja-JP')}`,
+      ctaText: '注文管理を開く',
+      ctaUrl: `${appUrl}/creator/orders`,
+    })
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: email,
+        subject: `【商品が購入されました】${content.title}`,
+        html,
+      }),
+    })
+    if (!res.ok) {
+      console.error('[email] Resend API error (creator sale)', res.status, await res.text().catch(() => ''))
+    }
+  } catch (e) {
+    console.error('Creator sale email error:', e)
   }
 }
 

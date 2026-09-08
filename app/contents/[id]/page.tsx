@@ -205,7 +205,14 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
           {/* サムネイル（PC 4/3・モバイル 4/5 = チェキ縦。.mm-content-detail-thumb が制御） */}
           <div className="mm-card mm-content-detail-thumb" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--mm-primary-light)' }}>
             {content.thumbnail_url ? (
-              <img src={content.thumbnail_url} alt={content.title} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
+              // 依頼: 「サムネイルが拡大（トリミング）されて全体が分からない」。枠に収めて全体を見せ、
+              // 縦横比の差で生じる余白には同じ画像をぼかして敷く（黒帯にしない）。
+              <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                <img src={content.thumbnail_url} alt="" aria-hidden
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(24px)', transform: 'scale(1.2)', opacity: 0.55 }} />
+                <img src={content.thumbnail_url} alt={content.title}
+                  style={{ position: 'relative', width: '100%', height: '100%', objectFit: 'contain' }} />
+              </div>
             ) : content.content_type === 'video' ? (
               <VideoIcon size={64} color="var(--mm-accent)" />
             ) : (

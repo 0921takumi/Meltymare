@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Type, X, Droplet, Undo2 } from 'lucide-react'
-import { rectFrom, toImageCoords as toImageCoordsPure, workSize, WORK_MAX_PX } from '@/lib/thumbnail-edit'
+import { rectFrom, toImageCoords as toImageCoordsPure, workSize, WORK_MAX_PX, boxBlurRGBA, blurRadiusFor } from '@/lib/thumbnail-edit'
 
 type VAlign = 'top' | 'middle' | 'bottom'
 type HAlign = 'left' | 'center' | 'right'
@@ -14,9 +14,34 @@ type BlurRect = import('@/lib/thumbnail-edit').Rect
 const SIZE_RATIO: Record<FontSize, number> = { small: 0.045, medium: 0.07, large: 0.1 }
 
 // canvasに画像+ぼかし+テキストを描画する共通ロジック（プレビューと最終書き出しの両方で使う）
+/**
+ * 元画像をまるごとぼかした「ぼかし版」を1回だけ作る。
+ * 以後は選んだ範囲をここから写すだけなので、なぞっている最中も軽い。
+ * canvas の ctx.filter は Safari(iPhone) が無視するため使わない（2026-09 の再報告の原因）。
+ */
+const BLUR_WORK_MAX_PX = 400
+
+function makeBlurredCopy(base: HTMLCanvasElement): HTMLCanvasElement | null {
+  // ぼかした絵に解像度は要らないので 1/4 程度に縮小して計算する（1600px幅で数秒→100ms未満）。
+  // 描画時に元のサイズへ拡大しても、ぼかし面は滑らかなので見た目は変わらない。
+  const { w, h } = workSize(base.width, base.height, BLUR_WORK_MAX_PX)
+  const out = document.createElement('canvas')
+  out.width = w
+  out.height = h
+  const dst = out.getContext('2d', { willReadFrequently: true })
+  if (!dst) return null
+  dst.drawImage(base, 0, 0, w, h)
+  const img = dst.getImageData(0, 0, w, h)
+  const radius = Math.max(2, Math.round(blurRadiusFor(base.width) * (w / base.width)))
+  boxBlurRGBA(img.data, w, h, radius)
+  dst.putImageData(img, 0, 0)
+  return out
+}
+
 function paint(
   canvas: HTMLCanvasElement,
   base: HTMLCanvasElement,
+  blurred: HTMLCanvasElement | null,
   text: string,
   valign: VAlign,
   halign: HAlign,
@@ -31,26 +56,17 @@ function paint(
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   ctx.drawImage(base, 0, 0)
 
-  // ぼかしはテキストより先に描く（乗せた文字までぼけないように）
-  const blurPx = Math.max(6, Math.round(canvas.width * 0.022))
+  // ぼかしはテキストより先に描く（乗せた文字までぼけないように）。
+  // 範囲ごとに「ぼかし版」から同じ座標を写す。転送元と転送先を同じ座標にすることで位置ズレしない。
   const all = dragRect ? [...blurs, dragRect] : blurs
-  for (const b of all) {
-    if (b.w < 2 || b.h < 2) continue
-    // 画像全体をぼかして切り抜くと重いので、対象範囲＋にじみ分の余白だけを描き直す。
-    const pad = blurPx * 2
-    const sx = Math.max(0, Math.floor(b.x - pad))
-    const sy = Math.max(0, Math.floor(b.y - pad))
-    const ex = Math.min(base.width, Math.ceil(b.x + b.w + pad))
-    const ey = Math.min(base.height, Math.ceil(b.y + b.h + pad))
-    if (ex <= sx || ey <= sy) continue
-    ctx.save()
-    ctx.beginPath()
-    ctx.rect(b.x, b.y, b.w, b.h)
-    ctx.clip()
-    ctx.filter = `blur(${blurPx}px)`
-    // 転送元と転送先を同じ座標にすることで、位置ズレなくその範囲だけをぼかす
-    ctx.drawImage(base, sx, sy, ex - sx, ey - sy, sx, sy, ex - sx, ey - sy)
-    ctx.restore()
+  if (blurred) {
+    // ぼかし版は縮小して作ってあるので、転送元だけ縮尺を掛ける
+    const s = blurred.width / base.width
+    ctx.imageSmoothingEnabled = true
+    for (const b of all) {
+      if (b.w < 2 || b.h < 2) continue
+      ctx.drawImage(blurred, b.x * s, b.y * s, b.w * s, b.h * s, b.x, b.y, b.w, b.h)
+    }
   }
 
   // ドラッグ中の範囲は枠線を出して「どこを選んでいるか」を見せる
@@ -117,6 +133,7 @@ export default function ThumbnailTextEditor({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const baseRef = useRef<HTMLCanvasElement | null>(null)
+  const blurredRef = useRef<HTMLCanvasElement | null>(null)
   // ドラッグ開始点。state に持つと移動のたびに起点が上書きされて範囲が壊れるため ref で固定する。
   const anchorRef = useRef<{ x: number; y: number } | null>(null)
   const [open, setOpen] = useState(false)
@@ -141,8 +158,9 @@ export default function ThumbnailTextEditor({
       const base = document.createElement('canvas')
       base.width = w
       base.height = h
-      base.getContext('2d')?.drawImage(img, 0, 0, w, h)
+      base.getContext('2d', { willReadFrequently: true })?.drawImage(img, 0, 0, w, h)
       baseRef.current = base
+      blurredRef.current = makeBlurredCopy(base)
       setBaseReady(true)
     }
     img.src = url
@@ -151,7 +169,7 @@ export default function ThumbnailTextEditor({
 
   useEffect(() => {
     if (!open || !baseReady || !baseRef.current || !canvasRef.current) return
-    paint(canvasRef.current, baseRef.current, text, valign, halign, fontSize, blurs, drag)
+    paint(canvasRef.current, baseRef.current, blurredRef.current, text, valign, halign, fontSize, blurs, drag)
   }, [open, baseReady, text, valign, halign, fontSize, blurs, drag])
 
   // 表示上の座標 → 作業用画像の実ピクセル座標。
@@ -185,7 +203,7 @@ export default function ThumbnailTextEditor({
   const apply = async () => {
     if (!baseRef.current || !canvasRef.current) return
     // 書き出し前にドラッグ中の枠線を除いて描き直す
-    paint(canvasRef.current, baseRef.current, text, valign, halign, fontSize, blurs, null)
+    paint(canvasRef.current, baseRef.current, blurredRef.current, text, valign, halign, fontSize, blurs, null)
     const file = await toFile(canvasRef.current, sourceFile)
     if (file) { onApply(file); setOpen(false) }
   }

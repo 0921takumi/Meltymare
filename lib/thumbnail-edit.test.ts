@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rectFrom, toImageCoords, workSize } from './thumbnail-edit'
+import { rectFrom, toImageCoords, workSize, boxBlurRGBA, blurRadiusFor } from './thumbnail-edit'
 
 describe('rectFrom: ドラッグ範囲の計算', () => {
   const anchor = { x: 100, y: 100 }
@@ -75,5 +75,73 @@ describe('workSize: 作業用画像の縮小', () => {
   })
   it('小さい画像は拡大しない', () => {
     expect(workSize(800, 600)).toEqual({ w: 800, h: 600 })
+  })
+})
+
+describe('boxBlurRGBA: ctx.filter に頼らないピクセルぼかし（Safari対策）', () => {
+  const solid = (w: number, h: number, rgba: [number, number, number, number]) => {
+    const d = new Uint8ClampedArray(w * h * 4)
+    for (let i = 0; i < w * h; i++) d.set(rgba, i * 4)
+    return d
+  }
+  const edgeImage = (w: number, h: number) => {
+    // 左半分が黒、右半分が白（アルファは255）
+    const d = new Uint8ClampedArray(w * h * 4)
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const v = x < w / 2 ? 0 : 255
+      d.set([v, v, v, 255], (y * w + x) * 4)
+    }
+    return d
+  }
+
+  it('単色画像は変化しない', () => {
+    const d = solid(8, 8, [200, 30, 60, 255])
+    const before = Array.from(d)
+    boxBlurRGBA(d, 8, 8, 3)
+    expect(Array.from(d)).toEqual(before)
+  })
+
+  it('黒/白の境界がなだらかになる（境界の両側が中間値になり、遠くは元のまま）', () => {
+    const w = 32, h = 4
+    const d = edgeImage(w, h)
+    boxBlurRGBA(d, w, h, 3)
+    const px = (x: number) => d[(1 * w + x) * 4]
+    expect(px(15)).toBeGreaterThan(0)
+    expect(px(15)).toBeLessThan(255)
+    expect(px(16)).toBeGreaterThan(0)
+    expect(px(16)).toBeLessThan(255)
+    expect(px(0)).toBe(0)
+    expect(px(31)).toBe(255)
+    for (let x = 1; x < w; x++) expect(px(x)).toBeGreaterThanOrEqual(px(x - 1))
+  })
+
+  it('ぼかしを当てないと境界は鋭いまま（テストが no-op を検知できることの確認）', () => {
+    const w = 32, h = 4
+    const d = edgeImage(w, h)
+    expect(d[(1 * w + 15) * 4]).toBe(0)
+    expect(d[(1 * w + 16) * 4]).toBe(255)
+  })
+
+  it('アルファは 255 のまま保たれる', () => {
+    const w = 16, h = 8
+    const d = edgeImage(w, h)
+    boxBlurRGBA(d, w, h, 4)
+    for (let i = 3; i < d.length; i += 4) expect(d[i]).toBe(255)
+  })
+
+  it('radius=0 なら何もしない／1x1 でも落ちない／配列長は変わらない', () => {
+    const d = edgeImage(16, 4)
+    const before = Array.from(d)
+    boxBlurRGBA(d, 16, 4, 0)
+    expect(Array.from(d)).toEqual(before)
+    const one = solid(1, 1, [10, 20, 30, 255])
+    boxBlurRGBA(one, 1, 1, 5)
+    expect(Array.from(one)).toEqual([10, 20, 30, 255])
+    expect(d.length).toBe(16 * 4 * 4)
+  })
+
+  it('ぼかし強度は幅に比例し、下限は 6px', () => {
+    expect(blurRadiusFor(1600)).toBe(35)
+    expect(blurRadiusFor(100)).toBe(6)
   })
 })
