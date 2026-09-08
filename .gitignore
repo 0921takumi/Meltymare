@@ -49,3 +49,6 @@ next-env.d.ts
 /.claude/worktrees/
 
 /_uiaudit/
+
+# ブラウザ実機テストの生成物（tests/browser/README.md 参照）
+tests/browser/.build/
