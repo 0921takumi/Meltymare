@@ -1024,6 +1024,13 @@ body {
 @media (max-width: 640px) {
   .mm-content-detail-thumb { aspect-ratio: 4 / 5; }
 }
+/* 依頼(2026-09): サムネイルを拡大・トリミングせず全体を見せる。サムネイルがあるときは枠の
+ * 縦横比を固定せず写真の縦横比なりに表示する（上下左右に帯を作らない）。極端に縦長の
+ * 写真だけ高さを抑え、余った左右には同じ画像をぼかして敷く。 */
+.mm-content-detail-thumb--fit { aspect-ratio: auto; max-height: 78vh; }
+.mm-content-detail-thumb--fit img.mm-content-detail-thumb-img {
+  display: block; width: 100%; height: auto; max-height: 78vh; object-fit: contain; position: relative;
+}
 
 /* スクロールバーを細くする */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
