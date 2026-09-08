@@ -138,6 +138,11 @@ export default function ThumbnailTextEditor({
   const blurredRef = useRef<HTMLCanvasElement | null>(null)
   // ドラッグ開始点。state に持つと移動のたびに起点が上書きされて範囲が壊れるため ref で固定する。
   const anchorRef = useRef<{ x: number; y: number } | null>(null)
+  // 現在なぞっている範囲。state(drag) は画面の再描画用で、確定(pointerup)に使うと
+  // 「最後の移動の再描画が終わる前に指が離れる」と1つ前の小さい範囲が確定されてしまう。
+  // 実際に Safari(iPhone) で、なぞった範囲より狭い所だけがぼける不具合として出た。
+  // 確定にはこの ref（移動のたびに同期的に更新される）を使う。
+  const dragRef = useRef<BlurRect | null>(null)
   const [open, setOpen] = useState(false)
   const [baseReady, setBaseReady] = useState(false)
   const [mode, setMode] = useState<Mode>('text')
@@ -187,18 +192,23 @@ export default function ThumbnailTextEditor({
     e.currentTarget.setPointerCapture(e.pointerId)
     const p = toImageCoords(e.clientX, e.clientY)
     anchorRef.current = p
-    setDrag({ x: p.x, y: p.y, w: 0, h: 0 })
+    dragRef.current = { x: p.x, y: p.y, w: 0, h: 0 }
+    setDrag(dragRef.current)
   }
   const moveDrag = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const a = anchorRef.current
     if (!a || mode !== 'blur') return
     e.preventDefault()
-    setDrag(rectFrom(a, toImageCoords(e.clientX, e.clientY)))
+    const r = rectFrom(a, toImageCoords(e.clientX, e.clientY))
+    dragRef.current = r
+    setDrag(r)
   }
   const endDrag = () => {
     if (!anchorRef.current) return
     anchorRef.current = null
-    if (drag && drag.w >= 4 && drag.h >= 4) setBlurs(b => [...b, drag])
+    const r = dragRef.current
+    dragRef.current = null
+    if (r && r.w >= 4 && r.h >= 4) setBlurs(b => [...b, r])
     setDrag(null)
   }
 
