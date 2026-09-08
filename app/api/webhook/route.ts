@@ -371,15 +371,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   })
   if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
 
-  // 購入完了メール（購入者）と売上通知メール（クリエイター）。
-  // 依頼(2026-09): 「販売商品が購入されたら該当クリエイターにメールなどで通知が行くように」。
-  // アプリ内通知は下で入れているが、メールは購入者宛しか無かった。
-  await sendPurchaseEmail(purchase.user_id, purchase.content_id, purchase.id)
-  await sendCreatorSaleEmail(purchase.content_id, purchase.user_id, purchase.id)
-
   // アプリ内通知（購入者 + クリエイター）。
   // 行欠落で .single() 例外→Stripeへ200返却→リトライ無し で通知が静かに消えるのを防ぐ
   // ため .maybeSingle() 化し、insert の error も必ずログに残す（売上通知のサイレント欠損防止）。
+  //
+  // レビュー指摘(2026-09): 以前はメール送信(外部API・タイムアウト無し)を先に直列で待っていた。
+  // Resend が遅延すると関数タイムアウトで通知insertまで到達せず、しかも冪等化の行は残るので
+  // Stripe が再送しても弾かれ、通知が二度と入らない。確実に残すDB書き込みを先に済ませる。
   const { data: content } = await supabase
     .from('contents')
     .select('title, creator_id')
@@ -406,6 +404,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   } else {
     console.error('[webhook] content not found; purchase notifications skipped. content_id:', purchase.content_id, 'purchase:', purchase.id)
   }
+
+  // 購入完了メール（購入者）と売上通知メール（クリエイター）。
+  // 依頼(2026-09): 「販売商品が購入されたら該当クリエイターにメールなどで通知が行くように」。
+  // 片方が失敗・遅延してももう片方を止めないよう並列＋allSettled で投げる。
+  await Promise.allSettled([
+    sendPurchaseEmail(purchase.user_id, purchase.content_id, purchase.id),
+    sendCreatorSaleEmail(purchase.content_id, purchase.user_id, purchase.id, purchase.amount ?? null),
+  ])
 }
 
 // ─── charge.refunded ハンドラ ────────────────────────────
@@ -769,6 +775,8 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
         subject: `【ご購入ありがとうございます】${content.title}`,
         html,
       }),
+      // 外部APIが応答しないときに webhook 全体を道連れにしない
+      signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) {
       console.error('[email] Resend API error', res.status, await res.text().catch(() => ''))
@@ -779,7 +787,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
 }
 
 /** クリエイター宛: 自分の商品が売れたことをメールで知らせる（納品を促す） */
-async function sendCreatorSaleEmail(contentId: string, buyerId: string, purchaseId: string) {
+async function sendCreatorSaleEmail(contentId: string, buyerId: string, purchaseId: string, paidAmount: number | null) {
   try {
     const { data: content } = await supabase
       .from('contents')
@@ -810,7 +818,9 @@ async function sendCreatorSaleEmail(contentId: string, buyerId: string, purchase
       greeting: `${escapeHtml(creator?.display_name ?? 'クリエイター')} さん、商品が購入されました。`,
       bodyText: `${escapeHtml(buyer?.display_name ?? 'ファン')} さんがご購入です。<br>注文管理からメッセージを添えて納品してください。`,
       cardTitle: escapeHtml(content.title),
-      cardSub: `¥${Number(content.price ?? 0).toLocaleString('ja-JP')}`,
+      // レビュー指摘: contents.price は定価。クーポン割引後・チップ込みの実売上(purchases.amount)を
+      // 出さないと、クリエイターが注文管理で見る額と食い違う。取れない時だけ定価にフォールバック。
+      cardSub: `¥${Number(paidAmount ?? content.price ?? 0).toLocaleString('ja-JP')}`,
       ctaText: '注文管理を開く',
       ctaUrl: `${appUrl}/creator/orders`,
     })
@@ -827,6 +837,8 @@ async function sendCreatorSaleEmail(contentId: string, buyerId: string, purchase
         subject: `【商品が購入されました】${content.title}`,
         html,
       }),
+      // 外部APIが応答しないときに webhook 全体を道連れにしない
+      signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) {
       console.error('[email] Resend API error (creator sale)', res.status, await res.text().catch(() => ''))

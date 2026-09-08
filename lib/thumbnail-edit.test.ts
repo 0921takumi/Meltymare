@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rectFrom, toImageCoords, workSize, boxBlurRGBA, blurRadiusFor } from './thumbnail-edit'
+import { rectFrom, toImageCoords, workSize, boxBlurRGBA, blurRadiusFor, blurImageDataRGBA } from './thumbnail-edit'
 
 describe('rectFrom: ドラッグ範囲の計算', () => {
   const anchor = { x: 100, y: 100 }
@@ -143,5 +143,60 @@ describe('boxBlurRGBA: ctx.filter に頼らないピクセルぼかし（Safari�
   it('ぼかし強度は幅に比例し、下限は 6px', () => {
     expect(blurRadiusFor(1600)).toBe(35)
     expect(blurRadiusFor(100)).toBe(6)
+  })
+})
+
+describe('blurImageDataRGBA: 透過PNGでも縁が汚れない（プリマルチプライ）', () => {
+  // 左半分が完全透明、右半分が不透明な白。ぼかすと境界に半透明の白が並ぶべきで、
+  // 「暗い灰色」が出てはいけない（透明画素のRGB=0 を素で平均すると黒が混ざる）。
+  const halfTransparentWhite = (w: number, h: number) => {
+    const d = new Uint8ClampedArray(w * h * 4)
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      if (x >= w / 2) d.set([255, 255, 255, 255], i)
+    }
+    return d
+  }
+  const w = 32, h = 4, R = 3
+  const rgbAt = (d: Uint8ClampedArray, x: number) => [d[(1 * w + x) * 4], d[(1 * w + x) * 4 + 1], d[(1 * w + x) * 4 + 2]]
+  const alphaAt = (d: Uint8ClampedArray, x: number) => d[(1 * w + x) * 4 + 3]
+
+  it('境界の半透明画素の色は白のまま（黒いにじみが出ない）', () => {
+    const d = halfTransparentWhite(w, h)
+    blurImageDataRGBA(d, w, h, R)
+    for (let x = 12; x <= 20; x++) {
+      if (alphaAt(d, x) < 8) continue
+      for (const c of rgbAt(d, x)) expect(c).toBeGreaterThan(240)
+    }
+  })
+
+  it('素の boxBlurRGBA だと同じ場所が暗くなる（プリマルチプライが効いていることの裏取り）', () => {
+    const d = halfTransparentWhite(w, h)
+    boxBlurRGBA(d, w, h, R)
+    const darkened = [12, 13, 14, 15, 16].some(x => rgbAt(d, x).some(c => c < 200))
+    expect(darkened).toBe(true)
+  })
+
+  it('アルファは滑らかに 0→255 へ増える', () => {
+    const d = halfTransparentWhite(w, h)
+    blurImageDataRGBA(d, w, h, R)
+    expect(alphaAt(d, 0)).toBe(0)
+    expect(alphaAt(d, 31)).toBe(255)
+    for (let x = 1; x < w; x++) expect(alphaAt(d, x)).toBeGreaterThanOrEqual(alphaAt(d, x - 1))
+  })
+
+  it('不透明画像では boxBlurRGBA と同一結果', () => {
+    const mk = () => {
+      const d = new Uint8ClampedArray(w * h * 4)
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const v = x < w / 2 ? 0 : 255
+        d.set([v, v, 128, 255], (y * w + x) * 4)
+      }
+      return d
+    }
+    const a = mk(), b = mk()
+    blurImageDataRGBA(a, w, h, R)
+    boxBlurRGBA(b, w, h, R)
+    expect(Array.from(a)).toEqual(Array.from(b))
   })
 })

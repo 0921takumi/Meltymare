@@ -64,6 +64,36 @@ export function boxBlurRGBA(data: Uint8ClampedArray, w: number, h: number, radiu
   }
 }
 
+/**
+ * 透過を含む画像を正しくぼかす（プリマルチプライ → ぼかし → 復元）。
+ *
+ * getImageData が返すのは「非プリマルチプライ」のRGBA。透明画素のRGBは通常 0,0,0 なので、
+ * そのまま平均すると不透明部分との境界に黒いにじみ（ハロー）が出る。透過PNGのサムネイルで
+ * 「ぼかしたのに縁が汚れる／隠しきれない」が起きるため、アルファで重み付けしてから平均する。
+ * 不透明画像（JPEG）では結果は boxBlurRGBA と同じ。
+ */
+export function blurImageDataRGBA(data: Uint8ClampedArray, w: number, h: number, radius: number, passes = 3): void {
+  const n = w * h * 4
+  if (n <= 0 || data.length < n) return
+  let hasAlpha = false
+  for (let i = 3; i < n; i += 4) { if (data[i] !== 255) { hasAlpha = true; break } }
+  if (!hasAlpha) { boxBlurRGBA(data, w, h, radius, passes); return }
+
+  const pm = new Float32Array(n)
+  for (let i = 0; i < n; i += 4) {
+    const a = data[i + 3] / 255
+    pm[i] = data[i] * a; pm[i + 1] = data[i + 1] * a; pm[i + 2] = data[i + 2] * a; pm[i + 3] = data[i + 3]
+  }
+  const packed = new Uint8ClampedArray(n)
+  for (let i = 0; i < n; i++) packed[i] = pm[i]
+  boxBlurRGBA(packed, w, h, radius, passes)
+  for (let i = 0; i < n; i += 4) {
+    const a = packed[i + 3]
+    const inv = a === 0 ? 0 : 255 / a
+    data[i] = packed[i] * inv; data[i + 1] = packed[i + 1] * inv; data[i + 2] = packed[i + 2] * inv; data[i + 3] = a
+  }
+}
+
 function blurHorizontal(src: Uint8ClampedArray, dst: Uint8ClampedArray, w: number, h: number, r: number): void {
   const div = 2 * r + 1
   const last = w - 1

@@ -1028,8 +1028,14 @@ body {
  * 縦横比を固定せず写真の縦横比なりに表示する（上下左右に帯を作らない）。極端に縦長の
  * 写真だけ高さを抑え、余った左右には同じ画像をぼかして敷く。 */
 .mm-content-detail-thumb--fit { aspect-ratio: auto; max-height: 78vh; }
+/* `auto 4 / 3` は「画像が読み込めたら実際の縦横比、それまでは 4:3」の意味。
+ * これが無いと画像が届くまで高さ0になり、下の商品情報と購入ボタンが後から押し下げられる。 */
 .mm-content-detail-thumb--fit img.mm-content-detail-thumb-img {
   display: block; width: 100%; height: auto; max-height: 78vh; object-fit: contain; position: relative;
+  aspect-ratio: auto 4 / 3;
+}
+@media (max-width: 640px) {
+  .mm-content-detail-thumb--fit img.mm-content-detail-thumb-img { aspect-ratio: auto 4 / 5; }
 }
 
 /* スクロールバーを細くする */

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Type, X, Droplet, Undo2 } from 'lucide-react'
-import { rectFrom, toImageCoords as toImageCoordsPure, workSize, WORK_MAX_PX, boxBlurRGBA, blurRadiusFor } from '@/lib/thumbnail-edit'
+import { rectFrom, toImageCoords as toImageCoordsPure, workSize, WORK_MAX_PX, blurImageDataRGBA, blurRadiusFor } from '@/lib/thumbnail-edit'
 
 type VAlign = 'top' | 'middle' | 'bottom'
 type HAlign = 'left' | 'center' | 'right'
@@ -33,7 +33,7 @@ function makeBlurredCopy(base: HTMLCanvasElement): HTMLCanvasElement | null {
   dst.drawImage(base, 0, 0, w, h)
   const img = dst.getImageData(0, 0, w, h)
   const radius = Math.max(2, Math.round(blurRadiusFor(base.width) * (w / base.width)))
-  boxBlurRGBA(img.data, w, h, radius)
+  blurImageDataRGBA(img.data, w, h, radius)
   dst.putImageData(img, 0, 0)
   return out
 }
@@ -60,12 +60,14 @@ function paint(
   // 範囲ごとに「ぼかし版」から同じ座標を写す。転送元と転送先を同じ座標にすることで位置ズレしない。
   const all = dragRect ? [...blurs, dragRect] : blurs
   if (blurred) {
-    // ぼかし版は縮小して作ってあるので、転送元だけ縮尺を掛ける
-    const s = blurred.width / base.width
+    // ぼかし版は縮小して作ってあるので、転送元だけ縮尺を掛ける。
+    // 縦横の縮小率は丸めの都合で一致しないため必ず別々に計算する（横だけだと下端に未処理の帯が残る）。
+    const sx = blurred.width / base.width
+    const sy = blurred.height / base.height
     ctx.imageSmoothingEnabled = true
     for (const b of all) {
       if (b.w < 2 || b.h < 2) continue
-      ctx.drawImage(blurred, b.x * s, b.y * s, b.w * s, b.h * s, b.x, b.y, b.w, b.h)
+      ctx.drawImage(blurred, b.x * sx, b.y * sy, b.w * sx, b.h * sy, b.x, b.y, b.w, b.h)
     }
   }
 
