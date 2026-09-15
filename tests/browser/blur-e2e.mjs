@@ -179,10 +179,18 @@ try {
     }
   }
 } finally {
-  await admin.from('contents').delete().eq('creator_id', tempUserId)
-  await admin.from('profiles').delete().eq('id', tempUserId)
-  const { error } = await admin.auth.admin.deleteUser(tempUserId)
-  console.log('temp creator deleted:', !error, error?.message ?? '')
+  // 後片付けは「消したつもり」にしない。エラーを見て、最後に残骸が無いことを確かめる
+  // （別のテストで、参照が残っていてプロフィール削除が失敗し、検証用の管理者が本番に残った前例がある）。
+  const errs = []
+  const c = await admin.from('contents').delete().eq('creator_id', tempUserId)
+  if (c.error) errs.push('contents: ' + c.error.message)
+  const p = await admin.from('profiles').delete().eq('id', tempUserId)
+  if (p.error) errs.push('profile: ' + p.error.message)
+  const a = await admin.auth.admin.deleteUser(tempUserId)
+  if (a.error && !/not found/i.test(a.error.message)) errs.push('auth: ' + a.error.message)
+  const { data: left } = await admin.from('profiles').select('id').eq('id', tempUserId)
+  if (left?.length) errs.push('プロフィールが残っています')
+  check('cleanup', '検証用アカウントを削除', errs.length === 0, errs.join(' / ') || tempUserId.slice(0, 8))
 }
 
 const failed = results.filter(r => !r.ok)
