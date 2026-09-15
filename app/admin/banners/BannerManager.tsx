@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Plus, Trash2, GripVertical, Eye, EyeOff } from 'lucide-react'
+import { apiErrorMessage, NETWORK_ERROR_MESSAGE } from '@/lib/api-error'
 
 interface Banner {
   id: string
@@ -60,18 +61,28 @@ export default function BannerManager({ initialBanners, creators, contents }: Pr
     }
   }
 
+  // 以前は失敗時に何も表示しなかった（押しても反応しないように見える）。失敗理由を必ず出す。
   const toggleActive = async (id: string, is_active: boolean) => {
-    const res = await fetch('/api/banner', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, is_active: !is_active }),
-    })
-    if (res.ok) setBanners(prev => prev.map(b => b.id === id ? { ...b, is_active: !b.is_active } : b))
+    setError('')
+    try {
+      const res = await fetch('/api/banner', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, is_active: !is_active }),
+      })
+      if (!res.ok) { setError(await apiErrorMessage(res, '表示の切り替えに失敗しました')); return }
+      setBanners(prev => prev.map(b => b.id === id ? { ...b, is_active: !b.is_active } : b))
+    } catch { setError(NETWORK_ERROR_MESSAGE) }
   }
 
   const remove = async (id: string) => {
-    const res = await fetch(`/api/banner?id=${id}`, { method: 'DELETE' })
-    if (res.ok) setBanners(prev => prev.filter(b => b.id !== id))
+    if (!confirm('このバナーを削除しますか？')) return
+    setError('')
+    try {
+      const res = await fetch(`/api/banner?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) { setError(await apiErrorMessage(res, '削除に失敗しました')); return }
+      setBanners(prev => prev.filter(b => b.id !== id))
+    } catch { setError(NETWORK_ERROR_MESSAGE) }
   }
 
   const inputStyle: React.CSSProperties = { width: '100%', padding: '9px 12px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }
@@ -84,6 +95,11 @@ export default function BannerManager({ initialBanners, creators, contents }: Pr
           <Plus size={15} /> バナーを追加
         </button>
       </div>
+
+      {/* 一覧側の操作（表示切り替え・削除）の失敗もここに出す（フォームを閉じていても見えるように） */}
+      {error && !showForm && (
+        <p role="alert" style={{ fontSize: 13, lineHeight: 1.6, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>{error}</p>
+      )}
 
       {showForm && (
         <div className="mm-card" style={{ padding: 24, marginBottom: 20 }}>

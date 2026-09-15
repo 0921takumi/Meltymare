@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, EyeOff, CheckCircle, XCircle } from 'lucide-react'
+import { apiErrorMessage, NETWORK_ERROR_MESSAGE } from '@/lib/api-error'
 
 interface Report {
   id: string
@@ -26,20 +27,30 @@ export default function CommentReportRow({ report: r, reasonLabel, isLast }: { r
   const [open, setOpen] = useState(false)
   const [pending, start] = useTransition()
 
+  const [error, setError] = useState('')
+
   const action = (kind: 'hide' | 'dismiss' | 'resolve') => {
     if (kind === 'hide' && !confirm('このコメントを非表示にしますか？')) return
+    setError('')
     start(async () => {
-      const res = await fetch('/api/admin-comment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ report_id: r.id, comment_id: r.comment?.id, action: kind }),
-      })
-      if (res.ok) router.refresh()
+      try {
+        const res = await fetch('/api/admin-comment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ report_id: r.id, comment_id: r.comment?.id, action: kind }),
+        })
+        // 以前は失敗時に何も表示しなかった。失敗理由を必ず出す。
+        if (!res.ok) { setError(await apiErrorMessage(res, '処理に失敗しました')); return }
+        router.refresh()
+      } catch { setError(NETWORK_ERROR_MESSAGE) }
     })
   }
 
   return (
     <div style={{ borderBottom: isLast ? 'none' : '1px solid var(--mm-border)' }}>
+      {error && (
+        <p role="alert" style={{ fontSize: 13, lineHeight: 1.6, color: '#991b1b', background: '#fef2f2', borderBottom: '1px solid #fecaca', padding: '10px 18px' }}>{error}</p>
+      )}
       <button onClick={() => setOpen(!open)} style={{ width: '100%', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
         <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#fee2e2', color: '#991b1b' }}>{reasonLabel}</span>
         <div style={{ flex: 1, minWidth: 0 }}>

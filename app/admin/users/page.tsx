@@ -130,12 +130,22 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                   <td data-label="購入数" className="num" style={{ fontWeight: 700 }}>{stat.count}</td>
                   <td data-label="累計支援" className="num" style={{ fontWeight: 700, color: 'var(--mm-ink)' }}>¥{stat.total.toLocaleString()}</td>
                   <td data-label="本人確認">
-                    {u.role === 'creator' && u.identity_status ? (
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
-                        background: u.identity_status === 'approved' ? '#d1fae5' : u.identity_status === 'pending' ? '#fef3c7' : '#fee2e2',
-                        color: u.identity_status === 'approved' ? '#065f46' : u.identity_status === 'pending' ? '#92400e' : '#991b1b',
-                      }}>{u.identity_status === 'approved' ? '承認' : u.identity_status === 'pending' ? '審査中' : u.identity_status === 'rejected' ? '却下' : '—'}</span>
-                    ) : <span style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>—</span>}
+                    {/* 以前はクリエイターの行にしか状態を出しておらず、一般ユーザーは常に「—」だった。
+                        クリエイターへの昇格には本人確認の承認が必須なので、昇格前の一般ユーザーこそ見える必要がある。 */}
+                    {u.role === 'admin' ? (
+                      <span style={{ fontSize: 10, color: 'var(--mm-text-muted)' }}>—</span>
+                    ) : (() => {
+                      const s = u.identity_status ?? 'unsubmitted'
+                      const meta = s === 'approved' ? { label: '承認', bg: '#d1fae5', fg: '#065f46' }
+                        : s === 'pending' ? { label: '審査待ち', bg: '#fef3c7', fg: '#92400e' }
+                        : s === 'rejected' ? { label: '却下', bg: '#fee2e2', fg: '#991b1b' }
+                        : { label: '未提出', bg: '#f1f5f9', fg: '#334155' }
+                      return (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: meta.bg, color: meta.fg, whiteSpace: 'nowrap' }}>
+                          {meta.label}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td data-label="ステータス">
                     {u.is_suspended ? (

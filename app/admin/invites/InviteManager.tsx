@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Copy, Trash2 } from 'lucide-react'
+import { apiErrorMessage, NETWORK_ERROR_MESSAGE } from '@/lib/api-error'
 
 interface Invite {
   id: string
@@ -25,38 +26,51 @@ export default function InviteManager({ initialInvites }: { initialInvites: Invi
   const [pending, start] = useTransition()
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
 
+  // 以前は失敗時に何も表示しなかった（押しても反応しないように見える）。失敗理由を必ず出す。
+  const [error, setError] = useState('')
+
   const create = () => {
+    setError('')
     start(async () => {
-      const res = await fetch('/api/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note, max_uses: maxUses, days }),
-      })
-      if (res.ok) {
+      try {
+        const res = await fetch('/api/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note, max_uses: maxUses, days }),
+        })
+        if (!res.ok) { setError(await apiErrorMessage(res, '招待コードの発行に失敗しました')); return }
         const j = await res.json()
         setInvites(prev => [j.invite, ...prev])
         setShowForm(false)
         setNote('')
-      }
+      } catch { setError(NETWORK_ERROR_MESSAGE) }
     })
   }
 
   const toggle = (id: string, active: boolean) => {
+    setError('')
     start(async () => {
-      const res = await fetch('/api/invite', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, is_active: active }),
-      })
-      if (res.ok) setInvites(prev => prev.map(i => i.id === id ? { ...i, is_active: active } : i))
+      try {
+        const res = await fetch('/api/invite', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, is_active: active }),
+        })
+        if (!res.ok) { setError(await apiErrorMessage(res, '切り替えに失敗しました')); return }
+        setInvites(prev => prev.map(i => i.id === id ? { ...i, is_active: active } : i))
+      } catch { setError(NETWORK_ERROR_MESSAGE) }
     })
   }
 
   const remove = (id: string) => {
     if (!confirm('この招待コードを削除しますか？')) return
+    setError('')
     start(async () => {
-      const res = await fetch(`/api/invite?id=${id}`, { method: 'DELETE' })
-      if (res.ok) setInvites(prev => prev.filter(i => i.id !== id))
+      try {
+        const res = await fetch(`/api/invite?id=${id}`, { method: 'DELETE' })
+        if (!res.ok) { setError(await apiErrorMessage(res, '削除に失敗しました')); return }
+        setInvites(prev => prev.filter(i => i.id !== id))
+      } catch { setError(NETWORK_ERROR_MESSAGE) }
     })
   }
 
@@ -71,6 +85,10 @@ export default function InviteManager({ initialInvites }: { initialInvites: Invi
       <button onClick={() => setShowForm(!showForm)} disabled={pending} className="admin-btn" style={{ marginBottom: 18 }}>
         <Plus size={14} />招待コードを発行
       </button>
+
+      {error && (
+        <p role="alert" style={{ fontSize: 13, lineHeight: 1.6, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>{error}</p>
+      )}
 
       {showForm && (
         <div style={{ background: 'white', border: '1px solid var(--mm-border)', borderRadius: 12, padding: 24, marginBottom: 22 }}>

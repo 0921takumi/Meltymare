@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { Heart } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { apiErrorMessage, NETWORK_ERROR_MESSAGE } from '@/lib/api-error'
 
 interface Props {
   creatorId: string
@@ -30,7 +31,12 @@ export default function FollowButton({ creatorId, isFollowing: initialFollowing,
         const next = !isFollowing
         setIsFollowing(next)
         setCount(c => next ? c + 1 : Math.max(0, c - 1))
+      } else {
+        // 以前は失敗時に何も表示しなかった（押しても反応しないように見える）
+        alert(await apiErrorMessage(res, 'フォローの切り替えに失敗しました'))
       }
+    } catch {
+      alert(NETWORK_ERROR_MESSAGE)
     } finally {
       setLoading(false)
     }

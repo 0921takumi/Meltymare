@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Tag, Plus, Trash2 } from 'lucide-react'
+import { apiErrorMessage, NETWORK_ERROR_MESSAGE } from '@/lib/api-error'
 
 interface Coupon {
   id: string
@@ -47,8 +48,14 @@ export default function CouponManager({ initialCoupons }: { initialCoupons: Coup
   }
 
   const deleteCoupon = async (id: string) => {
-    const res = await fetch(`/api/coupon?id=${id}`, { method: 'DELETE' })
-    if (res.ok) setCoupons(prev => prev.filter(c => c.id !== id))
+    if (!confirm('このクーポンを削除しますか？')) return
+    setError('')
+    try {
+      const res = await fetch(`/api/coupon?id=${id}`, { method: 'DELETE' })
+      // 以前は失敗時に何も表示しなかった。失敗理由を必ず出す。
+      if (!res.ok) { setError(await apiErrorMessage(res, '削除に失敗しました')); return }
+      setCoupons(prev => prev.filter(c => c.id !== id))
+    } catch { setError(NETWORK_ERROR_MESSAGE) }
   }
 
   const inputStyle: React.CSSProperties = { width: '100%', padding: '9px 12px', border: '1px solid var(--mm-border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }
@@ -61,6 +68,11 @@ export default function CouponManager({ initialCoupons }: { initialCoupons: Coup
           <Plus size={15} /> 新しいクーポンを作成
         </button>
       </div>
+
+      {/* 一覧側の操作（削除）の失敗もここに出す（フォームを閉じていても見えるように） */}
+      {error && !showForm && (
+        <p role="alert" style={{ fontSize: 13, lineHeight: 1.6, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>{error}</p>
+      )}
 
       {showForm && (
         <div className="mm-card" style={{ padding: 24, marginBottom: 20 }}>
