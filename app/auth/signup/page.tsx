@@ -255,18 +255,22 @@ function SignupForm() {
                 例: <code style={{ background: 'var(--mm-bg)', padding: '1px 4px', borderRadius: 3, fontFamily: 'monospace' }}>MyFocus2026!</code>
               </p>
             </div>
-            <div>
-              <label style={authLabelStyle}>
-                Invite code <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', fontWeight: 500, textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>（β期間中は必須）</span>
-              </label>
-              <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} required
-                className="mm-auth-input"
-                style={{ fontFamily: 'monospace', letterSpacing: '0.12em' }}
-                placeholder="招待コード" />
-              <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 6, lineHeight: 1.6 }}>
-                招待コードはクリエイターの SNS や運営からのご案内に記載されています。
-              </p>
-            </div>
+            {/* 招待コード欄は招待制のときだけ出す。以前は SERVICE_MODE.inviteOnly と無関係に
+                required で常に表示していたため、招待制を OFF にしても入力必須のままだった。 */}
+            {SERVICE_MODE.inviteOnly && (
+              <div>
+                <label style={authLabelStyle}>
+                  Invite code <span style={{ fontSize: 10, color: 'var(--mm-text-muted)', fontWeight: 500, textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>（β期間中は必須）</span>
+                </label>
+                <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} required
+                  className="mm-auth-input"
+                  style={{ fontFamily: 'monospace', letterSpacing: '0.12em' }}
+                  placeholder="招待コード" />
+                <p style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 6, lineHeight: 1.6 }}>
+                  招待コードはクリエイターの SNS や運営からのご案内に記載されています。
+                </p>
+              </div>
+            )}
 
             {/* 同意チェック */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 0 4px', borderTop: '1px solid var(--mm-border)', marginTop: 4 }}>
