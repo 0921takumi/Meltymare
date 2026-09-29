@@ -3,6 +3,11 @@ import { createClient as createServerClient } from '@supabase/supabase-js'
 
 // 環境変数に末尾改行/空白が混入していてもURLを破壊しないよう trim する
 const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp').trim()
+type ContentSitemapRow = { id: string; updated_at: string | null; sale_starts_at: string }
+type CreatorSitemapRow = { username: string | null; updated_at: string | null }
+
+// 予約商品の解禁後、再デプロイなしで次回クロールから掲載する。
+export const dynamic = 'force-dynamic'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPaths: MetadataRoute.Sitemap = [
@@ -19,6 +24,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]
 
   try {
+    const saleNowIso = new Date().toISOString()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -26,10 +32,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const { data: contents } = await supabase
       .from('contents')
-      .select('id, updated_at')
+      .select('id, updated_at, sale_starts_at')
       .eq('is_published', true)
       .neq('review_status', 'rejected')
-      .order('updated_at', { ascending: false })
+      .eq('hard_takedown', false)
+      .lte('sale_starts_at', saleNowIso)
+      // 解禁直後の予約商品を1000件上限の外へ押し出さないよう、販売開始順で取得する。
+      .order('sale_starts_at', { ascending: false })
       .limit(1000)
 
     const { data: creators } = await supabase
@@ -39,16 +48,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .not('username', 'is', null)
       .limit(1000)
 
-    const contentPaths: MetadataRoute.Sitemap = (contents ?? []).map((c: any) => ({
+    const contentRows = (contents ?? []) as ContentSitemapRow[]
+    const creatorRows = (creators ?? []) as CreatorSitemapRow[]
+
+    const contentPaths: MetadataRoute.Sitemap = contentRows.map(c => ({
       url: `${BASE_URL}/contents/${c.id}`,
       lastModified: c.updated_at ? new Date(c.updated_at) : undefined,
       changeFrequency: 'weekly' as const,
       priority: 0.7,
     }))
 
-    const creatorPaths: MetadataRoute.Sitemap = (creators ?? [])
-      .filter((c: any) => c.username)
-      .map((c: any) => ({
+    const creatorPaths: MetadataRoute.Sitemap = creatorRows
+      .filter((c): c is CreatorSitemapRow & { username: string } => !!c.username)
+      .map(c => ({
         url: `${BASE_URL}/creator/${c.username}`,
         lastModified: c.updated_at ? new Date(c.updated_at) : undefined,
         changeFrequency: 'weekly' as const,

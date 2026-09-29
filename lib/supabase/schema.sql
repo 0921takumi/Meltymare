@@ -31,8 +31,83 @@ create table public.contents (
   stock_limit integer,           -- nullは無制限
   sold_count integer default 0,
   is_published boolean default false,
+  review_status text not null default 'pending' check (review_status in ('pending', 'approved', 'rejected')),
+  hard_takedown boolean not null default false,
+  sale_starts_at timestamptz not null default now()
+    check (
+      isfinite(sale_starts_at)
+      and sale_starts_at >= timestamptz '0001-01-01 00:00:00+00'
+      and sale_starts_at <= timestamptz '9999-12-31 23:59:59.999999+00'
+    ),
+  has_been_on_sale boolean not null default false,
   created_at timestamptz default now()
 );
+
+create index contents_public_sale_starts_at_idx
+  on public.contents (sale_starts_at, created_at desc)
+  where is_published = true
+    and coalesce(review_status, 'approved') <> 'rejected'
+    and coalesce(hard_takedown, false) = false;
+
+create function public.enforce_sale_start_history()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  was_available boolean;
+begin
+  if tg_op = 'INSERT' then
+    if coalesce(new.is_published, false)
+      and coalesce(new.review_status, 'approved') <> 'rejected'
+      and coalesce(new.hard_takedown, false) = false
+      and new.sale_starts_at <= now()
+    then
+      new.sale_starts_at := now();
+      new.has_been_on_sale := true;
+    else
+      new.has_been_on_sale := false;
+    end if;
+    return new;
+  end if;
+
+  was_available := coalesce(old.has_been_on_sale, false) or (
+    coalesce(old.is_published, false)
+    and coalesce(old.review_status, 'approved') <> 'rejected'
+    and coalesce(old.hard_takedown, false) = false
+    and old.sale_starts_at <= now()
+  );
+
+  if was_available and new.sale_starts_at > now() then
+    raise exception 'a sale that has started cannot be scheduled again'
+      using errcode = '23514';
+  end if;
+
+  if was_available then
+    new.sale_starts_at := old.sale_starts_at;
+  elsif coalesce(new.is_published, false)
+    and coalesce(new.review_status, 'approved') <> 'rejected'
+    and coalesce(new.hard_takedown, false) = false
+    and new.sale_starts_at <= now()
+  then
+    new.sale_starts_at := now();
+  end if;
+
+  new.has_been_on_sale := was_available or (
+    coalesce(new.is_published, false)
+    and coalesce(new.review_status, 'approved') <> 'rejected'
+    and coalesce(new.hard_takedown, false) = false
+    and new.sale_starts_at <= now()
+  );
+  return new;
+end;
+$$;
+
+revoke execute on function public.enforce_sale_start_history() from public, anon, authenticated;
+
+create trigger zz_enforce_sale_start_history_trg
+  before insert or update on public.contents
+  for each row execute function public.enforce_sale_start_history();
 
 -- purchases（購入履歴）
 create table public.purchases (
@@ -59,8 +134,21 @@ create policy "profiles_select" on public.profiles for select using (true);
 create policy "profiles_insert" on public.profiles for insert with check (auth.uid() = id);
 create policy "profiles_update" on public.profiles for update using (auth.uid() = id);
 
--- contents: 公開済みは誰でも閲覧可、クリエイター本人のみCRUD
-create policy "contents_select" on public.contents for select using (is_published = true or creator_id = auth.uid());
+-- contents: 販売開始済みの公開商品、作成者本人、管理者のみ閲覧可
+create policy "contents_select" on public.contents
+  for select
+  to anon, authenticated
+  using (
+    (is_published = true
+      and coalesce(review_status, 'approved') <> 'rejected'
+      and coalesce(hard_takedown, false) = false
+      and sale_starts_at <= now())
+    or (creator_id = (select auth.uid()) and coalesce(hard_takedown, false) = false)
+    or exists (
+      select 1 from public.profiles p
+      where p.id = (select auth.uid()) and p.role = 'admin'
+    )
+  );
 create policy "contents_insert" on public.contents for insert with check (creator_id = auth.uid());
 create policy "contents_update" on public.contents for update using (creator_id = auth.uid());
 create policy "contents_delete" on public.contents for delete using (creator_id = auth.uid());
@@ -87,7 +175,8 @@ insert into storage.buckets (id, name, public) values ('avatars', 'avatars', tru
 -- ==========================================
 
 -- サムネイル・アバターは誰でも閲覧、クリエイターのみアップロード
-create policy "thumbnails_select" on storage.objects for select using (bucket_id = 'thumbnails');
+-- thumbnailsはpublic配信URLを使うが、storage APIでの匿名一覧取得は許可しない。
+-- 公開前商品のサムネイルURLを列挙されないため、SELECT policyは作成しない。
 create policy "thumbnails_insert" on storage.objects for insert with check (bucket_id = 'thumbnails' and auth.role() = 'authenticated');
 
 create policy "avatars_select" on storage.objects for select using (bucket_id = 'avatars');

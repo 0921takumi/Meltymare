@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { PROFILE_PUBLIC_SELECT, type PublicProfile } from '@/lib/profile-fields'
+import { hasSaleStarted, isSaleScheduled, resolveSaleStartsAt, toJstDateTimeLocalValue } from '@/lib/sale-schedule'
 import Header from '@/components/layout/Header'
 import { Upload, ImageIcon, VideoIcon, X, Plus } from 'lucide-react'
 import ThumbnailTextEditor from './ThumbnailTextEditor'
@@ -23,6 +24,11 @@ function UploadForm() {
   const [contentType, setContentType] = useState<'image' | 'video'>('image')
   // v55: 事後審査へ変更したため、新規出品は既定で公開ON（=即販売開始）。編集時は既存値で上書きされる。
   const [isPublished, setIsPublished] = useState(!isEdit)
+  const [saleTiming, setSaleTiming] = useState<'now' | 'scheduled'>('now')
+  const [scheduledSaleStart, setScheduledSaleStart] = useState('')
+  const [existingSaleStartsAt, setExistingSaleStartsAt] = useState<string | null>(null)
+  const [hasBeenOnSale, setHasBeenOnSale] = useState(false)
+  const [existingWasPublished, setExistingWasPublished] = useState(false)
   const [contentFile, setContentFile] = useState<File | null>(null)
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
   // テキスト合成後のサムネイル。元ファイル(thumbnailFile)は編集し直しても重ね書きされないよう別に保持する
@@ -68,7 +74,17 @@ function UploadForm() {
           setPrice(String(content.price))
           setStockLimit(content.stock_limit ? String(content.stock_limit) : '')
           setContentType(content.content_type)
-          setIsPublished(content.is_published)
+          const scheduled = isSaleScheduled(content.sale_starts_at)
+          const saleAlreadyStarted = content.has_been_on_sale === true
+            || (content.is_published === true && hasSaleStarted(content.sale_starts_at))
+          // 未承認動画はDB側で is_published=false に矯正される。未来の開始日時がある場合は
+          // 予約意思を優先して復元し、通常の編集保存で予約を失わないようにする。
+          setIsPublished(content.is_published || scheduled)
+          setExistingSaleStartsAt(content.sale_starts_at ?? null)
+          setHasBeenOnSale(saleAlreadyStarted)
+          setExistingWasPublished(content.is_published === true)
+          setSaleTiming(scheduled ? 'scheduled' : 'now')
+          setScheduledSaleStart(scheduled ? toJstDateTimeLocalValue(content.sale_starts_at) : '')
           setTags(Array.isArray(content.tags) ? content.tags : [])
           setOriginalReviewStatus(content.review_status ?? null)
           setRejectionReason(content.rejection_reason ?? null)
@@ -87,6 +103,15 @@ function UploadForm() {
     if (!user) return
 
     try {
+      // 日時不備で大容量ファイルをアップロードした後に失敗しないよう、最初に検証する。
+      // 非公開への変更は timing='now' として扱い、既存の未来予約を明示的に解除する。
+      const saleStartsAt = resolveSaleStartsAt({
+        timing: isPublished ? saleTiming : 'now',
+        existingSaleStartsAt,
+        hasBeenOnSale: hasBeenOnSale
+          || (existingWasPublished && hasSaleStarted(existingSaleStartsAt)),
+        scheduledLocalValue: scheduledSaleStart,
+      })
       let fileUrl = ''
       let thumbnailUrl = ''
 
@@ -153,6 +178,7 @@ function UploadForm() {
         content_type: contentType,
         stock_limit: stockLimit ? parseInt(stockLimit) : null,
         is_published: isPublished,
+        sale_starts_at: saleStartsAt,
         tags: tags.length > 0 ? tags : [],
       }
       if (fileUrl) payload.file_url = fileUrl
@@ -413,18 +439,81 @@ function UploadForm() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--mm-bg)', borderRadius: 8, flexWrap: 'wrap' }}>
-              <input type="checkbox" id="published" checked={isPublished} onChange={e => setIsPublished(e.target.checked)}
-                style={{ width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }} />
-              <label htmlFor="published" style={{ fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>公開する</label>
-              <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>
-                {contentType === 'video'
-                  ? '動画は運営の確認後に公開されます（写真はすぐに販売が始まります）'
-                  : 'チェックを入れると、すぐに販売が始まります'}
-              </span>
+            <div style={{ padding: '14px 16px', background: 'var(--mm-bg)', borderRadius: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <input type="checkbox" id="published" checked={isPublished} onChange={e => setIsPublished(e.target.checked)}
+                  style={{ width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }} />
+                <label htmlFor="published" style={{ fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>公開・販売する</label>
+                {!isPublished && (
+                  <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>
+                    非公開で保存します。予約中の場合は、更新すると予約もキャンセルされます。
+                  </span>
+                )}
+              </div>
+
+              {isPublished && (
+                <fieldset style={{ border: 0, padding: 0, margin: '14px 0 0' }}>
+                  <legend style={{ ...labelStyle, marginBottom: 8 }}>販売開始</legend>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    <label htmlFor="sale-timing-now" style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      <input
+                        id="sale-timing-now"
+                        type="radio"
+                        name="saleTiming"
+                        value="now"
+                        checked={saleTiming === 'now'}
+                        onChange={() => setSaleTiming('now')}
+                      />
+                      今すぐ販売
+                    </label>
+                    <label htmlFor="sale-timing-scheduled" style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, cursor: hasBeenOnSale ? 'not-allowed' : 'pointer', opacity: hasBeenOnSale ? 0.55 : 1 }}>
+                      <input
+                        id="sale-timing-scheduled"
+                        type="radio"
+                        name="saleTiming"
+                        value="scheduled"
+                        checked={saleTiming === 'scheduled'}
+                        disabled={hasBeenOnSale}
+                        onChange={() => setSaleTiming('scheduled')}
+                      />
+                      日時を指定
+                    </label>
+                  </div>
+
+                  {hasBeenOnSale && (
+                    <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 9, lineHeight: 1.6 }}>
+                      販売開始済みの商品は、購入者への表示を守るため予約し直せません。
+                    </p>
+                  )}
+
+                  {saleTiming === 'scheduled' && (
+                    <div style={{ marginTop: 12 }}>
+                      <label htmlFor="sale-starts-at" style={labelStyle}>販売開始日時（日本時間） *</label>
+                      <input
+                        id="sale-starts-at"
+                        type="datetime-local"
+                        value={scheduledSaleStart}
+                        onChange={e => setScheduledSaleStart(e.target.value)}
+                        required
+                        aria-describedby="sale-starts-at-help"
+                        style={inputStyle}
+                      />
+                      <p id="sale-starts-at-help" style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 7, lineHeight: 1.6 }}>
+                        開始前は一般ユーザーに表示されず、指定時刻に自動で販売開始します。日本時間。
+                      </p>
+                    </div>
+                  )}
+
+                  {contentType === 'video' && (
+                    <p style={{ fontSize: 12, color: 'var(--mm-text-muted)', marginTop: 10, lineHeight: 1.6 }}>
+                      動画は運営の確認後に公開されます。予約日時より確認完了が後になった場合は、確認後に販売開始されます。
+                    </p>
+                  )}
+                </fieldset>
+              )}
             </div>
 
-            {error && <p style={{ fontSize: 13, color: '#dc2626', background: '#fef2f2', padding: '10px 14px', borderRadius: 8 }}>{error}</p>}
+            {error && <p role="alert" style={{ fontSize: 13, color: '#dc2626', background: '#fef2f2', padding: '10px 14px', borderRadius: 8 }}>{error}</p>}
 
             <div style={{ display: 'flex', gap: 12 }}>
               <button type="button" onClick={() => router.back()}

@@ -38,6 +38,8 @@ export interface Content {
   stock_limit?: number
   sold_count: number
   is_published: boolean
+  sale_starts_at: string
+  has_been_on_sale: boolean
   review_status: 'pending' | 'approved' | 'rejected'
   created_at: string
   creator?: Profile

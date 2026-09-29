@@ -15,6 +15,7 @@ const CARD_COLORS = [
 
 export default async function CreatorsPage() {
   const supabase = await createClient()
+  const saleNowIso = new Date().toISOString()
 
   const { data: { user } } = await supabase.auth.getUser()
   let profile = null
@@ -40,6 +41,7 @@ export default async function CreatorsPage() {
         .eq('creator_id', c.id)
         .eq('is_published', true)
         .neq('review_status', 'rejected')
+        .lte('sale_starts_at', saleNowIso)
       const count = contents?.length ?? 0
       const sold = contents?.reduce((s, x) => s + (x.sold_count ?? 0), 0) ?? 0
       creatorStats[c.id] = { count, sold }

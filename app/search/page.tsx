@@ -12,6 +12,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const query = q?.trim() ?? ''
 
   const supabase = await createClient()
+  const saleNowIso = new Date().toISOString()
   const { data: { user } } = await supabase.auth.getUser()
   let profile = null
   if (user) {
@@ -39,8 +40,9 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         .select(CONTENT_CARD_WITH_CREATOR_SELECT)
         .eq('is_published', true)
         .neq('review_status', 'rejected')
+        .lte('sale_starts_at', saleNowIso)
         .ilike('title', `%${safeQ}%`)
-        .order('created_at', { ascending: false })
+        .order('sale_starts_at', { ascending: false })
         .limit(12),
     ])
     creators = creatorsRes.data ?? []

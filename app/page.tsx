@@ -37,6 +37,7 @@ const CREATOR_COLORS = [
 
 export default async function HomePage() {
   const supabase = await createClient()
+  const saleNowIso = new Date().toISOString()
 
   // ログイン状態
   const { data: { user } } = await supabase.auth.getUser()
@@ -65,7 +66,8 @@ export default async function HomePage() {
       .select(CONTENT_CARD_WITH_CREATOR_SELECT)
       .eq('is_published', true)
       .neq('review_status', 'rejected')
-      .order('created_at', { ascending: false })
+      .lte('sale_starts_at', saleNowIso)
+      .order('sale_starts_at', { ascending: false })
       .limit(8),
     user
       ? supabase.from('purchases').select('content_id').eq('user_id', user.id).eq('status', 'completed')
@@ -76,6 +78,7 @@ export default async function HomePage() {
       // ヒント(contents_creator_id_fkey)を付けると PGRST200 で特集が無言で全消えする。
       .select('*, creator:profiles!featured_banners_creator_id_fkey(id, display_name, username, avatar_url), content:contents(id, title, thumbnail_url)')
       .eq('is_active', true)
+      .lte('content.sale_starts_at', saleNowIso)
       .order('sort_order', { ascending: true })
       .limit(5),
   ])
@@ -83,7 +86,8 @@ export default async function HomePage() {
   const profile = profileRes.data
   const creators = creatorsRes.data
   const contents = contentsRes.data
-  const banners = bannersRes.data
+  // 予約販売前の商品に紐づくバナーは、埋め込みcontentが日時ゲートでnullになるため非表示にする。
+  const banners = (bannersRes.data ?? []).filter(banner => !banner.content_id || banner.content)
   const purchasedIds: string[] = (purchasesRes.data ?? []).map((p: any) => p.content_id)
 
   // クリエイターごとのコンテンツ数（N+1 を避け、1クエリで集計）
@@ -95,6 +99,7 @@ export default async function HomePage() {
       .in('creator_id', creators.map(c => c.id))
       .eq('is_published', true)
       .neq('review_status', 'rejected')
+      .lte('sale_starts_at', saleNowIso)
     for (const row of countRows ?? []) {
       creatorContentCounts[row.creator_id] = (creatorContentCounts[row.creator_id] ?? 0) + 1
     }

@@ -6,9 +6,17 @@ import Link from 'next/link'
 import { Plus, Edit, Eye, EyeOff, ClipboardList, MessageSquare, Tag, ShieldCheck, ShieldAlert, Clock, ExternalLink } from 'lucide-react'
 import { FINANCE } from '@/lib/config'
 import { fetchAllRows } from '@/lib/fetch-all'
+import { isSaleScheduled, toJstDateTimeLocalValue } from '@/lib/sale-schedule'
 import ShopLinkBar from './ShopLinkBar'
 
+function formatScheduledSaleStart(value: string): string {
+  const [date, time] = toJstDateTimeLocalValue(value).split('T')
+  const [, month, day] = date.split('-')
+  return `${Number(month)}月${Number(day)}日 ${time}開始`
+}
+
 export default async function CreatorDashboard() {
+  const saleNow = new Date()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -274,7 +282,10 @@ export default async function CreatorDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {contents.map(c => (
+                {contents.map(c => {
+                  const scheduled = isSaleScheduled(c.sale_starts_at, saleNow)
+                  const scheduledLabel = scheduled ? formatScheduledSaleStart(c.sale_starts_at) : null
+                  return (
                   <tr key={c.id} style={{ borderBottom: '1px solid var(--mm-border)' }}>
                     <td style={{ padding: '12px 16px', fontWeight: 600, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</td>
                     <td style={{ padding: '12px 16px' }}>
@@ -290,19 +301,31 @@ export default async function CreatorDashboard() {
                           非公開」が全部同じ「非公開」表示になり、却下されたことにクリエイターが
                           気づく手段が無かった。review_statusを優先して表示する。 */}
                       {c.review_status === 'pending' ? (
-                        c.is_published ? (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                            <Eye size={13} /> 販売中
-                          </span>
-                        ) : c.content_type === 'video' ? (
+                        c.content_type === 'video' ? (
                           // v58: 動画は運営が承認するまで公開されない。自分で下書きにした「非公開」と
                           // 同じ表示だと、承認待ちであることが伝わらない。
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#d97706', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                            <Clock size={13} /> 運営確認待ち
-                          </span>
-                        ) : (
+                          <div>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#d97706', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              <Clock size={13} /> 運営確認待ち
+                            </span>
+                            {scheduledLabel && (
+                              <p style={{ fontSize: 11, color: '#92400e', marginTop: 4, whiteSpace: 'nowrap' }}>{scheduledLabel}</p>
+                            )}
+                          </div>
+                        ) : !c.is_published ? (
                           <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--mm-text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                             <EyeOff size={13} /> 非公開
+                          </span>
+                        ) : scheduledLabel ? (
+                          <div>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#d97706', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              <Clock size={13} /> 予約販売
+                            </span>
+                            <p style={{ fontSize: 11, color: '#92400e', marginTop: 4, whiteSpace: 'nowrap' }}>{scheduledLabel}</p>
+                          </div>
+                        ) : (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            <Eye size={13} /> 販売中
                           </span>
                         )
                       ) : c.review_status === 'rejected' ? (
@@ -317,6 +340,17 @@ export default async function CreatorDashboard() {
                               理由: {c.rejection_reason}
                             </p>
                           )}
+                        </div>
+                      ) : !c.is_published ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--mm-text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          <EyeOff size={13} /> 非公開
+                        </span>
+                      ) : scheduledLabel ? (
+                        <div>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#d97706', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            <Clock size={13} /> 予約販売
+                          </span>
+                          <p style={{ fontSize: 11, color: '#92400e', marginTop: 4, whiteSpace: 'nowrap' }}>{scheduledLabel}</p>
                         </div>
                       ) : (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: c.is_published ? '#059669' : 'var(--mm-text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>
@@ -338,7 +372,8 @@ export default async function CreatorDashboard() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
             </div>

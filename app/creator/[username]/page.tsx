@@ -43,6 +43,7 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
 export default async function CreatorProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params
   const supabase = await createClient()
+  const saleNowIso = new Date().toISOString()
 
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -88,7 +89,8 @@ export default async function CreatorProfilePage({ params }: { params: Promise<{
       .eq('creator_id', creator.id)
       .eq('is_published', true)
       .neq('review_status', 'rejected')
-      .order('created_at', { ascending: false }),
+      .lte('sale_starts_at', saleNowIso)
+      .order('sale_starts_at', { ascending: false }),
     supabase.from('follows').select('id', { count: 'exact', head: true }).eq('creator_id', creator.id),
     user
       ? supabase.from('follows').select('id').eq('follower_id', user.id).eq('creator_id', creator.id).maybeSingle()

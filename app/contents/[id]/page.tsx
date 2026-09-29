@@ -12,11 +12,13 @@ import { ImageIcon, VideoIcon, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { COMPANY } from '@/lib/config'
+import { hasSaleStarted } from '@/lib/sale-schedule'
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-focus.jp').trim()
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
+  const saleNowIso = new Date().toISOString()
   const supabase = await createClient()
   // v55: 取り下げ(却下)済み・非公開の商品名がタブ/OGPに残らないよう、
   // 本文側の表示条件とメタデータの取得条件を揃える。
@@ -26,12 +28,24 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     .eq('id', id)
     .eq('is_published', true)
     .neq('review_status', 'rejected')
+    .lte('sale_starts_at', saleNowIso)
     .maybeSingle()
   if (!content) {
-    // 本文側の「購入者は取り下げ後も到達できる」経路と揃える（本文は商品を描画するのに
-    // タブ題名だけ「見つかりません」になる不整合をレビューで指摘）。noindex は維持。
+    // 本文側の「作成者/adminは予約前でもプレビューできる」経路と揃える。
+    // 公開条件を外した再取得でもRLSは効くため、無関係な利用者には行が返らない。
+    // プレビューを検索結果へ出さないようnoindexは維持する。
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
+      const { data: preview } = await supabase
+        .from('contents')
+        .select('title')
+        .eq('id', id)
+        .maybeSingle()
+      if (preview) {
+        return { title: preview.title, robots: { index: false, follow: false } }
+      }
+
+      // 購入後に通常取り下げされた商品も、購入者には従来どおり題名を表示する。
       const { data: bought } = await supabase
         .from('purchases').select('id')
         .eq('user_id', user.id).eq('content_id', id).eq('status', 'completed')
@@ -61,6 +75,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ContentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const saleNow = new Date()
+  const saleNowIso = saleNow.toISOString()
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -72,7 +88,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     user
       ? supabase.from('profiles').select(PROFILE_PUBLIC_SELECT).eq('id', user.id).single()
       : Promise.resolve({ data: null }),
-    supabase.from('contents').select(CONTENT_SELECT).eq('id', id).eq('is_published', true).neq('review_status', 'rejected').maybeSingle(),
+    supabase.from('contents').select(CONTENT_SELECT).eq('id', id).eq('is_published', true).neq('review_status', 'rejected').lte('sale_starts_at', saleNowIso).maybeSingle(),
   ])
   const profile = profileResult.data
   let content = contentResult.data
@@ -115,6 +131,30 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   // 他人の行のPII列のため service_role(admin) で読む。
   const isOwner = !!user && user.id === (content as { creator_id: string }).creator_id
   const isAdminViewer = profile?.role === 'admin'
+  const saleHasStarted = hasSaleStarted(content.sale_starts_at, saleNow)
+  const isRestrictedPreview = (isOwner || isAdminViewer) && (
+    content.is_published !== true
+    || content.review_status === 'rejected'
+    || !saleHasStarted
+  )
+  const scheduledSaleLabel = !saleHasStarted
+    ? new Intl.DateTimeFormat('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(new Date(content.sale_starts_at))
+    : null
+  const previewTitle = !saleHasStarted
+    ? '予約販売プレビュー'
+    : content.review_status === 'rejected'
+      ? '販売停止中のプレビュー'
+      : content.content_type === 'video' && content.review_status === 'pending'
+        ? '運営確認待ちのプレビュー'
+        : '非公開プレビュー'
 
   // v55: 上のフォールバックは「管理者/本人が審査前後の中身を確認する」ための経路で、
   // 元コメントは RLS が status を絞ってくれる前提だった。しかし本番の contents_select は
@@ -122,10 +162,14 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   // is_published=true のままなら第三者に見えてしまう。事後審査では「却下=取り下げ」が
   // 唯一の販売停止手段なので、RLS任せにせずアプリ側でも必ず閉じる。
   if (!isOwner && !isAdminViewer && !viewerIsBuyer) {
-    const c = content as { is_published?: boolean; review_status?: string | null }
-    if (c.is_published !== true || c.review_status === 'rejected') return notFound()
+    const c = content as { is_published?: boolean; review_status?: string | null; sale_starts_at?: string | null }
+    if (c.is_published !== true || c.review_status === 'rejected' || !hasSaleStarted(c.sale_starts_at, saleNow)) return notFound()
   }
-  const buyerSeesStoppedItem = viewerIsBuyer && (content.is_published !== true || content.review_status === 'rejected')
+  const buyerSeesStoppedItem = viewerIsBuyer && (
+    content.is_published !== true
+    || content.review_status === 'rejected'
+    || !hasSaleStarted(content.sale_starts_at, saleNow)
+  )
 
   // 依頼で発覚(表示が遅い): ここから先の凍結チェック・購入済みチェック・関連コンテンツ・
   // 購入済みIDリスト・レビュー取得は互いに無関係なのに直列(await→await→…)で行っており、
@@ -147,8 +191,9 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
       .eq('creator_id', content.creator_id)
       .eq('is_published', true)
       .neq('review_status', 'rejected')
+      .lte('sale_starts_at', saleNowIso)
       .neq('id', id)
-      .order('created_at', { ascending: false })
+      .order('sale_starts_at', { ascending: false })
       .limit(4),
     user
       ? supabase.from('purchases').select('content_id').eq('user_id', user.id).eq('status', 'completed')
@@ -272,15 +317,23 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
             )}
 
             {/* 購入ボタン */}
-            <PurchaseButton
-              contentId={content.id}
-              price={content.price}
-              isPurchased={isPurchased}
-              deliveryStatus={deliveryStatus}
-              isSoldOut={isSoldOut}
-              isLoggedIn={!!user}
-              downloadUrl={downloadUrl}
-            />
+            {isRestrictedPreview ? (
+              <div role="status" style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '14px 16px', color: '#92400e', lineHeight: 1.7 }}>
+                <p style={{ fontSize: 14, fontWeight: 700 }}>{previewTitle}</p>
+                {scheduledSaleLabel && <p style={{ fontSize: 13 }}>販売開始: {scheduledSaleLabel}（日本時間）</p>}
+                <p style={{ fontSize: 12, marginTop: 4 }}>現在は一般ユーザーには表示されず、購入もできません。</p>
+              </div>
+            ) : (
+              <PurchaseButton
+                contentId={content.id}
+                price={content.price}
+                isPurchased={isPurchased}
+                deliveryStatus={deliveryStatus}
+                isSoldOut={isSoldOut}
+                isLoggedIn={!!user}
+                downloadUrl={downloadUrl}
+              />
+            )}
 
             {/* 通報導線。ガイドラインが案内する「通報する」の実体（納品前監査で「ボタンが存在しない」と
                 指摘）。写真が事後審査になった以上、運営の目視以外に違反を見つける経路が要る。

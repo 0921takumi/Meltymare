@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 import { cleanEnv } from '@/lib/config'
+import { hasSaleStarted } from '@/lib/sale-schedule'
 
 // apiVersion を明示固定（SDK更新時の挙動変化で決済不整合になるのを防ぐ）
 const stripe = new Stripe(cleanEnv(process.env.STRIPE_SECRET_KEY), { apiVersion: '2026-03-25.dahlia' })
@@ -13,6 +14,10 @@ const stripe = new Stripe(cleanEnv(process.env.STRIPE_SECRET_KEY), { apiVersion:
 const admin = createAdminClient()
 
 export async function POST(req: NextRequest) {
+  // 販売開始の境界判定は、認証や外部I/Oで時刻が進んでも揺れないよう
+  // リクエスト受付時点の同じ時刻をクエリとアプリ側チェックの双方で使う。
+  const serverNow = new Date()
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -63,8 +68,15 @@ export async function POST(req: NextRequest) {
       .eq('id', contentId)
       .eq('is_published', true)
       .neq('review_status', 'rejected')
+      .lte('sale_starts_at', serverNow.toISOString())
       .single()
     if (contentError || !content) return NextResponse.json({ error: 'コンテンツが見つかりません' }, { status: 404 })
+
+    // RLS・クエリ条件に加え、欠損値や想定外の日時もfail-closedで遮断する。
+    // 無料購入・Stripe Checkout作成のいずれよりも前に判定する二重防御。
+    if (!hasSaleStarted(content.sale_starts_at, serverNow)) {
+      return NextResponse.json({ error: 'コンテンツが見つかりません' }, { status: 404 })
+    }
 
     // v49: 凍結・退会済みクリエイターのコンテンツが購入可能なまま放置されていた
     // （proxy.ts はクリエイター本人のダッシュボードアクセスを止めるだけで、
@@ -242,8 +254,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: '購入処理に失敗しました。時間をおいて再度お試しください' }, { status: 500 })
       }
       if (freeOk === false) {
-        // クーポン上限到達（100%off クーポンの無料取得の抜け道になるため購入を弾く）
-        return NextResponse.json({ error: 'クーポンが使用上限に達しました' }, { status: 400 })
+        // DB確定時点で商品状態・価格・クーポン上限のいずれかが変わった。
+        // どの条件でも古い画面のまま確定させず、最新状態の再読込を促す。
+        return NextResponse.json(
+          { error: '購入条件が変更されました。ページを更新してもう一度お試しください' },
+          { status: 409 },
+        )
       }
 
       // sold_count 更新（admin: contents更新はcreator/admin限定のため）。
@@ -300,6 +316,24 @@ export async function POST(req: NextRequest) {
         },
         quantity: 1,
       })
+    }
+
+    // Checkout発行直前にDB行をlockして販売条件を再検証し、開始済み履歴を確定する。
+    // 開始境界でクリエイターの日時変更と競合しても、未来へ戻った商品に有効な
+    // Checkoutだけが残る状態を防ぐ。
+    const { data: saleConfirmed, error: saleConfirmErr } = await admin.rpc('confirm_sale_for_checkout', {
+      p_content_id: contentId,
+      p_expected_price: content.price,
+    })
+    if (saleConfirmErr) {
+      console.error('[purchase] confirm_sale_for_checkout failed:', saleConfirmErr.message)
+      return NextResponse.json({ error: '購入処理に失敗しました。時間をおいて再度お試しください' }, { status: 500 })
+    }
+    if (saleConfirmed !== true) {
+      return NextResponse.json(
+        { error: '購入条件が変更されました。ページを更新してもう一度お試しください' },
+        { status: 409 },
+      )
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams)

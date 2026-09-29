@@ -50,7 +50,7 @@ type RequestRow = {
   creator: CreatorRef
 }
 type NewContentRow = {
-  id: string; title: string; thumbnail_url: string | null; created_at: string
+  id: string; title: string; thumbnail_url: string | null; sale_starts_at: string
   creator: CreatorRef
 }
 type FollowerRow = {
@@ -74,6 +74,7 @@ const KIND_CONFIG: Record<NotificationKind, { icon: typeof Bell; color: string; 
 
 export default async function NotificationsPage() {
   const supabase = await createClient()
+  const saleNowIso = new Date().toISOString()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login?next=/mypage/notifications')
 
@@ -145,16 +146,17 @@ export default async function NotificationsPage() {
 
   const followedIds = (myFollows ?? []).map(f => f.creator_id)
   if (followedIds.length > 0) {
-    const since = new Date()
+    const since = new Date(saleNowIso)
     since.setDate(since.getDate() - 30)
     const { data: newContents } = await supabase
       .from('contents')
-      .select('id, title, thumbnail_url, created_at, creator:profiles!contents_creator_id_fkey(id, display_name, avatar_url)')
+      .select('id, title, thumbnail_url, sale_starts_at, creator:profiles!contents_creator_id_fkey(id, display_name, avatar_url)')
       .in('creator_id', followedIds)
       .eq('is_published', true)
       .neq('review_status', 'rejected')
-      .gte('created_at', since.toISOString())
-      .order('created_at', { ascending: false })
+      .gte('sale_starts_at', since.toISOString())
+      .lte('sale_starts_at', saleNowIso)
+      .order('sale_starts_at', { ascending: false })
       .limit(20)
 
     for (const c of (newContents ?? []) as unknown as NewContentRow[]) {
@@ -164,7 +166,7 @@ export default async function NotificationsPage() {
         title: '推しが新しい投稿をしました',
         body: `${c.creator?.display_name ?? ''}「${c.title}」`,
         href: `/contents/${c.id}`,
-        createdAt: c.created_at,
+        createdAt: c.sale_starts_at,
         thumbnailUrl: c.thumbnail_url,
         avatarUrl: c.creator?.avatar_url,
       })

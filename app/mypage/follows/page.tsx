@@ -22,6 +22,7 @@ interface FollowRow {
 
 export default async function FollowsPage() {
   const supabase = await createClient()
+  const saleNowIso = new Date().toISOString()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login?next=/mypage/follows')
 
@@ -42,11 +43,12 @@ export default async function FollowsPage() {
   if (creatorIds.length > 0) {
     const { data: contents } = await supabase
       .from('contents')
-      .select('id, creator_id, title, thumbnail_url, created_at')
+      .select('id, creator_id, title, thumbnail_url, sale_starts_at')
       .in('creator_id', creatorIds)
       .eq('is_published', true)
       .neq('review_status', 'rejected')
-      .order('created_at', { ascending: false })
+      .lte('sale_starts_at', saleNowIso)
+      .order('sale_starts_at', { ascending: false })
 
     for (const c of contents ?? []) {
       if (!latestByCreator.has(c.creator_id)) {

@@ -22,6 +22,7 @@ export default async function DiagnosisResultPage({
   const selectedTags = tagsParam.split(',').map(t => t.trim()).filter(Boolean)
 
   const supabase = await createClient()
+  const saleNowIso = new Date().toISOString()
   const { data: { user } } = await supabase.auth.getUser()
   let profile = null
   if (user) {
@@ -37,6 +38,7 @@ export default async function DiagnosisResultPage({
     .select('id, title, tags, price, thumbnail_url, creator_id, sold_count, creator:profiles!contents_creator_id_fkey(id, display_name, username, avatar_url, bio)')
     .eq('is_published', true)
     .neq('review_status', 'rejected')
+    .lte('sale_starts_at', saleNowIso)
 
   const scoreByCreator = new Map<string, { score: number; creator: any; hitTags: Set<string>; contentCount: number; totalSold: number }>()
 

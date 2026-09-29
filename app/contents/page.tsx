@@ -18,6 +18,7 @@ export default async function ContentsPage({
 }) {
   const { sort = 'newest', type = 'all', tag } = await searchParams
   const supabase = await createClient()
+  const saleNowIso = new Date().toISOString()
 
   const { data: { user } } = await supabase.auth.getUser()
   let profile = null
@@ -33,6 +34,7 @@ export default async function ContentsPage({
     .select(CONTENT_CARD_WITH_CREATOR_AND_TAGS_SELECT)
     .eq('is_published', true)
     .neq('review_status', 'rejected')
+    .lte('sale_starts_at', saleNowIso)
 
   if (type !== 'all') query = query.eq('content_type', type)
   if (tag) query = query.contains('tags', [tag])
@@ -48,7 +50,7 @@ export default async function ContentsPage({
       query = query.order('price', { ascending: false })
       break
     default:
-      query = query.order('created_at', { ascending: false })
+      query = query.order('sale_starts_at', { ascending: false })
   }
 
   const { data: contents } = await query
@@ -117,6 +119,7 @@ export default async function ContentsPage({
             .in('id', topIds)
             .eq('is_published', true)
             .neq('review_status', 'rejected')
+            .lte('sale_starts_at', saleNowIso)
           recommendations = recs ?? []
         }
       }
