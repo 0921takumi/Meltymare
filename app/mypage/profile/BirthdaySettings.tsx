@@ -39,6 +39,10 @@ export default function BirthdaySettings() {
   }, [])
 
   const save = async (patch: { birthday_public?: boolean; accepts_birthday_messages?: boolean }, okText: string) => {
+    // 押した瞬間に見た目を切り替え、失敗したら元に戻す。保存完了まで切り替わらないと、
+    // その間「押しても反応しない」ように見える。
+    const previous = isPublic
+    if (typeof patch.birthday_public === 'boolean') setIsPublic(patch.birthday_public)
     setSaving(true)
     setMessage(null)
     try {
@@ -47,11 +51,16 @@ export default function BirthdaySettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       })
-      if (!res.ok) { setMessage({ kind: 'error', text: await apiErrorMessage(res, '保存に失敗しました') }); return }
+      if (!res.ok) {
+        setIsPublic(previous)
+        setMessage({ kind: 'error', text: await apiErrorMessage(res, '保存に失敗しました') })
+        return
+      }
       const j = await res.json()
       setIsPublic(j.birthday_public === true)
       setMessage({ kind: 'ok', text: okText })
     } catch {
+      setIsPublic(previous)
       setMessage({ kind: 'error', text: NETWORK_ERROR_MESSAGE })
     } finally {
       setSaving(false)
