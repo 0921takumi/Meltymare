@@ -234,7 +234,7 @@ export default function ProfileEditPage() {
           </form>
 
           {/* バースデー公開設定（クリエイターのみ）。押した時点で保存され、上の「保存する」とは独立。 */}
-          {(profile?.role === 'creator' || profile?.role === 'admin') && <BirthdaySettings />}
+          {profile?.role === 'creator' && <BirthdaySettings />}
         </div>
       </div>
     </div>
