@@ -14,7 +14,7 @@ const PROTECTED_PREFIXES = ['/admin', '/mypage', '/purchase/success']
 const CREATOR_PREFIXES = [
   '/creator/dashboard', '/creator/upload', '/creator/orders', '/creator/coupons',
   '/creator/plans', '/creator/stories', '/creator/live', '/creator/requests',
-  '/creator/blocks', '/creator/polls',
+  '/creator/blocks', '/creator/polls', '/creator/followers',
 ]
 
 // クリエイター申請（本人確認して出品申請する）ページ。ログインは必須だが、対象者は

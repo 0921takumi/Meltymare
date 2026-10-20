@@ -16,6 +16,10 @@ const RESERVED_USERNAMES = new Set([
   'admin', 'administrator', 'root', 'support', 'staff', 'official',
   'myfocus', 'my-focus', 'system', 'null', 'undefined', 'api',
   'creator', 'creators', 'user', 'users', 'me', 'you',
+  // /creator/<ID> の公開ページと、/creator/dashboard 等のクリエイター用画面が同じ階層にある。
+  // 同名のIDを取られると公開ページが管理画面に隠れて開けなくなるため予約する。
+  'dashboard', 'upload', 'orders', 'coupons', 'polls', 'blocks', 'followers',
+  'verification', 'plans', 'stories', 'live', 'requests',
 ])
 
 export function isReservedUsername(username: string): boolean {

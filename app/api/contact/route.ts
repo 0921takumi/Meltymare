@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     // メール通知（RESEND_API_KEYがあれば）
     const resendKey = cleanEnv(process.env.RESEND_API_KEY)
     const adminEmail = process.env.ADMIN_NOTIFY_EMAIL ?? 'info@my-focus.jp'
-    const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'My Focus <noreply@my-focus.jp>'
+    const fromEmail = cleanEnv(process.env.RESEND_FROM_EMAIL) || 'My Focus <noreply@my-focus.jp>'
 
     if (resendKey) {
       // 管理者への通知

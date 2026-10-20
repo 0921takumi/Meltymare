@@ -3,7 +3,7 @@ import { PROFILE_PUBLIC_SELECT } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Edit, Eye, EyeOff, ClipboardList, MessageSquare, Tag, ShieldCheck, ShieldAlert, Clock, ExternalLink } from 'lucide-react'
+import { Plus, Edit, Eye, EyeOff, ClipboardList, MessageSquare, Tag, ShieldCheck, ShieldAlert, Clock, ExternalLink, Users } from 'lucide-react'
 import { FINANCE } from '@/lib/config'
 import { fetchAllRows } from '@/lib/fetch-all'
 import { isSaleScheduled, toJstDateTimeLocalValue } from '@/lib/sale-schedule'
@@ -29,11 +29,14 @@ export default async function CreatorDashboard() {
   // (他のクリエイター管理ページ:coupons/blocks/polls/live/stories と同じパターンに統一)。
   if (profile.role !== 'creator' && profile.role !== 'admin') redirect('/contents')
 
-  const { data: contents } = await supabase
-    .from('contents')
-    .select('*')
-    .eq('creator_id', user.id)
-    .order('created_at', { ascending: false })
+  const [{ data: contents }, { count: followerCount }] = await Promise.all([
+    supabase
+      .from('contents')
+      .select('*')
+      .eq('creator_id', user.id)
+      .order('created_at', { ascending: false }),
+    supabase.from('follows').select('id', { count: 'exact', head: true }).eq('creator_id', user.id),
+  ])
 
   const contentIds = contents?.map(c => c.id) ?? []
   // v42: fetchAllRows で PostgREST のデフォルト行数上限による無言の切り捨てを防止
@@ -158,6 +161,9 @@ export default async function CreatorDashboard() {
             </Link>
             <Link href="/creator/coupons" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', color: 'var(--mm-text-sub)', border: '1px solid var(--mm-border)', padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}>
               <Tag size={15} /> クーポン
+            </Link>
+            <Link href="/creator/followers" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', color: 'var(--mm-text-sub)', border: '1px solid var(--mm-border)', padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              <Users size={15} /> フォロワー{typeof followerCount === 'number' ? ` (${followerCount.toLocaleString()})` : ''}
             </Link>
             <Link href="/creator/upload" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--mm-primary)', color: 'white', padding: '9px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}>
               <Plus size={15} /> コンテンツ追加

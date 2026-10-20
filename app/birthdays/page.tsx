@@ -25,18 +25,21 @@ type BirthdayCardData = Omit<CreatorRow, 'birthdate' | 'birthday_public'> & {
   info: ReturnType<typeof birthdayInfo>
 }
 
-function birthdayInfo(birthdate: string): { month: number; day: number; daysUntil: number; isToday: boolean; ageNext: number } {
-  const d = new Date(birthdate)
-  const month = d.getMonth() + 1
-  const day = d.getDate()
-  const now = new Date()
-  const thisYear = now.getFullYear()
-  let next = new Date(thisYear, d.getMonth(), d.getDate())
-  if (next < new Date(now.getFullYear(), now.getMonth(), now.getDate())) next = new Date(thisYear + 1, d.getMonth(), d.getDate())
-  const daysUntil = Math.ceil((next.getTime() - now.setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24))
-  const isToday = next.toDateString() === new Date().toDateString()
-  const ageNext = next.getFullYear() - d.getFullYear()
-  return { month, day, daysUntil, isToday, ageNext }
+/**
+ * 生年月日から「月日」と「次の誕生日まであと何日か」を出す。
+ * - 年・年齢は返さない（本人確認の生年月日なので、公開してよいのは月日だけ）
+ * - 「今日」は日本時間で判定する（サーバーは UTC で動くため、そのままだと 0〜9時に1日ずれる）
+ */
+function birthdayInfo(birthdate: string): { month: number; day: number; daysUntil: number; isToday: boolean } {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(birthdate)
+  const month = m ? Number(m[2]) : new Date(birthdate).getUTCMonth() + 1
+  const day = m ? Number(m[3]) : new Date(birthdate).getUTCDate()
+  const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const todayUtc = Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), jstNow.getUTCDate())
+  let next = Date.UTC(jstNow.getUTCFullYear(), month - 1, day)
+  if (next < todayUtc) next = Date.UTC(jstNow.getUTCFullYear() + 1, month - 1, day)
+  const daysUntil = Math.round((next - todayUtc) / (1000 * 60 * 60 * 24))
+  return { month, day, daysUntil, isToday: daysUntil === 0 }
 }
 
 export default async function BirthdaysPage() {
@@ -58,8 +61,8 @@ export default async function BirthdaysPage() {
   const creators = (creatorsData ?? []) as CreatorRow[]
 
   // 今月 / 来月 / 今日 で分類
-  const now = new Date()
-  const thisMonth = now.getMonth() + 1
+  // 月の区切りも日本時間で判定する（サーバーは UTC）
+  const thisMonth = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCMonth() + 1
   const nextMonth = thisMonth === 12 ? 1 : thisMonth + 1
 
   // v22: 生年月日の「年」をクライアントへ送らない（誕生月日のみ公開）。

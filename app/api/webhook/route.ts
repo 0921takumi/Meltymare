@@ -371,6 +371,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   })
   if (auditErr) console.error('[webhook] audit_logs insert failed:', auditErr.message)
 
+  await notifyPurchaseCompleted(purchase)
+}
+
+// ─── 購入完了の通知（アプリ内＋メール） ────────────────────
+// Stripe 経由の購入(webhook)と、無料購入(/api/purchase の100%オフ)の両方から呼ぶ。
+// 以前は webhook の中にしか無く、無料購入では購入者にもクリエイターにも何も通知されていなかった。
+export async function notifyPurchaseCompleted(purchase: { id: string; user_id: string; content_id: string; amount?: number | null }) {
   // アプリ内通知（購入者 + クリエイター）。
   // 行欠落で .single() 例外→Stripeへ200返却→リトライ無し で通知が静かに消えるのを防ぐ
   // ため .maybeSingle() 化し、insert の error も必ずログに残す（売上通知のサイレント欠損防止）。
@@ -665,7 +672,9 @@ const BRAND = {
   textMuted: '#9e938a',
 }
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'My Focus <noreply@my-focus.jp>'
+// Vercel の画面に貼った値は末尾の改行や BOM が混ざることがある（2026-07 に招待制フラグで実害）。
+// API キーにそれが混ざると Resend が黙って認証失敗するため、必ず cleanEnv を通す。
+const FROM_EMAIL = cleanEnv(process.env.RESEND_FROM_EMAIL) || 'My Focus <noreply@my-focus.jp>'
 
 /** My Focus ブランドのメール HTML テンプレ。本文と CTA を埋め込む */
 function brandedEmail(opts: {
@@ -741,7 +750,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
     const email = authUser?.user?.email
     if (!email) return
 
-    const resendKey = process.env.RESEND_API_KEY
+    const resendKey = cleanEnv(process.env.RESEND_API_KEY)
     if (!resendKey) {
       console.error('[email] RESEND_API_KEY not set, skipping email', 'userId:', userId, 'purchaseId:', _purchaseId)
       return
@@ -800,7 +809,7 @@ async function sendCreatorSaleEmail(contentId: string, buyerId: string, purchase
     const email = creatorAuth?.user?.email
     if (!email) return
 
-    const resendKey = process.env.RESEND_API_KEY
+    const resendKey = cleanEnv(process.env.RESEND_API_KEY)
     if (!resendKey) {
       console.error('[email] RESEND_API_KEY not set, skipping creator sale email', 'creatorId:', content.creator_id, 'purchaseId:', purchaseId)
       return
@@ -862,7 +871,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
     if (!email) return
 
     const { data: userProfile } = await supabase.from('profiles').select('display_name').eq('id', purchase.user_id).single()
-    const resendKey = process.env.RESEND_API_KEY
+    const resendKey = cleanEnv(process.env.RESEND_API_KEY)
     if (!resendKey) {
       console.error('[email] RESEND_API_KEY not set, skipping email', 'userId:', purchase.user_id, 'purchaseId:', purchaseId)
       return

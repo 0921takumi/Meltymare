@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 import { cleanEnv } from '@/lib/config'
 import { hasSaleStarted } from '@/lib/sale-schedule'
+import { notifyPurchaseCompleted } from '@/app/api/webhook/route'
 
 // apiVersion を明示固定（SDK更新時の挙動変化で決済不整合になるのを防ぐ）
 const stripe = new Stripe(cleanEnv(process.env.STRIPE_SECRET_KEY), { apiVersion: '2026-03-25.dahlia' })
@@ -267,6 +268,21 @@ export async function POST(req: NextRequest) {
       const { data: scOk, error: scErr } = await admin.rpc('increment_sold_count', { content_id: contentId })
       if (scErr) console.warn('[purchase] free increment_sold_count failed:', scErr.message)
       else if (scOk === false) console.error('[purchase] free OVERSTOCK: 在庫上限超過。content:', contentId, 'user:', user.id)
+
+      // 依頼(2026-10)「購入通知をメールで」: 以前は無料購入（100%オフのクーポン）だと、購入者にも
+      // クリエイターにもアプリ内通知・メールが一切届かなかった。Stripe 経由と同じ通知を出す。
+      // 通知の失敗で購入自体を失敗扱いにはしない（購入は上で確定済み）。
+      try {
+        const { data: freePurchase } = await admin.from('purchases').select('id')
+          .eq('user_id', user.id).eq('content_id', contentId).eq('status', 'completed').maybeSingle()
+        if (freePurchase?.id) {
+          await notifyPurchaseCompleted({ id: freePurchase.id, user_id: user.id, content_id: contentId, amount: 0 })
+        } else {
+          console.error('[purchase] free purchase row not found for notification. content:', contentId, 'user:', user.id)
+        }
+      } catch (e) {
+        console.error('[purchase] free purchase notification failed:', e)
+      }
 
       return NextResponse.json({ checkoutUrl: `${appUrl}/purchase/success` })
     }

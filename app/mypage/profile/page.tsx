@@ -6,6 +6,7 @@ import { PROFILE_PUBLIC_SELECT, type PublicProfile } from '@/lib/profile-fields'
 import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import BirthdaySettings from './BirthdaySettings'
 
 export default function ProfileEditPage() {
   const router = useRouter()
@@ -231,6 +232,9 @@ export default function ProfileEditPage() {
               {loading ? '保存中...' : saved ? '✓ 保存しました' : '保存する'}
             </button>
           </form>
+
+          {/* バースデー公開設定（クリエイターのみ）。押した時点で保存され、上の「保存する」とは独立。 */}
+          {(profile?.role === 'creator' || profile?.role === 'admin') && <BirthdaySettings />}
         </div>
       </div>
     </div>
