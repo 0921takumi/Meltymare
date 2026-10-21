@@ -61,7 +61,9 @@ export async function POST(req: NextRequest) {
 
     // メール通知（RESEND_API_KEYがあれば）
     const resendKey = cleanEnv(process.env.RESEND_API_KEY)
-    const adminEmail = process.env.ADMIN_NOTIFY_EMAIL ?? 'info@my-focus.jp'
+    // 運営の受信箱。my-focus.jp には受信設定(MX)が無いため、info@my-focus.jp のままだと届かない。
+    // 本番は Vercel の ADMIN_NOTIFY_EMAIL で設定する。
+    const adminEmail = cleanEnv(process.env.ADMIN_NOTIFY_EMAIL) || 'info@my-focus.jp'
     const fromEmail = cleanEnv(process.env.RESEND_FROM_EMAIL) || 'My Focus <noreply@my-focus.jp>'
 
     if (resendKey) {
@@ -98,6 +100,8 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           from: fromEmail,
           to: email,
+          // 自動返信に返信されたら運営の受信箱へ届くようにする
+          ...(cleanEnv(process.env.ADMIN_NOTIFY_EMAIL) ? { reply_to: adminEmail } : {}),
           subject: '【My Focus】お問い合わせを受け付けました',
           html: `
             <div style="font-family: sans-serif; max-width: 560px; padding: 24px;">

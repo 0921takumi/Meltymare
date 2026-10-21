@@ -675,6 +675,9 @@ const BRAND = {
 // Vercel の画面に貼った値は末尾の改行や BOM が混ざることがある（2026-07 に招待制フラグで実害）。
 // API キーにそれが混ざると Resend が黙って認証失敗するため、必ず cleanEnv を通す。
 const FROM_EMAIL = cleanEnv(process.env.RESEND_FROM_EMAIL) || 'My Focus <noreply@my-focus.jp>'
+// 通知メールに返信されたときの宛先（運営の受信箱）。my-focus.jp は受信設定(MX)が無く、
+// noreply@my-focus.jp への返信はどこにも届かないため、運営のアドレスへ返信が行くようにする。
+const REPLY_TO = cleanEnv(process.env.ADMIN_NOTIFY_EMAIL)
 
 /** My Focus ブランドのメール HTML テンプレ。本文と CTA を埋め込む */
 function brandedEmail(opts: {
@@ -780,6 +783,7 @@ async function sendPurchaseEmail(userId: string, contentId: string, _purchaseId:
       },
       body: JSON.stringify({
         from: FROM_EMAIL,
+        ...(REPLY_TO ? { reply_to: REPLY_TO } : {}),
         to: email,
         subject: `【ご購入ありがとうございます】${content.title}`,
         html,
@@ -842,6 +846,7 @@ async function sendCreatorSaleEmail(contentId: string, buyerId: string, purchase
       },
       body: JSON.stringify({
         from: FROM_EMAIL,
+        ...(REPLY_TO ? { reply_to: REPLY_TO } : {}),
         to: email,
         subject: `【商品が購入されました】${content.title}`,
         html,
@@ -900,6 +905,7 @@ export async function sendDeliveryEmail(purchaseId: string) {
       },
       body: JSON.stringify({
         from: FROM_EMAIL,
+        ...(REPLY_TO ? { reply_to: REPLY_TO } : {}),
         to: email,
         subject: `【納品完了】${content?.title} が届きました ✦`,
         html,
